@@ -1,0 +1,23 @@
+[package]
+name = "psbt"
+version = "0.1.0"
+authors = ["Tobin C. Harding <me@tobin.cc>"]
+license = "CC0-1.0"
+repository = "https://github.com/tcharding/rust-psbt/"
+description = "Partially signed Bitcoin Transaction, v0 and v1"
+categories = ["cryptography::cryptocurrencies"]
+keywords = [ "crypto", "bitcoin" ]
+readme = "../README.md"
+edition = "2018"
+exclude = ["tests", "contrib"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["std"]
+std = ["bitcoin/std"]
+
+[dependencies]
+bitcoin = { version = "0.31.0", default-features = false, features = [] }
