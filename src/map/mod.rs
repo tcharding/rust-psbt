@@ -12,6 +12,7 @@ use crate::serialize::Serialize;
 pub use self::{
     input::{Input, PsbtSighashType},
     output::Output,
+    global::Global,
 };
 
 /// A trait that describes a PSBT key-value map.

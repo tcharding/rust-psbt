@@ -9,6 +9,7 @@ macro_rules! combine {
     };
 }
 
+// Implements our Serialize/Deserialize traits using bitcoin consensus serialization.
 macro_rules! impl_psbt_de_serialize {
     ($thing:ty) => {
         impl_psbt_serialize!($thing);

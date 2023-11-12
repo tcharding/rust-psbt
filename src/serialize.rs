@@ -20,7 +20,7 @@ use bitcoin::taproot::{
 };
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
-use crate::map::{Input, Map, Output, PsbtSighashType};
+use crate::map::{Global, Input, Map, Output, PsbtSighashType};
 use crate::prelude::*;
 use crate::{io, Error, Psbt};
 
@@ -50,7 +50,7 @@ impl Psbt {
 
         buf.push(0xff_u8);
 
-        buf.extend(self.serialize_map());
+        buf.extend(self.global.serialize_map());
 
         for i in &self.inputs {
             buf.extend(i.serialize_map());
@@ -77,7 +77,7 @@ impl Psbt {
 
         let mut d = bytes.get(5..).ok_or(Error::NoMorePairs)?;
 
-        let mut global = Psbt::decode_global(&mut d)?;
+        let global = Global::decode(&mut d)?;
         global.unsigned_tx_checks()?;
 
         let inputs: Vec<Input> = {
@@ -104,9 +104,7 @@ impl Psbt {
             outputs
         };
 
-        global.inputs = inputs;
-        global.outputs = outputs;
-        Ok(global)
+        Ok(Psbt { global, inputs, outputs })
     }
 }
 impl_psbt_de_serialize!(Transaction);

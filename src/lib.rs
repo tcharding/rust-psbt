@@ -48,11 +48,11 @@ mod serde_utils;
 pub mod raw;
 pub mod serialize;
 
-use core::{cmp, fmt};
+use core::fmt;
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};
 
-use bitcoin::bip32::{self, KeySource, Xpriv, Xpub};
+use bitcoin::bip32::{self, KeySource, Xpriv};
 use bitcoin::hashes::Hash;
 use bitcoin::key::{PrivateKey, PublicKey};
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
@@ -66,7 +66,7 @@ use crate::prelude::*;
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use crate::{
     error::Error,
-    map::{Input, Output, PsbtSighashType},
+    map::{Input, Global, Output, PsbtSighashType},
 };
 
 /// A Partially Signed Transaction.
@@ -74,20 +74,8 @@ pub use crate::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Psbt {
-    /// The unsigned transaction, scriptSigs and witnesses for each input must be empty.
-    pub unsigned_tx: Transaction,
-    /// The version number of this PSBT. If omitted, the version number is 0.
-    pub version: u32,
-    /// A global map from extended public keys to the used key fingerprint and
-    /// derivation path as defined by BIP 32.
-    pub xpub: BTreeMap<Xpub, KeySource>,
-    /// Global proprietary key-value pairs.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
-    /// Unknown global key-value pairs.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub unknown: BTreeMap<raw::Key, Vec<u8>>,
-
+    /// The global map.
+    pub global: Global,
     /// The corresponding key-value map for each input in the unsigned transaction.
     pub inputs: Vec<Input>,
     /// The corresponding key-value map for each output in the unsigned transaction.
@@ -108,32 +96,18 @@ impl Psbt {
     ///
     /// The function panics if the length of transaction inputs is not equal to the length of PSBT inputs.
     pub fn iter_funding_utxos(&self) -> impl Iterator<Item = Result<&TxOut, Error>> {
-        assert_eq!(self.inputs.len(), self.unsigned_tx.input.len());
-        self.unsigned_tx.input.iter().zip(&self.inputs).map(|(tx_input, psbt_input)| {
-            match (&psbt_input.witness_utxo, &psbt_input.non_witness_utxo) {
-                (Some(witness_utxo), _) => Ok(witness_utxo),
-                (None, Some(non_witness_utxo)) => {
-                    let vout = tx_input.previous_output.vout as usize;
-                    non_witness_utxo.output.get(vout).ok_or(Error::PsbtUtxoOutOfbounds)
-                }
-                (None, None) => Err(Error::MissingUtxo),
+        assert_eq!(self.inputs.len(), self.global.unsigned_tx.input.len());
+        self.global.unsigned_tx.input.iter().zip(&self.inputs).map(|(tx_input, psbt_input)| match (
+            &psbt_input.witness_utxo,
+            &psbt_input.non_witness_utxo,
+        ) {
+            (Some(witness_utxo), _) => Ok(witness_utxo),
+            (None, Some(non_witness_utxo)) => {
+                let vout = tx_input.previous_output.vout as usize;
+                non_witness_utxo.output.get(vout).ok_or(Error::PsbtUtxoOutOfbounds)
             }
+            (None, None) => Err(Error::MissingUtxo),
         })
-    }
-
-    /// Checks that unsigned transaction does not have scriptSig's or witness data.
-    fn unsigned_tx_checks(&self) -> Result<(), Error> {
-        for txin in &self.unsigned_tx.input {
-            if !txin.script_sig.is_empty() {
-                return Err(Error::UnsignedTxHasScriptSigs);
-            }
-
-            if !txin.witness.is_empty() {
-                return Err(Error::UnsignedTxHasScriptWitnesses);
-            }
-        }
-
-        Ok(())
     }
 
     /// Creates a PSBT from an unsigned transaction.
@@ -142,17 +116,14 @@ impl Psbt {
     ///
     /// If transactions is not unsigned.
     pub fn from_unsigned_tx(tx: Transaction) -> Result<Self, Error> {
-        let psbt = Psbt {
-            inputs: vec![Default::default(); tx.input.len()],
-            outputs: vec![Default::default(); tx.output.len()],
+        let input_len = tx.input.len();
+        let output_len = tx.output.len();
 
-            unsigned_tx: tx,
-            xpub: Default::default(),
-            version: 0,
-            proprietary: Default::default(),
-            unknown: Default::default(),
+        let psbt = Psbt {
+            global: Global::from_unsigned_tx(tx)?,
+            inputs: vec![Default::default(); input_len],
+            outputs: vec![Default::default(); output_len],
         };
-        psbt.unsigned_tx_checks()?;
         Ok(psbt)
     }
 
@@ -205,7 +176,7 @@ impl Psbt {
 
     #[inline]
     fn internal_extract_tx(self) -> Transaction {
-        let mut tx: Transaction = self.unsigned_tx;
+        let mut tx: Transaction = self.global.unsigned_tx;
 
         for (vin, psbtin) in tx.input.iter_mut().zip(self.inputs.into_iter()) {
             vin.script_sig = psbtin.final_script_sig.unwrap_or_default();
@@ -251,56 +222,7 @@ impl Psbt {
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
     pub fn combine(&mut self, other: Self) -> Result<(), Error> {
-        if self.unsigned_tx != other.unsigned_tx {
-            return Err(Error::UnexpectedUnsignedTx {
-                expected: Box::new(self.unsigned_tx.clone()),
-                actual: Box::new(other.unsigned_tx),
-            });
-        }
-
-        // BIP 174: The Combiner must remove any duplicate key-value pairs, in accordance with
-        //          the specification. It can pick arbitrarily when conflicts occur.
-
-        // Keeping the highest version
-        self.version = cmp::max(self.version, other.version);
-
-        // Merging xpubs
-        for (xpub, (fingerprint1, derivation1)) in other.xpub {
-            match self.xpub.entry(xpub) {
-                btree_map::Entry::Vacant(entry) => {
-                    entry.insert((fingerprint1, derivation1));
-                }
-                btree_map::Entry::Occupied(mut entry) => {
-                    // Here in case of the conflict we select the version with algorithm:
-                    // 1) if everything is equal we do nothing
-                    // 2) report an error if
-                    //    - derivation paths are equal and fingerprints are not
-                    //    - derivation paths are of the same length, but not equal
-                    //    - derivation paths has different length, but the shorter one
-                    //      is not the strict suffix of the longer one
-                    // 3) choose longest derivation otherwise
-
-                    let (fingerprint2, derivation2) = entry.get().clone();
-
-                    if (derivation1 == derivation2 && fingerprint1 == fingerprint2)
-                        || (derivation1.len() < derivation2.len()
-                            && derivation1[..]
-                                == derivation2[derivation2.len() - derivation1.len()..])
-                    {
-                        continue;
-                    } else if derivation2[..]
-                        == derivation1[derivation1.len() - derivation2.len()..]
-                    {
-                        entry.insert((fingerprint1, derivation1));
-                        continue;
-                    }
-                    return Err(Error::CombineInconsistentKeySources(Box::new(xpub)));
-                }
-            }
-        }
-
-        self.proprietary.extend(other.proprietary);
-        self.unknown.extend(other.unknown);
+        self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {
             self_input.combine(other_input);
@@ -338,7 +260,7 @@ impl Psbt {
         C: Signing,
         K: GetKey,
     {
-        let tx = self.unsigned_tx.clone(); // clone because we need to mutably borrow when signing.
+        let tx = self.global.unsigned_tx.clone(); // clone because we need to mutably borrow when signing.
         let mut cache = SighashCache::new(&tx);
 
         let mut used = BTreeMap::new();
@@ -479,7 +401,7 @@ impl Psbt {
         let utxo = if let Some(witness_utxo) = &input.witness_utxo {
             witness_utxo
         } else if let Some(non_witness_utxo) = &input.non_witness_utxo {
-            let vout = self.unsigned_tx.input[input_index].previous_output.vout;
+            let vout = self.global.unsigned_tx.input[input_index].previous_output.vout;
             &non_witness_utxo.output[vout as usize]
         } else {
             return Err(SignError::MissingSpendUtxo);
@@ -506,10 +428,10 @@ impl Psbt {
             });
         }
 
-        if input_index >= self.unsigned_tx.input.len() {
+        if input_index >= self.global.unsigned_tx.input.len() {
             return Err(IndexOutOfBoundsError::TxInput {
                 index: input_index,
-                length: self.unsigned_tx.input.len(),
+                length: self.global.unsigned_tx.input.len(),
             });
         }
 
@@ -576,7 +498,7 @@ impl Psbt {
             inputs = inputs.checked_add(utxo?.value.to_sat()).ok_or(Error::FeeOverflow)?;
         }
         let mut outputs: u64 = 0;
-        for out in &self.unsigned_tx.output {
+        for out in &self.global.unsigned_tx.output {
             outputs = outputs.checked_add(out.value.to_sat()).ok_or(Error::FeeOverflow)?;
         }
         inputs.checked_sub(outputs).map(Amount::from_sat).ok_or(Error::NegativeFee)
@@ -1087,33 +1009,35 @@ mod tests {
     #[track_caller]
     fn psbt_with_values(input: u64, output: u64) -> Psbt {
         Psbt {
-            unsigned_tx: Transaction {
-                version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::ZERO,
-                input: vec![TxIn {
-                    previous_output: OutPoint {
-                        txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126"
-                            .parse()
-                            .unwrap(),
-                        vout: 0,
-                    },
-                    script_sig: ScriptBuf::new(),
-                    sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
-                    witness: Witness::default(),
-                }],
-                output: vec![TxOut {
-                    value: Amount::from_sat(output),
-                    script_pubkey: ScriptBuf::from_hex(
-                        "a9143545e6e33b832c47050f24d3eeb93c9c03948bc787",
-                    )
-                    .unwrap(),
-                }],
+            global: Global {
+                unsigned_tx: Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::ZERO,
+                    input: vec![TxIn {
+                        previous_output: OutPoint {
+                            txid:
+                                "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126"
+                                    .parse()
+                                    .unwrap(),
+                            vout: 0,
+                        },
+                        script_sig: ScriptBuf::new(),
+                        sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                        witness: Witness::default(),
+                    }],
+                    output: vec![TxOut {
+                        value: Amount::from_sat(output),
+                        script_pubkey: ScriptBuf::from_hex(
+                            "a9143545e6e33b832c47050f24d3eeb93c9c03948bc787",
+                        )
+                        .unwrap(),
+                    }],
+                },
+                xpub: Default::default(),
+                version: 0,
+                proprietary: BTreeMap::new(),
+                unknown: BTreeMap::new(),
             },
-            xpub: Default::default(),
-            version: 0,
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
-
             inputs: vec![Input {
                 witness_utxo: Some(TxOut {
                     value: Amount::from_sat(input),
@@ -1131,17 +1055,18 @@ mod tests {
     #[test]
     fn trivial_psbt() {
         let psbt = Psbt {
-            unsigned_tx: Transaction {
-                version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::ZERO,
-                input: vec![],
-                output: vec![],
+            global: Global {
+                unsigned_tx: Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::ZERO,
+                    input: vec![],
+                    output: vec![],
+                },
+                xpub: Default::default(),
+                version: 0,
+                proprietary: BTreeMap::new(),
+                unknown: BTreeMap::new(),
             },
-            xpub: Default::default(),
-            version: 0,
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
-
             inputs: vec![],
             outputs: vec![],
         };
@@ -1248,41 +1173,44 @@ mod tests {
     #[test]
     fn serialize_then_deserialize_global() {
         let expected = Psbt {
-            unsigned_tx: Transaction {
-                version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::from_consensus(1257139),
-                input: vec![TxIn {
-                    previous_output: OutPoint {
-                        txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126"
-                            .parse()
+            global: Global {
+                unsigned_tx: Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::from_consensus(1257139),
+                    input: vec![TxIn {
+                        previous_output: OutPoint {
+                            txid:
+                                "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126"
+                                    .parse()
+                                    .unwrap(),
+                            vout: 0,
+                        },
+                        script_sig: ScriptBuf::new(),
+                        sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                        witness: Witness::default(),
+                    }],
+                    output: vec![
+                        TxOut {
+                            value: Amount::from_sat(99_999_699),
+                            script_pubkey: ScriptBuf::from_hex(
+                                "76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac",
+                            )
                             .unwrap(),
-                        vout: 0,
-                    },
-                    script_sig: ScriptBuf::new(),
-                    sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
-                    witness: Witness::default(),
-                }],
-                output: vec![
-                    TxOut {
-                        value: Amount::from_sat(99_999_699),
-                        script_pubkey: ScriptBuf::from_hex(
-                            "76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac",
-                        )
-                        .unwrap(),
-                    },
-                    TxOut {
-                        value: Amount::from_sat(100_000_000),
-                        script_pubkey: ScriptBuf::from_hex(
-                            "a9143545e6e33b832c47050f24d3eeb93c9c03948bc787",
-                        )
-                        .unwrap(),
-                    },
-                ],
+                        },
+                        TxOut {
+                            value: Amount::from_sat(100_000_000),
+                            script_pubkey: ScriptBuf::from_hex(
+                                "a9143545e6e33b832c47050f24d3eeb93c9c03948bc787",
+                            )
+                            .unwrap(),
+                        },
+                    ],
+                },
+                xpub: Default::default(),
+                version: 0,
+                proprietary: Default::default(),
+                unknown: Default::default(),
             },
-            xpub: Default::default(),
-            version: 0,
-            proprietary: Default::default(),
-            unknown: Default::default(),
             inputs: vec![Input::default()],
             outputs: vec![Output::default(), Output::default()],
         };
@@ -1368,22 +1296,23 @@ mod tests {
         .collect();
 
         let psbt = Psbt {
-            version: 0,
-            xpub: {
-                let xpub: Xpub =
-                    "xpub661MyMwAqRbcGoRVtwfvzZsq2VBJR1LAHfQstHUoxqDorV89vRoMxUZ27kLrraAj6MPi\
-                    QfrDb27gigC1VS1dBXi5jGpxmMeBXEkKkcXUTg4".parse().unwrap();
-                vec![(xpub, key_source)].into_iter().collect()
+            global: Global {
+                version: 0,
+                xpub: {
+                    let xpub: Xpub =
+                        "xpub661MyMwAqRbcGoRVtwfvzZsq2VBJR1LAHfQstHUoxqDorV89vRoMxUZ27kLrraAj6MPi\
+                         QfrDb27gigC1VS1dBXi5jGpxmMeBXEkKkcXUTg4".parse().unwrap();
+                    vec![(xpub, key_source)].into_iter().collect()
+                },
+                unsigned_tx: {
+                    let mut unsigned = tx.clone();
+                    unsigned.input[0].script_sig = ScriptBuf::new();
+                    unsigned.input[0].witness = Witness::default();
+                    unsigned
+                },
+                proprietary: proprietary.clone(),
+                unknown: unknown.clone(),
             },
-            unsigned_tx: {
-                let mut unsigned = tx.clone();
-                unsigned.input[0].script_sig = ScriptBuf::new();
-                unsigned.input[0].witness = Witness::default();
-                unsigned
-            },
-            proprietary: proprietary.clone(),
-            unknown: unknown.clone(),
-
             inputs: vec![
                 Input {
                     non_witness_utxo: Some(tx),
@@ -1508,36 +1437,37 @@ mod tests {
         #[test]
         fn valid_vector_1() {
             let unserialized = Psbt {
-                unsigned_tx: Transaction {
-                    version: transaction::Version::TWO,
-                    lock_time: absolute::LockTime::from_consensus(1257139),
-                    input: vec![
-                        TxIn {
-                            previous_output: OutPoint {
-                                txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
-                                vout: 0,
+                global: Global {
+                    unsigned_tx: Transaction {
+                        version: transaction::Version::TWO,
+                        lock_time: absolute::LockTime::from_consensus(1257139),
+                        input: vec![
+                            TxIn {
+                                previous_output: OutPoint {
+                                    txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
+                                    vout: 0,
+                                },
+                                script_sig: ScriptBuf::new(),
+                                sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                                witness: Witness::default(),
+                            }
+                        ],
+                        output: vec![
+                            TxOut {
+                                value: Amount::from_sat(99_999_699),
+                                script_pubkey: ScriptBuf::from_hex("76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac").unwrap(),
                             },
-                            script_sig: ScriptBuf::new(),
-                            sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
-                            witness: Witness::default(),
-                        }
-                    ],
-                    output: vec![
-                        TxOut {
-                            value: Amount::from_sat(99_999_699),
-                            script_pubkey: ScriptBuf::from_hex("76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac").unwrap(),
-                        },
-                        TxOut {
-                            value: Amount::from_sat(100_000_000),
-                            script_pubkey: ScriptBuf::from_hex("a9143545e6e33b832c47050f24d3eeb93c9c03948bc787").unwrap(),
-                        },
-                    ],
+                            TxOut {
+                                value: Amount::from_sat(100_000_000),
+                                script_pubkey: ScriptBuf::from_hex("a9143545e6e33b832c47050f24d3eeb93c9c03948bc787").unwrap(),
+                            },
+                        ],
+                    },
+                    xpub: Default::default(),
+                    version: 0,
+                    proprietary: BTreeMap::new(),
+                    unknown: BTreeMap::new(),
                 },
-                xpub: Default::default(),
-                version: 0,
-                proprietary: BTreeMap::new(),
-                unknown: BTreeMap::new(),
-
                 inputs: vec![
                     Input {
                         non_witness_utxo: Some(Transaction {
@@ -1639,7 +1569,7 @@ mod tests {
             assert_eq!(psbt.inputs.len(), 1);
             assert_eq!(psbt.outputs.len(), 2);
 
-            let tx_input = &psbt.unsigned_tx.input[0];
+            let tx_input = &psbt.global.unsigned_tx.input[0];
             let psbt_non_witness_utxo = psbt.inputs[0].non_witness_utxo.as_ref().unwrap();
 
             assert_eq!(tx_input.previous_output.txid, psbt_non_witness_utxo.txid());
@@ -1707,7 +1637,7 @@ mod tests {
             assert_eq!(psbt.inputs.len(), 1);
             assert_eq!(psbt.outputs.len(), 1);
 
-            let tx = &psbt.unsigned_tx;
+            let tx = &psbt.global.unsigned_tx;
             assert_eq!(
                 tx.txid(),
                 "75c5c9665a570569ad77dd1279e6fd4628a093c4dcbf8d41532614044c14c115".parse().unwrap(),
@@ -1840,36 +1770,37 @@ mod tests {
 
         // same vector as valid_vector_1 from BIPs with added
         let mut unserialized = Psbt {
-            unsigned_tx: Transaction {
-                version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::from_consensus(1257139),
-                input: vec![
-                    TxIn {
-                        previous_output: OutPoint {
-                            txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
-                            vout: 0,
+            global: Global {
+                unsigned_tx: Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::from_consensus(1257139),
+                    input: vec![
+                        TxIn {
+                            previous_output: OutPoint {
+                                txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
+                                vout: 0,
+                            },
+                            script_sig: ScriptBuf::new(),
+                            sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                            witness: Witness::default(),
+                        }
+                    ],
+                    output: vec![
+                        TxOut {
+                            value: Amount::from_sat(99_999_699),
+                            script_pubkey: ScriptBuf::from_hex("76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac").unwrap(),
                         },
-                        script_sig: ScriptBuf::new(),
-                        sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
-                        witness: Witness::default(),
-                    }
-                ],
-                output: vec![
-                    TxOut {
-                        value: Amount::from_sat(99_999_699),
-                        script_pubkey: ScriptBuf::from_hex("76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac").unwrap(),
-                    },
-                    TxOut {
-                        value: Amount::from_sat(100_000_000),
-                        script_pubkey: ScriptBuf::from_hex("a9143545e6e33b832c47050f24d3eeb93c9c03948bc787").unwrap(),
-                    },
-                ],
+                        TxOut {
+                            value: Amount::from_sat(100_000_000),
+                            script_pubkey: ScriptBuf::from_hex("a9143545e6e33b832c47050f24d3eeb93c9c03948bc787").unwrap(),
+                        },
+                    ],
+                },
+                version: 0,
+                xpub: Default::default(),
+                proprietary: Default::default(),
+                unknown: BTreeMap::new(),
             },
-            version: 0,
-            xpub: Default::default(),
-            proprietary: Default::default(),
-            unknown: BTreeMap::new(),
-
             inputs: vec![
                 Input {
                     non_witness_utxo: Some(Transaction {
@@ -1943,13 +1874,13 @@ mod tests {
     #[test]
     fn serialize_and_deserialize_proprietary() {
         let mut psbt: Psbt = hex_psbt("70736274ff0100a00200000002ab0949a08c5af7c49b8212f417e2f15ab3f5c33dcf153821a8139f877a5b7be40000000000feffffffab0949a08c5af7c49b8212f417e2f15ab3f5c33dcf153821a8139f877a5b7be40100000000feffffff02603bea0b000000001976a914768a40bbd740cbe81d988e71de2a4d5c71396b1d88ac8e240000000000001976a9146f4620b553fa095e721b9ee0efe9fa039cca459788ac000000000001076a47304402204759661797c01b036b25928948686218347d89864b719e1f7fcf57d1e511658702205309eabf56aa4d8891ffd111fdf1336f3a29da866d7f8486d75546ceedaf93190121035cdc61fc7ba971c0b501a646a2a83b102cb43881217ca682dc86e2d73fa882920001012000e1f5050000000017a9143545e6e33b832c47050f24d3eeb93c9c03948bc787010416001485d13537f2e265405a34dbafa9e3dda01fb82308000000").unwrap();
-        psbt.proprietary.insert(
+        psbt.global.proprietary.insert(
             raw::ProprietaryKey { prefix: b"test".to_vec(), subtype: 0u8, key: b"test".to_vec() },
             b"test".to_vec(),
         );
-        assert!(!psbt.proprietary.is_empty());
+        assert!(!psbt.global.proprietary.is_empty());
         let rtt: Psbt = hex_psbt(&psbt.serialize_hex()).unwrap();
-        assert!(!rtt.proprietary.is_empty());
+        assert!(!rtt.global.proprietary.is_empty());
     }
 
     // PSBTs taken from BIP 174 test vectors.
@@ -2009,35 +1940,36 @@ mod tests {
         let prev_output_val = Amount::from_sat(200_000_000);
 
         let mut t = Psbt {
-            unsigned_tx: Transaction {
-                version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::from_consensus(1257139),
-                input: vec![
-                    TxIn {
-                        previous_output: OutPoint {
-                            txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
-                            vout: 0,
+            global: Global {
+                unsigned_tx: Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::from_consensus(1257139),
+                    input: vec![
+                        TxIn {
+                            previous_output: OutPoint {
+                                txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126".parse().unwrap(),
+                                vout: 0,
+                            },
+                            sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                            ..Default::default()
+                        }
+                    ],
+                    output: vec![
+                        TxOut {
+                            value: output_0_val,
+                            script_pubkey:  ScriptBuf::new()
                         },
-                        sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
-                        ..Default::default()
-                    }
-                ],
-                output: vec![
-                    TxOut {
-                        value: output_0_val,
-                        script_pubkey:  ScriptBuf::new()
-                    },
-                    TxOut {
-                        value: output_1_val,
-                        script_pubkey:  ScriptBuf::new()
-                    },
-                ],
+                        TxOut {
+                            value: output_1_val,
+                            script_pubkey:  ScriptBuf::new()
+                        },
+                    ],
+                },
+                xpub: Default::default(),
+                version: 0,
+                proprietary: BTreeMap::new(),
+                unknown: BTreeMap::new(),
             },
-            xpub: Default::default(),
-            version: 0,
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
-
             inputs: vec![
                 Input {
                     non_witness_utxo: Some(Transaction {
@@ -2097,14 +2029,14 @@ mod tests {
         }
         //  negative fee
         let mut t3 = t.clone();
-        t3.unsigned_tx.output[0].value = prev_output_val;
+        t3.global.unsigned_tx.output[0].value = prev_output_val;
         match t3.fee().unwrap_err() {
             Error::NegativeFee => {}
             e => panic!("unexpected error: {:?}", e),
         }
         // overflow
-        t.unsigned_tx.output[0].value = Amount::MAX;
-        t.unsigned_tx.output[1].value = Amount::MAX;
+        t.global.unsigned_tx.output[0].value = Amount::MAX;
+        t.global.unsigned_tx.output[1].value = Amount::MAX;
         match t.fee().unwrap_err() {
             Error::FeeOverflow => {}
             e => panic!("unexpected error: {:?}", e),
