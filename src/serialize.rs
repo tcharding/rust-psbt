@@ -20,9 +20,9 @@ use bitcoin::taproot::{
 };
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
-use crate::map::{Input, Map, Output, PsbtSighashType};
+use crate::map::PsbtSighashType;
 use crate::prelude::*;
-use crate::{io, Error, Psbt};
+use crate::{io, Error};
 
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
@@ -37,78 +37,6 @@ pub(crate) trait Deserialize: Sized {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error>;
 }
 
-impl Psbt {
-    /// Serialize a value as bytes in hex.
-    pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
-
-    /// Serialize as raw binary data
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-
-        //  <magic>
-        buf.extend_from_slice(b"psbt");
-
-        buf.push(0xff_u8);
-
-        buf.extend(self.serialize_map());
-
-        for i in &self.inputs {
-            buf.extend(i.serialize_map());
-        }
-
-        for i in &self.outputs {
-            buf.extend(i.serialize_map());
-        }
-
-        buf
-    }
-
-    /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        const MAGIC_BYTES: &[u8] = b"psbt";
-        if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(Error::InvalidMagic);
-        }
-
-        const PSBT_SERPARATOR: u8 = 0xff_u8;
-        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
-            return Err(Error::InvalidSeparator);
-        }
-
-        let mut d = bytes.get(5..).ok_or(Error::NoMorePairs)?;
-
-        let mut global = Psbt::decode_global(&mut d)?;
-        global.unsigned_tx_checks()?;
-
-        let inputs: Vec<Input> = {
-            let inputs_len: usize = (global.unsigned_tx.input).len();
-
-            let mut inputs: Vec<Input> = Vec::with_capacity(inputs_len);
-
-            for _ in 0..inputs_len {
-                inputs.push(Input::decode(&mut d)?);
-            }
-
-            inputs
-        };
-
-        let outputs: Vec<Output> = {
-            let outputs_len: usize = (global.unsigned_tx.output).len();
-
-            let mut outputs: Vec<Output> = Vec::with_capacity(outputs_len);
-
-            for _ in 0..outputs_len {
-                outputs.push(Output::decode(&mut d)?);
-            }
-
-            outputs
-        };
-
-        global.inputs = inputs;
-        global.outputs = outputs;
-        Ok(global)
-    }
-}
 impl_psbt_de_serialize!(Transaction);
 impl_psbt_de_serialize!(TxOut);
 impl_psbt_de_serialize!(Witness);
@@ -390,6 +318,7 @@ mod tests {
     use core::convert::TryFrom;
 
     use super::*;
+    use crate::Psbt;
 
     // Composes tree matching a given depth map, filled with dumb script leafs,
     // each of which consists of a single push-int op code, with int value

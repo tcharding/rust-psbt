@@ -61,6 +61,7 @@ use bitcoin::transaction::{Transaction, TxOut};
 use bitcoin::{ecdsa, Amount, FeeRate};
 
 use crate::error::write_err;
+use crate::map::Map;
 use crate::prelude::*;
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
@@ -95,6 +96,77 @@ pub struct Psbt {
 }
 
 impl Psbt {
+    /// Serialize a value as bytes in hex.
+    pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
+
+    /// Serialize as raw binary data
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+
+        //  <magic>
+        buf.extend_from_slice(b"psbt");
+
+        buf.push(0xff_u8);
+
+        buf.extend(self.serialize_map());
+
+        for i in &self.inputs {
+            buf.extend(i.serialize_map());
+        }
+
+        for i in &self.outputs {
+            buf.extend(i.serialize_map());
+        }
+
+        buf
+    }
+
+    /// Deserialize a value from raw binary data.
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        const MAGIC_BYTES: &[u8] = b"psbt";
+        if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
+            return Err(Error::InvalidMagic);
+        }
+
+        const PSBT_SERPARATOR: u8 = 0xff_u8;
+        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
+            return Err(Error::InvalidSeparator);
+        }
+
+        let mut d = bytes.get(5..).ok_or(Error::NoMorePairs)?;
+
+        let mut global = Psbt::decode_global(&mut d)?;
+        global.unsigned_tx_checks()?;
+
+        let inputs: Vec<Input> = {
+            let inputs_len: usize = (global.unsigned_tx.input).len();
+
+            let mut inputs: Vec<Input> = Vec::with_capacity(inputs_len);
+
+            for _ in 0..inputs_len {
+                inputs.push(Input::decode(&mut d)?);
+            }
+
+            inputs
+        };
+
+        let outputs: Vec<Output> = {
+            let outputs_len: usize = (global.unsigned_tx.output).len();
+
+            let mut outputs: Vec<Output> = Vec::with_capacity(outputs_len);
+
+            for _ in 0..outputs_len {
+                outputs.push(Output::decode(&mut d)?);
+            }
+
+            outputs
+        };
+
+        global.inputs = inputs;
+        global.outputs = outputs;
+        Ok(global)
+    }
+
     /// Returns an iterator for the funding UTXOs of the psbt
     ///
     /// For each PSBT input that contains UTXO information `Ok` is returned containing that information.
