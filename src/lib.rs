@@ -39,6 +39,7 @@ pub extern crate bitcoin;
 #[cfg(feature = "miniscript")]
 pub extern crate miniscript;
 
+mod consts;
 mod error;
 #[macro_use]
 mod macros;

@@ -14,15 +14,12 @@ use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
 use crate::v0::map::Map;
 use crate::{raw, Error};
-
-/// Type: Unsigned Transaction PSBT_GLOBAL_UNSIGNED_TX = 0x00
-const PSBT_GLOBAL_UNSIGNED_TX: u8 = 0x00;
-/// Type: Extended Public Key PSBT_GLOBAL_XPUB = 0x01
-const PSBT_GLOBAL_XPUB: u8 = 0x01;
-/// Type: Version Number PSBT_GLOBAL_VERSION = 0xFB
-const PSBT_GLOBAL_VERSION: u8 = 0xFB;
-/// Type: Proprietary Use Type PSBT_GLOBAL_PROPRIETARY = 0xFC
-const PSBT_GLOBAL_PROPRIETARY: u8 = 0xFC;
+use crate::consts::{
+PSBT_GLOBAL_UNSIGNED_TX,
+PSBT_GLOBAL_XPUB,
+PSBT_GLOBAL_VERSION,
+PSBT_GLOBAL_PROPRIETARY,
+};
 
 /// The global key-value map.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
