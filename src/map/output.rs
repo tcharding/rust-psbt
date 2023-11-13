@@ -164,4 +164,4 @@ impl Map for Output {
     }
 }
 
-impl_psbtmap_ser_de_serialize!(Output);
+impl_psbtmap_decoding!(Output);

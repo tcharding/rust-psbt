@@ -1312,7 +1312,9 @@ mod tests {
             ..Default::default()
         };
 
-        let actual = Output::deserialize(&expected.serialize()).unwrap();
+        let ser = &expected.serialize_map();
+        let mut decoder = std::io::Cursor::new(&ser);
+        let actual = Output::decode(&mut decoder).unwrap();
 
         assert_eq!(expected, actual);
     }

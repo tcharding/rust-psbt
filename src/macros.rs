@@ -34,25 +34,6 @@ macro_rules! impl_psbt_serialize {
     };
 }
 
-macro_rules! impl_psbtmap_serialize {
-    ($thing:ty) => {
-        impl $crate::serialize::Serialize for $thing {
-            fn serialize(&self) -> Vec<u8> { self.serialize_map() }
-        }
-    };
-}
-
-macro_rules! impl_psbtmap_deserialize {
-    ($thing:ty) => {
-        impl $crate::serialize::Deserialize for $thing {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::Error> {
-                let mut decoder = bytes;
-                Self::decode(&mut decoder)
-            }
-        }
-    };
-}
-
 macro_rules! impl_psbtmap_decoding {
     ($thing:ty) => {
         impl $thing {
@@ -70,14 +51,6 @@ macro_rules! impl_psbtmap_decoding {
                 }
             }
         }
-    };
-}
-
-macro_rules! impl_psbtmap_ser_de_serialize {
-    ($thing:ty) => {
-        impl_psbtmap_decoding!($thing);
-        impl_psbtmap_serialize!($thing);
-        impl_psbtmap_deserialize!($thing);
     };
 }
 

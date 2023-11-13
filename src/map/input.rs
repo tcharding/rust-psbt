@@ -490,7 +490,7 @@ impl Map for Input {
     }
 }
 
-impl_psbtmap_ser_de_serialize!(Input);
+impl_psbtmap_decoding!(Input);
 
 fn psbt_insert_hash_pair<H>(
     map: &mut BTreeMap<H, Vec<u8>>,
