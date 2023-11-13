@@ -38,6 +38,10 @@ use core2::io;
 #[macro_use]
 extern crate actual_serde as serde;
 
+
+/// Re-export of the `rust-bitcoin` crate.
+pub extern crate bitcoin;
+
 mod error;
 #[macro_use]
 mod macros;
