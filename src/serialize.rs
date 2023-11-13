@@ -20,8 +20,8 @@ use bitcoin::taproot::{
 };
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
-use crate::sighash_type::PsbtSighashType;
 use crate::prelude::*;
+use crate::sighash_type::PsbtSighashType;
 use crate::{io, Error};
 
 /// A trait for serializing a value as raw data for insertion into PSBT

@@ -11,8 +11,8 @@ use bitcoin::consensus::Decodable;
 use bitcoin::transaction::Transaction;
 
 use crate::io::{self, Cursor, Read};
-use crate::map::Map;
 use crate::prelude::*;
+use crate::v0::map::Map;
 use crate::{raw, Error};
 
 /// Type: Unsigned Transaction PSBT_GLOBAL_UNSIGNED_TX = 0x00

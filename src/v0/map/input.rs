@@ -9,10 +9,10 @@ use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighash
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{ecdsa, secp256k1, taproot, ScriptBuf, Transaction, TxOut, Witness};
 
-use crate::map::Map;
 use crate::prelude::*;
 use crate::serialize::Deserialize;
-use crate::sighash_type::{PsbtSighashType, InvalidSighashTypeError};
+use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
+use crate::v0::map::Map;
 use crate::{error, raw, Error};
 
 /// Type: Non-Witness UTXO PSBT_IN_NON_WITNESS_UTXO = 0x00
