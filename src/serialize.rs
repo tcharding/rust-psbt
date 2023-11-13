@@ -20,7 +20,7 @@ use bitcoin::taproot::{
 };
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
-use crate::map::PsbtSighashType;
+use crate::sighash_type::PsbtSighashType;
 use crate::prelude::*;
 use crate::{io, Error};
 

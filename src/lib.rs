@@ -44,6 +44,7 @@ mod macros;
 mod map;
 #[cfg(feature = "serde")]
 mod serde_utils;
+mod sighash_type;
 
 pub mod raw;
 pub mod serialize;
@@ -67,7 +68,8 @@ use crate::prelude::*;
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use crate::{
     error::Error,
-    map::{Input, Global, Output, PsbtSighashType},
+    map::{Input, Global, Output},
+    sighash_type::PsbtSighashType,
 };
 
 /// A Partially Signed Transaction.
