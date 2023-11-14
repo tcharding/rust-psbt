@@ -795,7 +795,7 @@ mod tests {
         //! Create a full PSBT value with various fields filled and make sure it can be JSONized.
         use bitcoin::hashes::sha256d;
 
-        use crate::sighash_type::PstbtSighashType;
+        use crate::sighash_type::PsbtSighashType;
         use crate::v0::map::Input;
 
         // create some values to use in the PSBT
