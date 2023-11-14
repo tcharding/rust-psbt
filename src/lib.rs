@@ -35,6 +35,10 @@ extern crate actual_serde as serde;
 /// Re-export of the `rust-bitcoin` crate.
 pub extern crate bitcoin;
 
+/// Re-export of the `rust-bitcoin` crate.
+#[cfg(feature = "miniscript")]
+pub extern crate miniscript;
+
 mod error;
 #[macro_use]
 mod macros;

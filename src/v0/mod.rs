@@ -8,6 +8,8 @@
 
 mod error;
 mod map;
+#[cfg(feature = "miniscript")]
+pub mod miniscript;
 
 use core::fmt;
 #[cfg(feature = "std")]
