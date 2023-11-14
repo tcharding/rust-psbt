@@ -7,8 +7,8 @@ use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{secp256k1, ScriptBuf};
 
-use crate::map::Map;
 use crate::prelude::*;
+use crate::v0::map::Map;
 use crate::{raw, Error};
 
 /// Type: Redeem ScriptBuf PSBT_OUT_REDEEM_SCRIPT = 0x00
@@ -164,4 +164,4 @@ impl Map for Output {
     }
 }
 
-impl_psbtmap_ser_de_serialize!(Output);
+impl_psbtmap_decoding!(Output);

@@ -10,8 +10,9 @@ use crate::serialize::Serialize;
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use self::{
-    input::{Input, PsbtSighashType},
+    input::Input,
     output::Output,
+    global::Global,
 };
 
 /// A trait that describes a PSBT key-value map.
