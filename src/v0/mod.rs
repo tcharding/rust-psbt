@@ -34,6 +34,13 @@ use crate::Error;
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
 
+/// Combines this two PSBTs as described by BIP 174.
+pub fn combine(mut this: Psbt, that: Psbt) -> Result<Psbt, Error> {
+    this.combine_with(that)?;
+    Ok(this)
+}
+// TODO: Consider adding an iter API that combines the yielded pbsts.
+
 /// A Partially Signed Transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -164,7 +171,7 @@ impl Psbt {
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP 174.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), Error> {
+    pub fn combine_with(&mut self, other: Self) -> Result<(), Error> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {
@@ -1612,12 +1619,13 @@ mod tests {
     // PSBTs taken from BIP 174 test vectors.
     #[test]
     fn combine_psbts() {
-        let mut psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
+        let psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
         let psbt2 = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
-        let psbt_combined = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
 
-        psbt1.combine(psbt2).expect("psbt combine to succeed");
-        assert_eq!(psbt1, psbt_combined);
+        let want = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
+        let got = combine(psbt1, psbt2).expect("psbt combine to succeed");
+
+        assert_eq!(got, want);
     }
 
     #[test]
@@ -1628,8 +1636,8 @@ mod tests {
         let psbt1_clone = psbt1.clone();
         let psbt2_clone = psbt2.clone();
 
-        psbt1.combine(psbt2_clone).expect("psbt1 combine to succeed");
-        psbt2.combine(psbt1_clone).expect("psbt2 combine to succeed");
+        psbt1.combine_with(psbt2_clone).expect("psbt1 combine to succeed");
+        psbt2.combine_with(psbt1_clone).expect("psbt2 combine to succeed");
 
         assert_eq!(psbt1, psbt2);
     }
