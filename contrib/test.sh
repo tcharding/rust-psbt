@@ -26,17 +26,14 @@ then
     cargo clippy --locked --all-features --all-targets -- -D warnings
 fi
 
-echo "********* Testing std *************"
 # Test without any features other than std first
 cargo test --locked --verbose --no-default-features --features="std"
 
-echo "********* Testing default *************"
 # Then test with the default features
 cargo test --verbose
 
 if [ "$DO_NO_STD" = true ]
 then
-    echo "********* Testing no-std build *************"
     # Build no_std, to make sure that cfg(test) doesn't hide any issues
     cargo build --locked --verbose --features="no-std" --no-default-features
 
@@ -59,7 +56,6 @@ fi
 # Test each feature with default enabled ("std").
 for feature in ${FEATURES}
 do
-    echo "********* Testing $feature *************"
     cargo test --locked --verbose --features="$feature"
 done
 
