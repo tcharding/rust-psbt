@@ -1,13 +1,6 @@
 // Written in 2020 by Sanket Kanjalkar <sanket1729@gmail.com>
 // SPDX-License-Identifier: CC0-1.0
 
-//! # Partially-Signed Bitcoin Transactions
-//!
-//! This module implements the Finalizer and Extractor roles defined in
-//! BIP 174, PSBT, described at
-//! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
-//!
-
 use core::mem;
 
 use crate::bitcoin::hashes::hash160;
