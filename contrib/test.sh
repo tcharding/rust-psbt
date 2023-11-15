@@ -3,7 +3,6 @@
 set -ex
 
 FEATURES="serde base64"
-MSRV="1\.56\.1"
 
 cargo --version
 rustc --version
