@@ -58,68 +58,6 @@ pub use crate::{
     sighash_type::PsbtSighashType,
 };
 
-#[cfg(feature = "base64")]
-mod display_from_str {
-    use core::fmt::{self, Display, Formatter};
-    use core::str::FromStr;
-
-    use bitcoin::base64::display::Base64Display;
-    use bitcoin::base64::prelude::{Engine as _, BASE64_STANDARD};
-
-    use crate::error::write_err;
-    use crate::Error;
-
-    /// Error encountered during PSBT decoding from Base64 string.
-    #[derive(Debug)]
-    #[non_exhaustive]
-    pub enum PsbtParseError {
-        /// Error in internal PSBT data structure.
-        PsbtEncoding(Error),
-        /// Error in PSBT Base64 encoding.
-        Base64Encoding(bitcoin::base64::DecodeError),
-    }
-
-    impl Display for PsbtParseError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            use self::PsbtParseError::*;
-
-            match *self {
-                PsbtEncoding(ref e) => write_err!(f, "error in internal PSBT data structure"; e),
-                Base64Encoding(ref e) => write_err!(f, "error in PSBT base64 encoding"; e),
-            }
-        }
-    }
-
-    #[cfg(feature = "std")]
-    impl std::error::Error for PsbtParseError {
-        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-            use self::PsbtParseError::*;
-
-            match self {
-                PsbtEncoding(e) => Some(e),
-                Base64Encoding(e) => Some(e),
-            }
-        }
-    }
-
-    impl Display for crate::v0::Psbt {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", Base64Display::new(&self.serialize(), &BASE64_STANDARD))
-        }
-    }
-
-    impl FromStr for crate::v0::Psbt {
-        type Err = PsbtParseError;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let data = BASE64_STANDARD.decode(s).map_err(PsbtParseError::Base64Encoding)?;
-            crate::v0::Psbt::deserialize(&data).map_err(PsbtParseError::PsbtEncoding)
-        }
-    }
-}
-#[cfg(feature = "base64")]
-pub use self::display_from_str::PsbtParseError;
-
 #[rustfmt::skip]
 mod prelude {
     #[cfg(all(not(feature = "std"), not(test)))]
