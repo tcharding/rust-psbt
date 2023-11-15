@@ -5,13 +5,13 @@ use core::mem;
 
 use crate::bitcoin::hashes::hash160;
 use crate::bitcoin::key::XOnlyPublicKey;
-use crate::bitcoin::secp256k1::{self, Secp256k1};
+use crate::bitcoin::secp256k1::{Secp256k1, Verification};
 use crate::bitcoin::sighash::Prevouts;
 use crate::bitcoin::taproot::LeafVersion;
-use crate::bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
+use crate::bitcoin::{Address, Network, PublicKey, Script, ScriptBuf, TxOut, VarInt, Witness};
 use crate::miniscript::miniscript::satisfy::Placeholder;
 use crate::miniscript::{
-    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, MiniscriptKey, Satisfier,
+    BareCtx, Descriptor, ExtParams, Interpreter, Legacy, Miniscript, MiniscriptKey, Satisfier,
     Segwitv0, SigType, Tap, ToPublicKey,
 };
 use crate::prelude::*;
@@ -29,7 +29,7 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
-    let mut map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, XOnlyPublicKey> = BTreeMap::new();
     let psbt_inputs = &sat.psbt.inputs;
     for psbt_input in psbt_inputs {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
@@ -101,7 +101,7 @@ pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<ScriptBuf, I
 }
 
 // Get the spending utxo for this psbt input
-pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, InputError> {
+pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&TxOut, InputError> {
     let inp = &psbt.inputs[index];
     let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
         witness_utxo
@@ -115,7 +115,7 @@ pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, Inp
 }
 
 /// Get the Prevouts for the psbt
-pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error> {
+pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&TxOut>, super::Error> {
     let mut utxos = vec![];
     for i in 0..psbt.inputs.len() {
         let utxo_ref = get_utxo(psbt, i).map_err(|e| Error::InputError(e, i))?;
@@ -165,7 +165,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             // Partial sigs loses the compressed flag that is necessary
             // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
             // The type checker will fail again after we update to 0.28 and this can be removed
-            let addr = bitcoin::Address::p2pkh(&pk, bitcoin::Network::Bitcoin);
+            let addr = Address::p2pkh(&pk, Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
@@ -177,7 +177,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
             // Indirect way to check the equivalence of pubkey-hashes.
             // Create a pubkey hash and check if they are the same.
-            let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
+            let addr = Address::p2wpkh(&pk, Network::Bitcoin)
                 .expect("Address corresponding to valid pubkey");
             *script_pubkey == addr.script_pubkey()
         });
@@ -235,7 +235,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 } else if redeem_script.is_p2wpkh() {
                     // 6. `ShWpkh` case
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-                        let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
+                        let addr = Address::p2wpkh(&pk, Network::Bitcoin)
                             .expect("Address corresponding to valid pubkey");
                         *redeem_script == addr.script_pubkey()
                     });
@@ -281,10 +281,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
 /// The psbt must have included final script sig and final witness.
 /// In other words, this checks whether the finalized psbt interprets
 /// correctly
-pub fn interpreter_check<C: secp256k1::Verification>(
-    psbt: &Psbt,
-    secp: &Secp256k1<C>,
-) -> Result<(), Error> {
+pub fn interpreter_check<C: Verification>(psbt: &Psbt, secp: &Secp256k1<C>) -> Result<(), Error> {
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     for (index, input) in psbt.inputs.iter().enumerate() {
@@ -303,7 +300,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 }
 
 // Run the miniscript interpreter on a single psbt input
-fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
+fn interpreter_inp_check<C: Verification, T: Borrow<TxOut>>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
     index: usize,
@@ -319,9 +316,8 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     {
         let cltv = psbt.global.unsigned_tx.lock_time;
         let csv = psbt.global.unsigned_tx.input[index].sequence;
-        let interpreter =
-            interpreter::Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
-                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+        let interpreter = Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
+            .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
         let iter = interpreter.iter(secp, &psbt.global.unsigned_tx, index, utxos);
         if let Some(error) = iter.filter_map(Result::err).next() {
             return Err(Error::InputError(InputError::Interpreter(error), index));
@@ -340,22 +336,19 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
 /// The functions fails it is not possible to satisfy any of the inputs non-malleably
 /// See [finalize_mall] if you want to allow malleable satisfactions
 #[deprecated(since = "7.0.0", note = "Please use Psbt::finalize instead")]
-pub fn finalize<C: secp256k1::Verification>(
-    psbt: &mut Psbt,
-    secp: &Secp256k1<C>,
-) -> Result<(), super::Error> {
+pub fn finalize<C: Verification>(psbt: &mut Psbt, secp: &Secp256k1<C>) -> Result<(), super::Error> {
     finalize_helper(psbt, secp, false)
 }
 
 /// Same as [finalize], but allows for malleable satisfactions
-pub fn finalize_mall<C: secp256k1::Verification>(
+pub fn finalize_mall<C: Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), super::Error> {
     finalize_helper(psbt, secp, true)
 }
 
-pub fn finalize_helper<C: secp256k1::Verification>(
+pub fn finalize_helper<C: Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
     allow_mall: bool,
@@ -372,7 +365,7 @@ pub fn finalize_helper<C: secp256k1::Verification>(
 
 // Helper function to obtain psbt final_witness/final_script_sig.
 // Does not add fields to the psbt, only returns the values.
-fn finalize_input_helper<C: secp256k1::Verification>(
+fn finalize_input_helper<C: Verification>(
     psbt: &Psbt,
     index: usize,
     secp: &Secp256k1<C>,
@@ -398,7 +391,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
         }
     };
 
-    let witness = bitcoin::Witness::from_slice(&witness);
+    let witness = Witness::from_slice(&witness);
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;
@@ -406,7 +399,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
     Ok((witness, script_sig))
 }
 
-pub(super) fn finalize_input<C: secp256k1::Verification>(
+pub(super) fn finalize_input<C: Verification>(
     psbt: &mut Psbt,
     index: usize,
     secp: &Secp256k1<C>,
@@ -461,7 +454,7 @@ pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
     wit.iter().map(T::size).sum::<usize>() + varint_len(wit.len())
 }
 
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
+pub(crate) fn varint_len(n: usize) -> usize { VarInt(n as u64).size() }
 
 #[cfg(test)]
 mod tests {

@@ -11,15 +11,19 @@ mod satisfy;
 use core::convert::TryFrom;
 
 use crate::bitcoin::hashes::Hash;
-use crate::bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-use crate::bitcoin::sighash::{self, SighashCache};
-use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use crate::bitcoin::{bip32, Script, ScriptBuf};
+use crate::bitcoin::key::XOnlyPublicKey;
+use crate::bitcoin::secp256k1::{self, Message, Secp256k1, Verification, VerifyOnly};
+use crate::bitcoin::sighash::{self, EcdsaSighashType, SighashCache, TapSighashType};
+use crate::bitcoin::taproot::{
+    ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TapTree, TaprootBuilder,
+};
+use crate::bitcoin::{bip32, Script, ScriptBuf, Transaction};
 use crate::miniscript::{
     descriptor, interpreter, translate_hash_clone, DefiniteDescriptorKey, Descriptor,
     DescriptorPublicKey, ToPublicKey, TranslatePk, Translator,
 };
 use crate::prelude::*;
+use crate::raw;
 use crate::v0::map::{Input, Output};
 use crate::v0::Psbt;
 
@@ -49,10 +53,7 @@ impl Psbt {
     /// # Errors:
     ///
     /// - A vector of errors, one of each of failed finalized input
-    pub fn finalize_mut<C: secp256k1::Verification>(
-        &mut self,
-        secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<(), Vec<Error>> {
+    pub fn finalize_mut<C: Verification>(&mut self, secp: &Secp256k1<C>) -> Result<(), Vec<Error>> {
         // Actually construct the witnesses
         let mut errors = vec![];
         for index in 0..self.inputs.len() {
@@ -77,9 +78,9 @@ impl Psbt {
     ///
     /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
     /// - A vector of input errors, one of each of failed finalized input
-    pub fn finalize<C: secp256k1::Verification>(
+    pub fn finalize<C: Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
         match self.finalize_mut(secp) {
             Ok(..) => Ok(self),
@@ -88,9 +89,9 @@ impl Psbt {
     }
 
     /// Same as [Psbt::finalize_mut], but allows for malleable satisfactions
-    pub fn finalize_mall_mut<C: secp256k1::Verification>(
+    pub fn finalize_mall_mut<C: Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
         let mut errors = vec![];
         for index in 0..self.inputs.len() {
@@ -109,7 +110,7 @@ impl Psbt {
     }
 
     /// Same as [Psbt::finalize], but allows for malleable satisfactions
-    pub fn finalize_mall<C: secp256k1::Verification>(
+    pub fn finalize_mall<C: Verification>(
         mut self,
         secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
@@ -126,9 +127,9 @@ impl Psbt {
     /// # Errors:
     ///
     /// - Input error detailing why the finalization failed. The psbt is not mutated when the finalization fails
-    pub fn finalize_inp_mut<C: secp256k1::Verification>(
+    pub fn finalize_inp_mut<C: Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
@@ -143,9 +144,9 @@ impl Psbt {
     ///  Returns a tuple containing
     /// - Original psbt
     /// - Input Error detailing why the input finalization failed
-    pub fn finalize_inp<C: secp256k1::Verification>(
+    pub fn finalize_inp<C: Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)> {
         match self.finalize_inp_mut(secp, index) {
@@ -155,9 +156,9 @@ impl Psbt {
     }
 
     /// Same as [`Psbt::finalize_inp_mut`], but allows for malleable satisfactions
-    pub fn finalize_inp_mall_mut<C: secp256k1::Verification>(
+    pub fn finalize_inp_mall_mut<C: Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
@@ -167,9 +168,9 @@ impl Psbt {
     }
 
     /// Same as [`Psbt::finalize_inp`], but allows for malleable satisfactions
-    pub fn finalize_inp_mall<C: secp256k1::Verification>(
+    pub fn finalize_inp_mall<C: Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)> {
         match self.finalize_inp_mall_mut(secp, index) {
@@ -183,10 +184,7 @@ impl Psbt {
     /// Also does the interpreter sanity check
     /// Will error if the final ScriptSig or final Witness are missing
     /// or the interpreter check fails.
-    pub fn extract<C: secp256k1::Verification>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::Transaction, Error> {
+    pub fn extract<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<Transaction, Error> {
         sanity_check(self)?;
 
         let mut ret = self.global.unsigned_tx.clone();
@@ -363,14 +361,14 @@ impl Psbt {
         let prevouts = finalizer::prevouts(self).map_err(|_e| SighashError::MissingSpendUtxos)?;
         // Note that as per Psbt spec we should have access to spent_utxos for the transaction
         // Even if the transaction does not require SighashAll, we create `Prevouts::All` for code simplicity
-        let prevouts = bitcoin::sighash::Prevouts::All(&prevouts);
+        let prevouts = sighash::Prevouts::All(&prevouts);
         let inp_spk =
             finalizer::get_scriptpubkey(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?;
         if inp_spk.is_p2tr() {
             let hash_ty = inp
                 .sighash_type
                 .map(|sighash_type| sighash_type.taproot_hash_ty())
-                .unwrap_or(Ok(sighash::TapSighashType::Default))
+                .unwrap_or(Ok(TapSighashType::Default))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
             match tapleaf_hash {
                 Some(leaf_hash) => {
@@ -388,7 +386,7 @@ impl Psbt {
             let hash_ty = inp
                 .sighash_type
                 .map(|sighash_type| sighash_type.ecdsa_hash_ty())
-                .unwrap_or(Ok(sighash::EcdsaSighashType::All))
+                .unwrap_or(Ok(EcdsaSighashType::All))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
             let amt =
                 finalizer::get_utxo(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?.value;
@@ -486,7 +484,7 @@ impl Output {
 // hash160 -> (XonlyPublicKey)/PublicKey
 struct KeySourceLookUp(
     pub BTreeMap<secp256k1::PublicKey, bip32::KeySource>,
-    pub secp256k1::Secp256k1<VerifyOnly>,
+    pub Secp256k1<VerifyOnly>,
 );
 
 impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
@@ -516,21 +514,21 @@ trait PsbtFields {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf>;
     fn witness_script(&mut self) -> &mut Option<ScriptBuf>;
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource>;
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey>;
+    fn tap_internal_key(&mut self) -> &mut Option<XOnlyPublicKey>;
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    ) -> &mut BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
     fn proprietary(&mut self) -> &mut BTreeMap<crate::raw::ProprietaryKey, Vec<u8>>;
     fn unknown(&mut self) -> &mut BTreeMap<crate::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in Output, so it's returned as an option of a mutable ref
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { None }
+    fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { None }
 
     // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> { None }
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<TapNodeHash>> { None }
 }
 
 impl PsbtFields for Input {
@@ -539,23 +537,21 @@ impl PsbtFields for Input {
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
-        &mut self.tap_internal_key
-    }
+    fn tap_internal_key(&mut self) -> &mut Option<XOnlyPublicKey> { &mut self.tap_internal_key }
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    fn proprietary(&mut self) -> &mut BTreeMap<crate::raw::ProprietaryKey, Vec<u8>> {
+    fn proprietary(&mut self) -> &mut BTreeMap<raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
-    fn unknown(&mut self) -> &mut BTreeMap<crate::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> {
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<TapNodeHash>> {
         Some(&mut self.tap_merkle_root)
     }
 }
@@ -574,12 +570,12 @@ impl PsbtFields for Output {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    fn proprietary(&mut self) -> &mut BTreeMap<crate::raw::ProprietaryKey, Vec<u8>> {
+    fn proprietary(&mut self) -> &mut BTreeMap<raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
-    fn unknown(&mut self) -> &mut BTreeMap<crate::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknown }
 
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }
+    fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { Some(&mut self.tap_tree) }
 }
 
 fn update_item_with_descriptor_helper<F: PsbtFields>(
@@ -590,7 +586,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
     // failed.
 ) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
-    let secp = secp256k1::Secp256k1::verification_only();
+    let secp = Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
         let derived = descriptor.derived_descriptor(&secp)?;
@@ -623,7 +619,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 ),
             );
 
-            let mut builder = taproot::TaprootBuilder::new();
+            let mut builder = TaprootBuilder::new();
 
             for ((_depth_der, ms_derived), (depth, ms)) in
                 tr_derived.iter_scripts().zip(tr_xpk.iter_scripts())
@@ -674,10 +670,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
                 // contains one, otherwise it'll just be empty
                 Some(tap_tree) if tr_derived.tap_tree().is_some() => {
-                    *tap_tree = Some(
-                        taproot::TapTree::try_from(builder)
-                            .expect("The tree should always be valid"),
-                    );
+                    *tap_tree =
+                        Some(TapTree::try_from(builder).expect("The tree should always be valid"));
                 }
                 _ => {}
             }
@@ -732,13 +726,11 @@ pub enum PsbtSighashMsg {
 
 impl PsbtSighashMsg {
     /// Convert the message to a [`secp256k1::Message`].
-    pub fn to_secp_msg(&self) -> secp256k1::Message {
+    pub fn to_secp_msg(&self) -> Message {
         match *self {
-            PsbtSighashMsg::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
-            PsbtSighashMsg::LegacySighash(msg) =>
-                secp256k1::Message::from_digest(msg.to_byte_array()),
-            PsbtSighashMsg::SegwitV0Sighash(msg) =>
-                secp256k1::Message::from_digest(msg.to_byte_array()),
+            PsbtSighashMsg::TapSighash(msg) => Message::from_digest(msg.to_byte_array()),
+            PsbtSighashMsg::LegacySighash(msg) => Message::from_digest(msg.to_byte_array()),
+            PsbtSighashMsg::SegwitV0Sighash(msg) => Message::from_digest(msg.to_byte_array()),
         }
     }
 }

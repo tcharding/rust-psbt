@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use crate::bitcoin::hashes::{hash160, sha256d, Hash};
-use crate::bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use crate::bitcoin::{absolute, transaction, Sequence};
+use crate::bitcoin::key::XOnlyPublicKey;
+use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
+use crate::bitcoin::{absolute, ecdsa, transaction, ScriptBuf, Sequence};
 use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey};
 use crate::prelude::*;
 use crate::v0::Psbt;
@@ -26,15 +27,11 @@ impl<'a> PsbtInputSatisfier<'a> {
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'a> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
+    fn lookup_tap_key_spend_sig(&self) -> Option<taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }
 
-    fn lookup_tap_leaf_script_sig(
-        &self,
-        pk: &Pk,
-        lh: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
+    fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<taproot::Signature> {
         self.psbt.inputs[self.index].tap_script_sigs.get(&(pk.to_x_only_pubkey(), *lh)).copied()
     }
 
@@ -48,14 +45,14 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&self.psbt.inputs[self.index].tap_scripts)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
+    ) -> Option<(XOnlyPublicKey, taproot::Signature)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -65,14 +62,14 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
-    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<ecdsa::Signature> {
         self.psbt.inputs[self.index].partial_sigs.get(&pk.to_public_key()).copied()
     }
 
     fn lookup_raw_pkh_ecdsa_sig(
         &self,
         pkh: &hash160::Hash,
-    ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
+    ) -> Option<(bitcoin::PublicKey, ecdsa::Signature)> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
