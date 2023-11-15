@@ -37,6 +37,23 @@ pub use self::{
 pub use self::finalizer::finalize;
 
 impl Psbt {
+    /// Same as [`Psbt::finalize_mut`], but does not mutate the input psbt and
+    /// returns a new psbt
+    ///
+    /// # Errors:
+    ///
+    /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
+    /// - A vector of input errors, one of each of failed finalized input
+    pub fn finalize<C: Verification>(
+        mut self,
+        secp: &Secp256k1<C>,
+    ) -> Result<Psbt, (Psbt, Vec<Error>)> {
+        match self.finalize_mut(secp) {
+            Ok(..) => Ok(self),
+            Err(e) => Err((self, e)),
+        }
+    }
+
     /// Finalize the psbt. This function takes in a mutable reference to psbt
     /// and populates the final_witness and final_scriptsig
     /// for all miniscript inputs.
@@ -71,18 +88,12 @@ impl Psbt {
         }
     }
 
-    /// Same as [`Psbt::finalize_mut`], but does not mutate the input psbt and
-    /// returns a new psbt
-    ///
-    /// # Errors:
-    ///
-    /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
-    /// - A vector of input errors, one of each of failed finalized input
-    pub fn finalize<C: Verification>(
+    /// Same as [Psbt::finalize], but allows for malleable satisfactions
+    pub fn finalize_mall<C: Verification>(
         mut self,
         secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
-        match self.finalize_mut(secp) {
+        match self.finalize_mall_mut(secp) {
             Ok(..) => Ok(self),
             Err(e) => Err((self, e)),
         }
@@ -109,12 +120,18 @@ impl Psbt {
         }
     }
 
-    /// Same as [Psbt::finalize], but allows for malleable satisfactions
-    pub fn finalize_mall<C: Verification>(
+    /// Same as [`Psbt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
+    ///
+    /// # Errors:
+    ///  Returns a tuple containing
+    /// - Original psbt
+    /// - Input Error detailing why the input finalization failed
+    pub fn finalize_inp<C: Verification>(
         mut self,
         secp: &Secp256k1<C>,
-    ) -> Result<Psbt, (Psbt, Vec<Error>)> {
-        match self.finalize_mall_mut(secp) {
+        index: usize,
+    ) -> Result<Psbt, (Psbt, Error)> {
+        match self.finalize_inp_mut(secp, index) {
             Ok(..) => Ok(self),
             Err(e) => Err((self, e)),
         }
@@ -138,18 +155,13 @@ impl Psbt {
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
-    /// Same as [`Psbt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
-    ///
-    /// # Errors:
-    ///  Returns a tuple containing
-    /// - Original psbt
-    /// - Input Error detailing why the input finalization failed
-    pub fn finalize_inp<C: Verification>(
+    /// Same as [`Psbt::finalize_inp`], but allows for malleable satisfactions
+    pub fn finalize_inp_mall<C: Verification>(
         mut self,
         secp: &Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)> {
-        match self.finalize_inp_mut(secp, index) {
+        match self.finalize_inp_mall_mut(secp, index) {
             Ok(..) => Ok(self),
             Err(e) => Err((self, e)),
         }
@@ -165,18 +177,6 @@ impl Psbt {
             return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
-    }
-
-    /// Same as [`Psbt::finalize_inp`], but allows for malleable satisfactions
-    pub fn finalize_inp_mall<C: Verification>(
-        mut self,
-        secp: &Secp256k1<C>,
-        index: usize,
-    ) -> Result<Psbt, (Psbt, Error)> {
-        match self.finalize_inp_mall_mut(secp, index) {
-            Ok(..) => Ok(self),
-            Err(e) => Err((self, e)),
-        }
     }
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
