@@ -26,34 +26,34 @@ then
 fi
 
 # Test without any features other than std first (same as default)
-cargo build --locked --verbose --no-default-features --features="std"
-cargo test --locked --verbose --no-default-features --features="std"
+cargo build --locked --no-default-features --features="std"
+cargo test --locked --no-default-features --features="std"
 
 # Test each feature with default enabled ("std").
 for feature in ${FEATURES}
 do
-    cargo build --locked --verbose --features="$feature"
-    cargo test --locked --verbose --features="$feature"
+    cargo build --locked --features="$feature"
+    cargo test --locked --features="$feature"
 done
 
 if [ "$DO_NO_STD" = true ]
 then
     # Build no_std, to make sure that cfg(test) doesn't hide any issues
-    cargo build --locked --verbose --no-default-features --features="no-std"
+    cargo build --locked --no-default-features --features="no-std"
 
     # Build std + no_std, to make sure they are not incompatible
-    cargo build --locked --verbose --features="no-std"
+    cargo build --locked --features="no-std"
 
     # Test no_std
-    cargo test --locked --verbose --no-default-features --features="no-std"
+    cargo test --locked --no-default-features --features="no-std"
 
     # Build all features
-    cargo build --locked --verbose --no-default-features --features="no-std $FEATURES"
+    cargo build --locked --no-default-features --features="no-std $FEATURES"
 
     # Build specific features
     for feature in ${FEATURES}
     do
-        cargo build --locked --verbose --no-default-features --features="no-std $feature"
+        cargo build --locked --no-default-features --features="no-std $feature"
     done
 fi
 
