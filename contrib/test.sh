@@ -26,11 +26,16 @@ then
     cargo clippy --locked --all-features --all-targets -- -D warnings
 fi
 
-# Test without any features other than std first
+# Test without any features other than std first (same as default)
+cargo build --locked --verbose --no-default-features --features="std"
 cargo test --locked --verbose --no-default-features --features="std"
 
-# Then test with the default features
-cargo test --verbose
+# Test each feature with default enabled ("std").
+for feature in ${FEATURES}
+do
+    cargo build --locked --verbose --features="$feature"
+    cargo test --locked --verbose --features="$feature"
+done
 
 if [ "$DO_NO_STD" = true ]
 then
@@ -52,12 +57,6 @@ then
         cargo build --locked --verbose --no-default-features --features="no-std $feature"
     done
 fi
-
-# Test each feature with default enabled ("std").
-for feature in ${FEATURES}
-do
-    cargo test --locked --verbose --features="$feature"
-done
 
 # Build the docs if told to (this only works with the nightly toolchain)
 if [ "$DO_DOCSRS" = true ]; then
