@@ -35,54 +35,6 @@ pub use self::{
 #[allow(deprecated)]
 pub use self::finalizer::finalize;
 
-// Basic sanity checks on psbts.
-// rust-bitcoin TODO: (Long term)
-// Brainstorm about how we can enforce these in type system while having a nice API
-fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
-    if psbt.global.unsigned_tx.input.len() != psbt.inputs.len() {
-        return Err(Error::WrongInputCount {
-            in_tx: psbt.global.unsigned_tx.input.len(),
-            in_map: psbt.inputs.len(),
-        });
-    }
-
-    // Check well-formedness of input data
-    for (index, input) in psbt.inputs.iter().enumerate() {
-        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
-        let target_ecdsa_sighash_ty = match input.sighash_type {
-            Some(psbt_hash_ty) => psbt_hash_ty
-                .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
-            None => sighash::EcdsaSighashType::All,
-        };
-        for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
-                |_| {
-                    Error::InputError(
-                        InputError::Interpreter(interpreter::Error::NonStandardSighash(
-                            ecdsa_sig.to_vec(),
-                        )),
-                        index,
-                    )
-                },
-            )?;
-            if target_ecdsa_sighash_ty != flag {
-                return Err(Error::InputError(
-                    InputError::WrongSighashFlag {
-                        required: target_ecdsa_sighash_ty,
-                        got: flag,
-                        pubkey: *key,
-                    },
-                    index,
-                ));
-            }
-            // Signatures are well-formed in psbt partial sigs
-        }
-    }
-
-    Ok(())
-}
-
 impl Psbt {
     /// Finalize the psbt. This function takes in a mutable reference to psbt
     /// and populates the final_witness and final_scriptsig
@@ -792,6 +744,54 @@ impl PsbtSighashMsg {
                 secp256k1::Message::from_digest(msg.to_byte_array()),
         }
     }
+}
+
+// Basic sanity checks on psbts.
+// rust-bitcoin TODO: (Long term)
+// Brainstorm about how we can enforce these in type system while having a nice API
+fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
+    if psbt.global.unsigned_tx.input.len() != psbt.inputs.len() {
+        return Err(Error::WrongInputCount {
+            in_tx: psbt.global.unsigned_tx.input.len(),
+            in_map: psbt.inputs.len(),
+        });
+    }
+
+    // Check well-formedness of input data
+    for (index, input) in psbt.inputs.iter().enumerate() {
+        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
+        let target_ecdsa_sighash_ty = match input.sighash_type {
+            Some(psbt_hash_ty) => psbt_hash_ty
+                .ecdsa_hash_ty()
+                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
+            None => sighash::EcdsaSighashType::All,
+        };
+        for (key, ecdsa_sig) in &input.partial_sigs {
+            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
+                |_| {
+                    Error::InputError(
+                        InputError::Interpreter(interpreter::Error::NonStandardSighash(
+                            ecdsa_sig.to_vec(),
+                        )),
+                        index,
+                    )
+                },
+            )?;
+            if target_ecdsa_sighash_ty != flag {
+                return Err(Error::InputError(
+                    InputError::WrongSighashFlag {
+                        required: target_ecdsa_sighash_ty,
+                        got: flag,
+                        pubkey: *key,
+                    },
+                    index,
+                ));
+            }
+            // Signatures are well-formed in psbt partial sigs
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
