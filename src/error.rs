@@ -19,7 +19,9 @@ pub enum PsbtHash {
     Hash160,
     Hash256,
 }
+
 /// Ways that a Partially Signed Transaction might fail.
+// TODO: This general error needs splitting up into specific error types.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {

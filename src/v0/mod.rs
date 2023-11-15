@@ -6,21 +6,26 @@
 //!
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
+mod error;
 mod map;
 
+use core::fmt;
+#[cfg(feature = "std")]
+use std::collections::{HashMap, HashSet};
+
+use bitcoin::bip32::{self, KeySource, Xpriv};
 use bitcoin::hashes::Hash;
-use bitcoin::key::PublicKey;
+use bitcoin::key::{PrivateKey, PublicKey};
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::{Transaction, TxOut};
 use bitcoin::{ecdsa, Amount, FeeRate};
 
+use crate::error::write_err;
 use crate::prelude::*;
+use crate::v0::error::{ExtractTxError, IndexOutOfBoundsError, SignError};
 use crate::v0::map::{Global, Input, Map, Output};
-use crate::{
-    Error, ExtractTxError, GetKey, IndexOutOfBoundsError, KeyRequest, OutputType, SignError,
-    SigningAlgorithm, SigningErrors, SigningKeys,
-};
+use crate::Error;
 
 /// A Partially Signed Transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -168,7 +173,7 @@ impl Psbt {
     ///
     /// ## Errors
     ///
-    /// [`ExtractTxError`] variants will contain either the [`Psbt`] itself or the [`Transaction`]
+    /// `ExtractTxError` variants will contain either the [`Psbt`] itself or the [`Transaction`]
     /// that was extracted. These can be extracted from the Errors in order to recover.
     /// See the error documentation for info on the variants. In general, it covers large fees.
     pub fn extract_tx_fee_rate_limit(self) -> Result<Transaction, ExtractTxError> {
@@ -527,6 +532,199 @@ impl Psbt {
     }
 }
 
+/// Data required to call [`GetKey`] to get the private key to sign an input.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum KeyRequest {
+    /// Request a private key using the associated public key.
+    Pubkey(PublicKey),
+    /// Request a private key using BIP-32 fingerprint and derivation path.
+    Bip32(KeySource),
+}
+
+/// Trait to get a private key from a key request, key is then used to sign an input.
+pub trait GetKey {
+    /// An error occurred while getting the key.
+    type Error: core::fmt::Debug;
+
+    /// Attempts to get the private key for `key_request`.
+    ///
+    /// # Returns
+    /// - `Some(key)` if the key is found.
+    /// - `None` if the key was not found but no error was encountered.
+    /// - `Err` if an error was encountered while looking for the key.
+    fn get_key<C: Signing>(
+        &self,
+        key_request: KeyRequest,
+        secp: &Secp256k1<C>,
+    ) -> Result<Option<PrivateKey>, Self::Error>;
+}
+
+impl GetKey for Xpriv {
+    type Error = GetKeyError;
+
+    fn get_key<C: Signing>(
+        &self,
+        key_request: KeyRequest,
+        secp: &Secp256k1<C>,
+    ) -> Result<Option<PrivateKey>, Self::Error> {
+        match key_request {
+            KeyRequest::Pubkey(_) => Err(GetKeyError::NotSupported),
+            KeyRequest::Bip32((fingerprint, path)) => {
+                let key = if self.fingerprint(secp) == fingerprint {
+                    let k = self.derive_priv(secp, &path)?;
+                    Some(k.to_priv())
+                } else {
+                    None
+                };
+                Ok(key)
+            }
+        }
+    }
+}
+
+/// Map of input index -> pubkey associated with secret key used to create signature for that input.
+pub type SigningKeys = BTreeMap<usize, Vec<PublicKey>>;
+
+/// Map of input index -> the error encountered while attempting to sign that input.
+pub type SigningErrors = BTreeMap<usize, SignError>;
+
+#[rustfmt::skip]
+macro_rules! impl_get_key_for_set {
+    ($set:ident) => {
+
+impl GetKey for $set<Xpriv> {
+    type Error = GetKeyError;
+
+    fn get_key<C: Signing>(
+        &self,
+        key_request: KeyRequest,
+        secp: &Secp256k1<C>
+    ) -> Result<Option<PrivateKey>, Self::Error> {
+        match key_request {
+            KeyRequest::Pubkey(_) => Err(GetKeyError::NotSupported),
+            KeyRequest::Bip32((fingerprint, path)) => {
+                for xpriv in self.iter() {
+                    if xpriv.parent_fingerprint == fingerprint {
+                        let k = xpriv.derive_priv(secp, &path)?;
+                        return Ok(Some(k.to_priv()));
+                    }
+                }
+                Ok(None)
+            }
+        }
+    }
+}}}
+
+impl_get_key_for_set!(BTreeSet);
+#[cfg(feature = "std")]
+impl_get_key_for_set!(HashSet);
+
+#[rustfmt::skip]
+macro_rules! impl_get_key_for_map {
+    ($map:ident) => {
+
+impl GetKey for $map<PublicKey, PrivateKey> {
+    type Error = GetKeyError;
+
+    fn get_key<C: Signing>(
+        &self,
+        key_request: KeyRequest,
+        _: &Secp256k1<C>,
+    ) -> Result<Option<PrivateKey>, Self::Error> {
+        match key_request {
+            KeyRequest::Pubkey(pk) => Ok(self.get(&pk).cloned()),
+            KeyRequest::Bip32(_) => Err(GetKeyError::NotSupported),
+        }
+    }
+}}}
+impl_get_key_for_map!(BTreeMap);
+#[cfg(feature = "std")]
+impl_get_key_for_map!(HashMap);
+
+/// Errors when getting a key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum GetKeyError {
+    /// A bip32 error.
+    Bip32(bip32::Error),
+    /// The GetKey operation is not supported for this key request.
+    NotSupported,
+}
+
+impl fmt::Display for GetKeyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use GetKeyError::*;
+
+        match *self {
+            Bip32(ref e) => write_err!(f, "a bip23 error"; e),
+            NotSupported =>
+                f.write_str("the GetKey operation is not supported for this key request"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for GetKeyError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use GetKeyError::*;
+
+        match *self {
+            NotSupported => None,
+            Bip32(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<bip32::Error> for GetKeyError {
+    fn from(e: bip32::Error) -> Self { GetKeyError::Bip32(e) }
+}
+
+/// The various output types supported by the Bitcoin network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum OutputType {
+    /// An output of type: pay-to-pubkey or pay-to-pubkey-hash.
+    Bare,
+    /// A pay-to-witness-pubkey-hash output (P2WPKH).
+    Wpkh,
+    /// A pay-to-witness-script-hash output (P2WSH).
+    Wsh,
+    /// A nested segwit output, pay-to-witness-pubkey-hash nested in a pay-to-script-hash.
+    ShWpkh,
+    /// A nested segwit output, pay-to-witness-script-hash nested in a pay-to-script-hash.
+    ShWsh,
+    /// A pay-to-script-hash output excluding wrapped segwit (P2SH).
+    Sh,
+    /// A taproot output (P2TR).
+    Tr,
+}
+
+impl OutputType {
+    /// The signing algorithm used to sign this output type.
+    pub fn signing_algorithm(&self) -> SigningAlgorithm {
+        use OutputType::*;
+
+        match self {
+            Bare | Wpkh | Wsh | ShWpkh | ShWsh | Sh => SigningAlgorithm::Ecdsa,
+            Tr => SigningAlgorithm::Schnorr,
+        }
+    }
+}
+
+/// Signing algorithms supported by the Bitcoin network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SigningAlgorithm {
+    /// The Elliptic Curve Digital Signature Algorithm (see [wikipedia]).
+    ///
+    /// [wikipedia]: https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+    Ecdsa,
+    /// The Schnorr signature algorithm (see [wikipedia]).
+    ///
+    /// [wikipedia]: https://en.wikipedia.org/wiki/Schnorr_signature
+    Schnorr,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -543,8 +741,8 @@ mod tests {
     use bitcoin::{ScriptBuf, Witness};
 
     use super::*;
-    use crate::raw;
     use crate::serialize::{Deserialize, Serialize};
+    use crate::{io, raw};
 
     #[track_caller]
     pub fn hex_psbt(s: &str) -> Result<Psbt, crate::error::Error> {
@@ -714,8 +912,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ser = &expected.serialize_map();
-        let mut decoder = std::io::Cursor::new(&ser);
+        let mut decoder = io::Cursor::new(expected.serialize_map());
         let actual = Output::decode(&mut decoder).unwrap();
 
         assert_eq!(expected, actual);
@@ -916,8 +1113,8 @@ mod tests {
         use bitcoin::witness::Witness;
 
         use super::*;
+        use crate::raw;
         use crate::v0::map::{Input, Map, Output};
-        use crate::{raw, Psbt};
 
         #[test]
         #[should_panic(expected = "InvalidMagic")]

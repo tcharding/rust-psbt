@@ -6,6 +6,7 @@ use core::str::FromStr;
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 
 use crate::error::write_err;
+use crate::prelude::*;
 
 /// A Signature hash type for the corresponding input. As of taproot upgrade, the signature hash
 /// type can be either [`EcdsaSighashType`] or [`TapSighashType`] but it is not possible to know
