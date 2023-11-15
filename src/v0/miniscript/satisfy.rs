@@ -7,21 +7,21 @@ use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicK
 use crate::prelude::*;
 use crate::v0::Psbt;
 
-/// Psbt satisfier for at inputs at a particular index
-/// Takes in &psbt because multiple inputs will share
-/// the same psbt structure
-/// All operations on this structure will panic if index
-/// is more than number of inputs in pbst
+/// A PSBT [`Satisfier`] for an input at a particular index.
+///
+/// Contains reference to the [`Psbt`] because multiple inputs will share the same PSBT. All
+/// operations on this structure will panic if index is more than number of inputs in pbst
+///
+/// [`Satisfier`]: crate::miniscript::Satisfier
 pub struct PsbtInputSatisfier<'psbt> {
-    /// pbst
+    /// Reference to the [`Psbt`].
     pub psbt: &'psbt Psbt,
-    /// input index
+    /// Index of the input we are satisfying.
     pub index: usize,
 }
 
 impl<'psbt> PsbtInputSatisfier<'psbt> {
-    /// create a new PsbtInputsatisfier from
-    /// psbt and index
+    /// Creates a new `PsbtInputSatisfier` from `psbt` and `index`.
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
 }
 
