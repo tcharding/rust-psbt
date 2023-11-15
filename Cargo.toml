@@ -18,12 +18,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = ["std"]
 std = ["bitcoin/std"]
-no-std = ["bitcoin/no-std"]
+no-std = ["bitcoin/no-std", "core2"]
 serde = ["actual-serde", "bitcoin/serde"]
 base64 = ["bitcoin/base64"]
 
 [dependencies]
-bitcoin = { version = "0.31.0", default-features = false, features = ["std"] }
+bitcoin = { version = "0.31.0", default-features = false, features = [] }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = [ "derive", "alloc" ], optional = true }

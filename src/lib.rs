@@ -537,11 +537,5 @@ mod prelude {
     #[cfg(any(feature = "std", test))]
     pub use std::collections::{BTreeMap, BTreeSet, btree_map, BinaryHeap};
 
-    #[cfg(feature = "std")]
-    pub use std::io::sink;
-
-    #[cfg(not(feature = "std"))]
-    pub use crate::io_extras::sink;
-
     pub use bitcoin::hex::DisplayHex;
 }
