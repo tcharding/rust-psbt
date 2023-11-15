@@ -7,6 +7,9 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+mod error;
+mod finalizer;
+
 use core::convert::TryFrom;
 
 use crate::bitcoin::hashes::{hash160, sha256d, Hash};
@@ -19,18 +22,17 @@ use crate::miniscript::{
     DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey, TranslatePk,
     Translator,
 };
-pub use crate::v0::miniscript::error::{
-    Error, InputError, OutputUpdateError, SighashError, UtxoUpdateError,
-};
-
-mod error;
-mod finalizer;
-
-#[allow(deprecated)]
-pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 use crate::prelude::*;
 use crate::v0::map::{Input, Output};
 use crate::v0::Psbt;
+
+#[rustfmt::skip]                // Keep public re-exports separate.
+pub use self::{
+    error::{Error, InputError, OutputUpdateError, SighashError, UtxoUpdateError},
+    finalizer::{finalize_mall, interpreter_check},
+};
+#[allow(deprecated)]
+pub use self::finalizer::finalize;
 
 /// Psbt satisfier for at inputs at a particular index
 /// Takes in &psbt because multiple inputs will share

@@ -10,7 +10,6 @@
 
 use core::mem;
 
-use super::{sanity_check, Error, InputError, PsbtInputSatisfier};
 use crate::bitcoin::hashes::hash160;
 use crate::bitcoin::key::XOnlyPublicKey;
 use crate::bitcoin::secp256k1::{self, Secp256k1};
@@ -23,6 +22,7 @@ use crate::miniscript::{
     Segwitv0, SigType, Tap, ToPublicKey,
 };
 use crate::prelude::*;
+use crate::v0::miniscript::{sanity_check, Error, InputError, PsbtInputSatisfier};
 use crate::v0::Psbt;
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
