@@ -35,21 +35,21 @@ cargo test --verbose
 if [ "$DO_NO_STD" = true ]
 then
     # Build no_std, to make sure that cfg(test) doesn't hide any issues
-    cargo build --locked --verbose --features="no-std" --no-default-features
+    cargo build --locked --verbose --no-default-features --features="no-std"
 
     # Build std + no_std, to make sure they are not incompatible
     cargo build --locked --verbose --features="no-std"
 
     # Test no_std
-    cargo test --locked --verbose --features="no-std" --no-default-features
+    cargo test --locked --verbose --no-default-features --features="no-std"
 
     # Build all features
-    cargo build --locked --verbose --features="no-std $FEATURES" --no-default-features
+    cargo build --locked --verbose --no-default-features --features="no-std $FEATURES"
 
     # Build specific features
     for feature in ${FEATURES}
     do
-        cargo build --locked --verbose --features="no-std $feature" --no-default-features
+        cargo build --locked --verbose --no-default-features --features="no-std $feature"
     done
 fi
 
