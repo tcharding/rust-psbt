@@ -5,36 +5,40 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
 mod error;
-mod finalizer;
 mod satisfy;
 
 use core::convert::TryFrom;
+use core::mem;
 
-use crate::bitcoin::hashes::Hash;
+use crate::bitcoin::hashes::{hash160, Hash};
 use crate::bitcoin::key::XOnlyPublicKey;
 use crate::bitcoin::secp256k1::{self, Message, Secp256k1, Verification, VerifyOnly};
-use crate::bitcoin::sighash::{self, EcdsaSighashType, SighashCache, TapSighashType};
+use crate::bitcoin::sighash::{self, EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use crate::bitcoin::taproot::{
     ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TapTree, TaprootBuilder,
 };
-use crate::bitcoin::{bip32, Script, ScriptBuf, Transaction};
+use crate::bitcoin::{
+    bip32, Address, Network, Script, ScriptBuf, Transaction, TxOut, VarInt, Witness,
+};
+use crate::miniscript::miniscript::satisfy::Placeholder;
 use crate::miniscript::{
-    descriptor, interpreter, translate_hash_clone, DefiniteDescriptorKey, Descriptor,
-    DescriptorPublicKey, ToPublicKey, TranslatePk, Translator,
+    descriptor, interpreter, translate_hash_clone, BareCtx, DefiniteDescriptorKey, Descriptor,
+    DescriptorPublicKey, ExtParams, Interpreter, Legacy, Miniscript, MiniscriptKey, Satisfier,
+    Segwitv0, SigType, Tap, ToPublicKey, TranslatePk, Translator,
 };
 use crate::prelude::*;
 use crate::raw;
 use crate::v0::map::{Input, Output};
 use crate::v0::Psbt;
 
+const ALLOW_MAL: bool = true;
+const NO_MAL: bool = false;
+
 #[rustfmt::skip]                // Keep public re-exports separate.
 pub use self::{
     error::{Error, InputError, OutputUpdateError, SighashError, UtxoUpdateError},
-    finalizer::{finalize_mall, interpreter_check},
     satisfy::PsbtInputSatisfier,
 };
-#[allow(deprecated)]
-pub use self::finalizer::finalize;
 
 impl Psbt {
     /// Same as [`Psbt::finalize_mut`], but does not mutate the input psbt and
@@ -74,7 +78,7 @@ impl Psbt {
         // Actually construct the witnesses
         let mut errors = vec![];
         for index in 0..self.inputs.len() {
-            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ false) {
+            match self._finalize_input(index, secp, NO_MAL) {
                 Ok(..) => {}
                 Err(e) => {
                     errors.push(e);
@@ -106,7 +110,7 @@ impl Psbt {
     ) -> Result<(), Vec<Error>> {
         let mut errors = vec![];
         for index in 0..self.inputs.len() {
-            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ true) {
+            match self._finalize_input(index, secp, ALLOW_MAL) {
                 Ok(..) => {}
                 Err(e) => {
                     errors.push(e);
@@ -152,7 +156,7 @@ impl Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
-        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
+        self._finalize_input(index, secp, NO_MAL)
     }
 
     /// Same as [`Psbt::finalize_inp`], but allows for malleable satisfactions
@@ -176,7 +180,84 @@ impl Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
-        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
+        self._finalize_input(index, secp, NO_MAL)
+    }
+
+    fn _finalize<C: Verification>(
+        &mut self,
+        secp: &Secp256k1<C>,
+        allow_mall: bool,
+    ) -> Result<(), Error> {
+        self.sanity_check()?;
+
+        // Actually construct the witnesses
+        for index in 0..self.inputs.len() {
+            self._finalize_input(index, secp, allow_mall)?;
+        }
+        // Interpreter is already run inside finalize_input for each input
+        Ok(())
+    }
+
+    fn _finalize_input<C: Verification>(
+        &mut self,
+        index: usize,
+        secp: &Secp256k1<C>,
+        allow_mall: bool,
+    ) -> Result<(), Error> {
+        let (witness, script_sig) = self.__finalize_input(index, secp, allow_mall)?;
+
+        // Now mutate the psbt input. Note that we cannot error after this point.
+        // If the input is mutated, it means that the finalization succeeded.
+        {
+            let original = mem::take(&mut self.inputs[index]);
+            let input = &mut self.inputs[index];
+            input.non_witness_utxo = original.non_witness_utxo;
+            input.witness_utxo = original.witness_utxo;
+            input.final_script_sig = if script_sig.is_empty() { None } else { Some(script_sig) };
+            input.final_script_witness = if witness.is_empty() { None } else { Some(witness) };
+        }
+
+        Ok(())
+    }
+
+    // Helper function to obtain psbt final_witness/final_script_sig.
+    // Does not add fields to the psbt, only returns the values.
+    fn __finalize_input<C: Verification>(
+        &self,
+        index: usize,
+        secp: &Secp256k1<C>,
+        allow_mall: bool,
+    ) -> Result<(Witness, ScriptBuf), Error> {
+        let (witness, script_sig) = {
+            let spk = self.get_scriptpubkey(index).map_err(|e| Error::InputError(e, index))?;
+            let sat = PsbtInputSatisfier::new(self, index);
+
+            if spk.is_p2tr() {
+                // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
+                let wit = construct_tap_witness(&spk, &sat, allow_mall)
+                    .map_err(|e| Error::InputError(e, index))?;
+                (wit, ScriptBuf::new())
+            } else {
+                // Get a descriptor for this input.
+                let desc = self.get_descriptor(index).map_err(|e| Error::InputError(e, index))?;
+
+                //generate the satisfaction witness and scriptsig
+                let sat = PsbtInputSatisfier::new(self, index);
+                if !allow_mall {
+                    desc.get_satisfaction(sat)
+                } else {
+                    desc.get_satisfaction_mall(sat)
+                }
+                .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+            }
+        };
+
+        let witness = Witness::from_slice(&witness);
+        let utxos = self.prevouts()?;
+        let utxos = &Prevouts::All(&utxos);
+        self.interpreter_inp_check(secp, index, utxos, &witness, &script_sig)?;
+
+        Ok((witness, script_sig))
     }
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
@@ -185,7 +266,7 @@ impl Psbt {
     /// Will error if the final ScriptSig or final Witness are missing
     /// or the interpreter check fails.
     pub fn extract<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<Transaction, Error> {
-        sanity_check(self)?;
+        self.sanity_check()?;
 
         let mut ret = self.global.unsigned_tx.clone();
         for (n, input) in self.inputs.iter().enumerate() {
@@ -200,7 +281,7 @@ impl Psbt {
                 ret.input[n].script_sig = script_sig.clone();
             }
         }
-        interpreter_check(self, secp)?;
+        self.interpreter_check(secp)?;
         Ok(ret)
     }
 
@@ -358,12 +439,11 @@ impl Psbt {
             return Err(SighashError::IndexOutOfBounds(idx, self.inputs.len()));
         }
         let inp = &self.inputs[idx];
-        let prevouts = finalizer::prevouts(self).map_err(|_e| SighashError::MissingSpendUtxos)?;
+        let prevouts = self.prevouts().map_err(|_e| SighashError::MissingSpendUtxos)?;
         // Note that as per Psbt spec we should have access to spent_utxos for the transaction
         // Even if the transaction does not require SighashAll, we create `Prevouts::All` for code simplicity
         let prevouts = sighash::Prevouts::All(&prevouts);
-        let inp_spk =
-            finalizer::get_scriptpubkey(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?;
+        let inp_spk = self.get_scriptpubkey(idx).map_err(|_e| SighashError::MissingInputUtxo)?;
         if inp_spk.is_p2tr() {
             let hash_ty = inp
                 .sighash_type
@@ -388,8 +468,7 @@ impl Psbt {
                 .map(|sighash_type| sighash_type.ecdsa_hash_ty())
                 .unwrap_or(Ok(EcdsaSighashType::All))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
-            let amt =
-                finalizer::get_utxo(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?.value;
+            let amt = self.get_utxo(idx).map_err(|_e| SighashError::MissingInputUtxo)?.value;
             let is_nested_wpkh = inp_spk.is_p2sh()
                 && inp.redeem_script.as_ref().map(|x| x.is_p2wpkh()).unwrap_or(false);
             let is_nested_wsh = inp_spk.is_p2sh()
@@ -425,6 +504,283 @@ impl Psbt {
                 Ok(PsbtSighashMsg::LegacySighash(msg))
             }
         }
+    }
+
+    // Basic sanity checks on psbts.
+    // rust-bitcoin TODO: (Long term)
+    // Brainstorm about how we can enforce these in type system while having a nice API
+    fn sanity_check(&self) -> Result<(), Error> {
+        if self.global.unsigned_tx.input.len() != self.inputs.len() {
+            return Err(Error::WrongInputCount {
+                in_tx: self.global.unsigned_tx.input.len(),
+                in_map: self.inputs.len(),
+            });
+        }
+
+        // Check well-formedness of input data
+        for (index, input) in self.inputs.iter().enumerate() {
+            // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
+            let target_ecdsa_sighash_ty = match input.sighash_type {
+                Some(psbt_hash_ty) => psbt_hash_ty
+                    .ecdsa_hash_ty()
+                    .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
+                None => sighash::EcdsaSighashType::All,
+            };
+            for (key, ecdsa_sig) in &input.partial_sigs {
+                let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32)
+                    .map_err(|_| {
+                        Error::InputError(
+                            InputError::Interpreter(interpreter::Error::NonStandardSighash(
+                                ecdsa_sig.to_vec(),
+                            )),
+                            index,
+                        )
+                    })?;
+                if target_ecdsa_sighash_ty != flag {
+                    return Err(Error::InputError(
+                        InputError::WrongSighashFlag {
+                            required: target_ecdsa_sighash_ty,
+                            got: flag,
+                            pubkey: *key,
+                        },
+                        index,
+                    ));
+                }
+                // Signatures are well-formed in psbt partial sigs
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Gets the scriptpubkey for the psbt input.
+    fn get_scriptpubkey(&self, index: usize) -> Result<ScriptBuf, InputError> {
+        self.get_utxo(index).map(|utxo| utxo.script_pubkey.clone())
+    }
+
+    /// Gets the spending utxo for this psbt input.
+    fn get_utxo(&self, index: usize) -> Result<&TxOut, InputError> {
+        let inp = &self.inputs[index];
+        let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
+            witness_utxo
+        } else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
+            let vout = self.global.unsigned_tx.input[index].previous_output.vout;
+            &non_witness_utxo.output[vout as usize]
+        } else {
+            return Err(InputError::MissingUtxo);
+        };
+        Ok(utxo)
+    }
+
+    /// Gets the Prevouts for this psbt.
+    fn prevouts(&self) -> Result<Vec<&TxOut>, Error> {
+        let mut utxos = vec![];
+        for i in 0..self.inputs.len() {
+            let utxo_ref = self.get_utxo(i).map_err(|e| Error::InputError(e, i))?;
+            utxos.push(utxo_ref);
+        }
+        Ok(utxos)
+    }
+
+    /// Creates a descriptor from unfinalized PSBT input.
+    ///
+    /// Panics on out of bound input index for psbt Also sanity checks that the witness script and
+    /// redeem script are consistent with the script pubkey. Does *not* check signatures We parse
+    /// the insane version while satisfying because we want to move the script is probably already
+    /// created and we want to satisfy it in any way possible.
+    fn get_descriptor(&self, index: usize) -> Result<Descriptor<bitcoin::PublicKey>, InputError> {
+        let mut map: BTreeMap<hash160::Hash, bitcoin::PublicKey> = BTreeMap::new();
+        let psbt_inputs = &self.inputs;
+        for psbt_input in psbt_inputs {
+            // Use BIP32 Derviation to get set of all possible keys.
+            let public_keys = psbt_input.bip32_derivation.keys();
+            for key in public_keys {
+                let bitcoin_key = bitcoin::PublicKey::new(*key);
+                let hash = bitcoin_key.pubkey_hash().to_raw_hash();
+                map.insert(hash, bitcoin_key);
+            }
+        }
+
+        // Figure out Scriptpubkey
+        let script_pubkey = self.get_scriptpubkey(index)?;
+        let inp = &self.inputs[index];
+        // 1. `PK`: creates a `Pk` descriptor(does not check if partial sig is given)
+        if script_pubkey.is_p2pk() {
+            let script_pubkey_len = script_pubkey.len();
+            let pk_bytes = &script_pubkey.to_bytes();
+            match bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
+                Ok(pk) => Ok(Descriptor::new_pk(pk)),
+                Err(e) => Err(InputError::from(e)),
+            }
+        } else if script_pubkey.is_p2pkh() {
+            // 2. `Pkh`: creates a `PkH` descriptor if partial_sigs has the corresponding pk
+            let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
+                // Indirect way to check the equivalence of pubkey-hashes.
+                // Create a pubkey hash and check if they are the same.
+                // THIS IS A BUG AND *WILL* PRODUCE WRONG SATISFACTIONS FOR UNCOMPRESSED KEYS
+                // Partial sigs loses the compressed flag that is necessary
+                // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
+                // The type checker will fail again after we update to 0.28 and this can be removed
+                let addr = Address::p2pkh(&pk, Network::Bitcoin);
+                *script_pubkey == addr.script_pubkey()
+            });
+            match partial_sig_contains_pk {
+                Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(InputError::from),
+                None => Err(InputError::MissingPubkey),
+            }
+        } else if script_pubkey.is_p2wpkh() {
+            // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
+            let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
+                // Indirect way to check the equivalence of pubkey-hashes.
+                // Create a pubkey hash and check if they are the same.
+                let addr = Address::p2wpkh(&pk, Network::Bitcoin)
+                    .expect("Address corresponding to valid pubkey");
+                *script_pubkey == addr.script_pubkey()
+            });
+            match partial_sig_contains_pk {
+                Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
+                None => Err(InputError::MissingPubkey),
+            }
+        } else if script_pubkey.is_p2wsh() {
+            // 4. `Wsh`: creates a `Wsh` descriptor
+            if inp.redeem_script.is_some() {
+                return Err(InputError::NonEmptyRedeemScript);
+            }
+            if let Some(ref witness_script) = inp.witness_script {
+                if witness_script.to_p2wsh() != *script_pubkey {
+                    return Err(InputError::InvalidWitnessScript {
+                        witness_script: witness_script.clone(),
+                        p2wsh_expected: script_pubkey.clone(),
+                    });
+                }
+                let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+                    witness_script,
+                    &ExtParams::allow_all(),
+                )?;
+                Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
+            } else {
+                Err(InputError::MissingWitnessScript)
+            }
+        } else if script_pubkey.is_p2sh() {
+            match inp.redeem_script {
+                None => Err(InputError::MissingRedeemScript),
+                Some(ref redeem_script) => {
+                    if redeem_script.to_p2sh() != *script_pubkey {
+                        return Err(InputError::InvalidRedeemScript {
+                            redeem: redeem_script.clone(),
+                            p2sh_expected: script_pubkey.clone(),
+                        });
+                    }
+                    if redeem_script.is_p2wsh() {
+                        // 5. `ShWsh` case
+                        if let Some(ref witness_script) = inp.witness_script {
+                            if witness_script.to_p2wsh() != *redeem_script {
+                                return Err(InputError::InvalidWitnessScript {
+                                    witness_script: witness_script.clone(),
+                                    p2wsh_expected: redeem_script.clone(),
+                                });
+                            }
+                            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+                                witness_script,
+                                &ExtParams::allow_all(),
+                            )?;
+                            Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
+                        } else {
+                            Err(InputError::MissingWitnessScript)
+                        }
+                    } else if redeem_script.is_p2wpkh() {
+                        // 6. `ShWpkh` case
+                        let partial_sig_contains_pk =
+                            inp.partial_sigs.iter().find(|&(&pk, _sig)| {
+                                let addr = Address::p2wpkh(&pk, Network::Bitcoin)
+                                    .expect("Address corresponding to valid pubkey");
+                                *redeem_script == addr.script_pubkey()
+                            });
+                        match partial_sig_contains_pk {
+                            Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),
+                            None => Err(InputError::MissingPubkey),
+                        }
+                    } else {
+                        //7. regular p2sh
+                        if inp.witness_script.is_some() {
+                            return Err(InputError::NonEmptyWitnessScript);
+                        }
+                        if let Some(ref redeem_script) = inp.redeem_script {
+                            let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse_with_ext(
+                                redeem_script,
+                                &ExtParams::allow_all(),
+                            )?;
+                            Ok(Descriptor::new_sh(ms)?)
+                        } else {
+                            Err(InputError::MissingWitnessScript)
+                        }
+                    }
+                }
+            }
+        } else {
+            // 8. Bare case
+            if inp.witness_script.is_some() {
+                return Err(InputError::NonEmptyWitnessScript);
+            }
+            if inp.redeem_script.is_some() {
+                return Err(InputError::NonEmptyRedeemScript);
+            }
+            let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+                &script_pubkey,
+                &ExtParams::allow_all(),
+            )?;
+            Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map))?)
+        }
+    }
+
+    /// Interprets all psbt inputs and checks whether the
+    /// script is correctly interpreted according to the context
+    /// The psbt must have included final script sig and final witness.
+    /// In other words, this checks whether the finalized psbt interprets
+    /// correctly
+    pub fn interpreter_check<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<(), Error> {
+        let utxos = self.prevouts()?;
+        let utxos = &Prevouts::All(&utxos);
+        for (index, input) in self.inputs.iter().enumerate() {
+            let empty_script_sig = ScriptBuf::new();
+            let empty_witness = Witness::default();
+            let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
+            let witness = input
+                .final_script_witness
+                .as_ref()
+                .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
+                .unwrap_or(empty_witness);
+
+            self.interpreter_inp_check(secp, index, utxos, &witness, script_sig)?;
+        }
+        Ok(())
+    }
+
+    // Runs the miniscript interpreter on a single psbt input.
+    fn interpreter_inp_check<C: Verification, T: Borrow<TxOut>>(
+        &self,
+        secp: &Secp256k1<C>,
+        index: usize,
+        utxos: &Prevouts<T>,
+        witness: &Witness,
+        script_sig: &Script,
+    ) -> Result<(), Error> {
+        let spk = self.get_scriptpubkey(index).map_err(|e| Error::InputError(e, index))?;
+
+        // Now look at all the satisfied constraints. If everything is filled in
+        // corrected, there should be no errors
+        // Interpreter check
+        {
+            let cltv = self.global.unsigned_tx.lock_time;
+            let csv = self.global.unsigned_tx.input[index].sequence;
+            let interpreter = Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
+                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+            let iter = interpreter.iter(secp, &self.global.unsigned_tx, index, utxos);
+            if let Some(error) = iter.filter_map(Result::err).next() {
+                return Err(Error::InputError(InputError::Interpreter(error), index));
+            };
+        }
+        Ok(())
     }
 }
 
@@ -576,6 +932,83 @@ impl PsbtFields for Output {
     fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { Some(&mut self.tap_tree) }
+}
+
+// Satisfy the taproot descriptor. It is not possible to infer the complete
+// descriptor from psbt because the information about all the scripts might not
+// be present. Also, currently the spec does not support hidden branches, so
+// inferring a descriptor is not possible
+fn construct_tap_witness(
+    spk: &Script,
+    sat: &PsbtInputSatisfier,
+    allow_mall: bool,
+) -> Result<Vec<Vec<u8>>, InputError> {
+    // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
+    // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
+    let mut map: BTreeMap<hash160::Hash, XOnlyPublicKey> = BTreeMap::new();
+    let psbt_inputs = &sat.psbt.inputs;
+    for psbt_input in psbt_inputs {
+        // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
+        // all the keys added on a descriptor and thus we get keys from it.
+        let public_keys = psbt_input.tap_key_origins.keys();
+        for key in public_keys {
+            let bitcoin_key = *key;
+            let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
+            map.insert(hash, bitcoin_key);
+        }
+    }
+    assert!(spk.is_p2tr());
+
+    // try the key spend path first
+    if let Some(sig) =
+        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat)
+    {
+        return Ok(vec![sig.to_vec()]);
+    }
+    // Next script spends
+    let (mut min_wit, mut min_wit_len) = (None, None);
+    if let Some(block_map) =
+        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_control_block_map(sat)
+    {
+        for (control_block, (script, ver)) in block_map {
+            if *ver != LeafVersion::TapScript {
+                // We don't know how to satisfy non default version scripts yet
+                continue;
+            }
+            let ms = match Miniscript::<XOnlyPublicKey, Tap>::parse_with_ext(
+                script,
+                &ExtParams::allow_all(),
+            ) {
+                Ok(ms) => ms.substitute_raw_pkh(&map),
+                Err(..) => continue, // try another script
+            };
+            let mut wit = if allow_mall {
+                match ms.satisfy_malleable(sat) {
+                    Ok(ms) => ms,
+                    Err(..) => continue,
+                }
+            } else {
+                match ms.satisfy(sat) {
+                    Ok(ms) => ms,
+                    Err(..) => continue,
+                }
+            };
+            wit.push(ms.encode().into_bytes());
+            wit.push(control_block.serialize());
+            let wit_len = Some(witness_size(&wit));
+            if min_wit_len.is_some() && wit_len > min_wit_len {
+                continue;
+            } else {
+                // store the minimum
+                min_wit = Some(wit);
+                min_wit_len = wit_len;
+            }
+        }
+        min_wit.ok_or(InputError::CouldNotSatisfyTr)
+    } else {
+        // No control blocks found
+        Err(InputError::CouldNotSatisfyTr)
+    }
 }
 
 fn update_item_with_descriptor_helper<F: PsbtFields>(
@@ -735,53 +1168,41 @@ impl PsbtSighashMsg {
     }
 }
 
-// Basic sanity checks on psbts.
-// rust-bitcoin TODO: (Long term)
-// Brainstorm about how we can enforce these in type system while having a nice API
-fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
-    if psbt.global.unsigned_tx.input.len() != psbt.inputs.len() {
-        return Err(Error::WrongInputCount {
-            in_tx: psbt.global.unsigned_tx.input.len(),
-            in_map: psbt.inputs.len(),
-        });
-    }
+pub(crate) trait ItemSize {
+    fn size(&self) -> usize;
+}
 
-    // Check well-formedness of input data
-    for (index, input) in psbt.inputs.iter().enumerate() {
-        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
-        let target_ecdsa_sighash_ty = match input.sighash_type {
-            Some(psbt_hash_ty) => psbt_hash_ty
-                .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
-            None => sighash::EcdsaSighashType::All,
-        };
-        for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
-                |_| {
-                    Error::InputError(
-                        InputError::Interpreter(interpreter::Error::NonStandardSighash(
-                            ecdsa_sig.to_vec(),
-                        )),
-                        index,
-                    )
-                },
-            )?;
-            if target_ecdsa_sighash_ty != flag {
-                return Err(Error::InputError(
-                    InputError::WrongSighashFlag {
-                        required: target_ecdsa_sighash_ty,
-                        got: flag,
-                        pubkey: *key,
-                    },
-                    index,
-                ));
-            }
-            // Signatures are well-formed in psbt partial sigs
+impl<Pk: MiniscriptKey> ItemSize for Placeholder<Pk> {
+    fn size(&self) -> usize {
+        match self {
+            Placeholder::Pubkey(_, size) => *size,
+            Placeholder::PubkeyHash(_, size) => *size,
+            Placeholder::EcdsaSigPk(_) | Placeholder::EcdsaSigPkHash(_) => 73,
+            Placeholder::SchnorrSigPk(_, _, size) | Placeholder::SchnorrSigPkHash(_, _, size) =>
+                size + 1, // +1 for the OP_PUSH
+            Placeholder::HashDissatisfaction
+            | Placeholder::Sha256Preimage(_)
+            | Placeholder::Hash256Preimage(_)
+            | Placeholder::Ripemd160Preimage(_)
+            | Placeholder::Hash160Preimage(_) => 33,
+            Placeholder::PushOne => 2, // On legacy this should be 1 ?
+            Placeholder::PushZero => 1,
+            Placeholder::TapScript(s) => s.len(),
+            Placeholder::TapControlBlock(cb) => cb.serialize().len(),
         }
     }
-
-    Ok(())
 }
+
+impl ItemSize for Vec<u8> {
+    fn size(&self) -> usize { self.len() }
+}
+
+// Helper function to calculate witness size
+pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
+    wit.iter().map(T::size).sum::<usize>() + varint_len(wit.len())
+}
+
+pub(crate) fn varint_len(n: usize) -> usize { VarInt(n as u64).size() }
 
 #[cfg(test)]
 mod tests {
@@ -1072,5 +1493,16 @@ mod tests {
             Err(OutputUpdateError::MismatchedScriptPubkey),
             "output script_pubkey no longer matches"
         );
+    }
+
+    #[test]
+    fn tests_from_bip174() {
+        let mut psbt = Psbt::deserialize(&Vec::<u8>::from_hex("70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f00000000000100bb0200000001aad73931018bd25f84ae400b68848be09db706eac2ac18298babee71ab656f8b0000000048473044022058f6fc7c6a33e1b31548d481c826c015bd30135aad42cd67790dab66d2ad243b02204a1ced2604c6735b6393e5b41691dd78b00f0c5942fb9f751856faa938157dba01feffffff0280f0fa020000000017a9140fb9463421696b82c833af241c78c17ddbde493487d0f20a270100000017a91429ca74f8a08f81999428185c97b5d852e4063f6187650000002202029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01220202dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d7483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01010304010000000104475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752ae2206029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f10d90c6a4f000000800000008000000080220602dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d710d90c6a4f0000008000000080010000800001012000c2eb0b0000000017a914b7f5faf40e3d40a5a459b1db3535f2b72fa921e887220203089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f012202023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e73473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d2010103040100000001042200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b2028903010547522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae2206023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7310d90c6a4f000000800000008003000080220603089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc10d90c6a4f00000080000000800200008000220203a9a4c37f5996d3aa25dbac6b570af0650394492942460b354753ed9eeca5877110d90c6a4f000000800000008004000080002202027f6399757d2eff55a136ad02c684b1838b6556e5f1b6b34282a94b6b5005109610d90c6a4f00000080000000800500008000").unwrap()).unwrap();
+
+        let secp = Secp256k1::verification_only();
+        psbt.finalize_mut(&secp).unwrap();
+
+        let expected = Psbt::deserialize(&Vec::<u8>::from_hex("70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f00000000000100bb0200000001aad73931018bd25f84ae400b68848be09db706eac2ac18298babee71ab656f8b0000000048473044022058f6fc7c6a33e1b31548d481c826c015bd30135aad42cd67790dab66d2ad243b02204a1ced2604c6735b6393e5b41691dd78b00f0c5942fb9f751856faa938157dba01feffffff0280f0fa020000000017a9140fb9463421696b82c833af241c78c17ddbde493487d0f20a270100000017a91429ca74f8a08f81999428185c97b5d852e4063f6187650000000107da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752ae0001012000c2eb0b0000000017a914b7f5faf40e3d40a5a459b1db3535f2b72fa921e8870107232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b20289030108da0400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00220203a9a4c37f5996d3aa25dbac6b570af0650394492942460b354753ed9eeca5877110d90c6a4f000000800000008004000080002202027f6399757d2eff55a136ad02c684b1838b6556e5f1b6b34282a94b6b5005109610d90c6a4f00000080000000800500008000").unwrap()).unwrap();
+        assert_eq!(psbt, expected);
     }
 }
