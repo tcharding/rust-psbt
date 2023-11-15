@@ -220,10 +220,7 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
     Ok(())
 }
 
-/// Additional operations for miniscript descriptors for various psbt roles.
-/// Note that these APIs would generally error when used on scripts that are not
-/// miniscripts.
-pub trait PsbtExt {
+impl Psbt {
     /// Finalize the psbt. This function takes in a mutable reference to psbt
     /// and populates the final_witness and final_scriptsig
     /// for all miniscript inputs.
@@ -235,159 +232,12 @@ pub trait PsbtExt {
     /// Input finalization also fails if it is not possible to satisfy any of the inputs non-malleably
     /// See [finalizer::finalize_mall] if you want to allow malleable satisfactions
     ///
-    /// For finalizing individual inputs, see also [`PsbtExt::finalize_inp`]
+    /// For finalizing individual inputs, see also [`Psbt::finalize_inp`]
     ///
     /// # Errors:
     ///
     /// - A vector of errors, one of each of failed finalized input
-    fn finalize_mut<C: secp256k1::Verification>(
-        &mut self,
-        secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<(), Vec<Error>>;
-
-    /// Same as [`PsbtExt::finalize_mut`], but does not mutate the input psbt and
-    /// returns a new psbt
-    ///
-    /// # Errors:
-    ///
-    /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
-    /// - A vector of input errors, one of each of failed finalized input
-    fn finalize<C: secp256k1::Verification>(
-        self,
-        secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<Psbt, (Psbt, Vec<Error>)>;
-
-    /// Same as [PsbtExt::finalize_mut], but allows for malleable satisfactions
-    fn finalize_mall_mut<C: secp256k1::Verification>(
-        &mut self,
-        secp: &Secp256k1<C>,
-    ) -> Result<(), Vec<Error>>;
-
-    /// Same as [PsbtExt::finalize], but allows for malleable satisfactions
-    fn finalize_mall<C: secp256k1::Verification>(
-        self,
-        secp: &Secp256k1<C>,
-    ) -> Result<Psbt, (Psbt, Vec<Error>)>;
-
-    /// Same as [`PsbtExt::finalize_mut`], but only tries to finalize a single input leaving other
-    /// inputs as is. Use this when not all of inputs that you are trying to
-    /// satisfy are miniscripts
-    ///
-    /// # Errors:
-    ///
-    /// - Input error detailing why the finalization failed. The psbt is not mutated when the finalization fails
-    fn finalize_inp_mut<C: secp256k1::Verification>(
-        &mut self,
-        secp: &secp256k1::Secp256k1<C>,
-        index: usize,
-    ) -> Result<(), Error>;
-
-    /// Same as [`PsbtExt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
-    ///
-    /// # Errors:
-    ///  Returns a tuple containing
-    /// - Original psbt
-    /// - Input Error detailing why the input finalization failed
-    fn finalize_inp<C: secp256k1::Verification>(
-        self,
-        secp: &secp256k1::Secp256k1<C>,
-        index: usize,
-    ) -> Result<Psbt, (Psbt, Error)>;
-
-    /// Same as [`PsbtExt::finalize_inp_mut`], but allows for malleable satisfactions
-    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
-        &mut self,
-        secp: &secp256k1::Secp256k1<C>,
-        index: usize,
-    ) -> Result<(), Error>;
-
-    /// Same as [`PsbtExt::finalize_inp`], but allows for malleable satisfactions
-    fn finalize_inp_mall<C: secp256k1::Verification>(
-        self,
-        secp: &secp256k1::Secp256k1<C>,
-        index: usize,
-    ) -> Result<Psbt, (Psbt, Error)>;
-
-    /// Psbt extractor as defined in BIP174 that takes in a psbt reference
-    /// and outputs a extracted bitcoin::Transaction
-    /// Also does the interpreter sanity check
-    /// Will error if the final ScriptSig or final Witness are missing
-    /// or the interpreter check fails.
-    fn extract<C: secp256k1::Verification>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::Transaction, Error>;
-
-    /// Update PSBT input with a descriptor and check consistency of `*_utxo` fields.
-    ///
-    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
-    /// `witness_utxo` and `non_witness_utxo` are sane and have a `script_pubkey` that matches the
-    /// descriptor. In particular, it makes sure pre-segwit descriptors always have `non_witness_utxo`
-    /// present (and the txid matches). If both `witness_utxo` and `non_witness_utxo` are present
-    /// then it also checks they are consistent with each other.
-    ///
-    /// Hint: because of the *[segwit bug]* some PSBT signers require that `non_witness_utxo` is
-    /// present on segwitv0 inputs regardless but this function doesn't enforce this so you will
-    /// have to do this check its presence manually (if it is present this *will* check its
-    /// validity).
-    ///
-    /// The `descriptor` **must not have any wildcards** in it
-    /// otherwise an error will be returned however it can (and should) have extended keys in it.
-    ///
-    /// [`update_with_descriptor_unchecked`]: PsbtInputExt::update_with_descriptor_unchecked
-    /// [segwit bug]: https://bitcoinhackers.org/@lukedashjr/104287698361196952
-    fn update_input_with_descriptor(
-        &mut self,
-        input_index: usize,
-        descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<(), UtxoUpdateError>;
-
-    /// Update PSBT output with a descriptor and check consistency of the output's `script_pubkey`
-    ///
-    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
-    /// output's `script_pubkey` matches the descriptor.
-    ///
-    /// The `descriptor` **must not have any wildcards** in it
-    /// otherwise an error will be returned however it can (and should) have extended keys in it.
-    ///
-    /// [`update_with_descriptor_unchecked`]: PsbtOutputExt::update_with_descriptor_unchecked
-    fn update_output_with_descriptor(
-        &mut self,
-        output_index: usize,
-        descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<(), OutputUpdateError>;
-
-    /// Get the sighash message(data to sign) at input index `idx`.
-    ///
-    /// Based on the sighash
-    /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`sighash::TapSighashType::Default`](bitcoin::sighash::TapSighashType::Default) is chosen
-    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
-    /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
-    /// If the utxo at `idx` is a pre-taproot segwit output, returns a [`PsbtSighashMsg::SegwitV0Sighash`] variant.
-    /// For legacy outputs, returns a [`PsbtSighashMsg::LegacySighash`] variant.
-    /// The `tapleaf_hash` parameter can be used to specify which tapleaf script hash has to be computed. If
-    /// `tapleaf_hash` is [`None`], and the output is taproot output, the key spend hash is computed. This parameter must be
-    /// set to [`None`] while computing sighash for pre-taproot outputs.
-    /// The function also updates the sighash cache with transaction computed during sighash computation of this input
-    ///
-    /// # Arguments:
-    ///
-    /// * `idx`: The input index of psbt to sign
-    /// * `cache`: The [`SighashCache`] for used to cache/read previously cached computations
-    /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
-    ///
-    /// [`SighashCache`]: bitcoin::sighash::SighashCache
-    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
-        &self,
-        idx: usize,
-        cache: &mut SighashCache<T>,
-        tapleaf_hash: Option<TapLeafHash>,
-    ) -> Result<PsbtSighashMsg, SighashError>;
-}
-
-impl PsbtExt for Psbt {
-    fn finalize_mut<C: secp256k1::Verification>(
+    pub fn finalize_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
@@ -408,7 +258,14 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize<C: secp256k1::Verification>(
+    /// Same as [`Psbt::finalize_mut`], but does not mutate the input psbt and
+    /// returns a new psbt
+    ///
+    /// # Errors:
+    ///
+    /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
+    /// - A vector of input errors, one of each of failed finalized input
+    pub fn finalize<C: secp256k1::Verification>(
         mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
@@ -418,7 +275,8 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_mall_mut<C: secp256k1::Verification>(
+    /// Same as [Psbt::finalize_mut], but allows for malleable satisfactions
+    pub fn finalize_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
@@ -438,7 +296,8 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_mall<C: secp256k1::Verification>(
+    /// Same as [Psbt::finalize], but allows for malleable satisfactions
+    pub fn finalize_mall<C: secp256k1::Verification>(
         mut self,
         secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
@@ -448,7 +307,14 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_inp_mut<C: secp256k1::Verification>(
+    /// Same as [`Psbt::finalize_mut`], but only tries to finalize a single input leaving other
+    /// inputs as is. Use this when not all of inputs that you are trying to
+    /// satisfy are miniscripts
+    ///
+    /// # Errors:
+    ///
+    /// - Input error detailing why the finalization failed. The psbt is not mutated when the finalization fails
+    pub fn finalize_inp_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
@@ -459,7 +325,13 @@ impl PsbtExt for Psbt {
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
-    fn finalize_inp<C: secp256k1::Verification>(
+    /// Same as [`Psbt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
+    ///
+    /// # Errors:
+    ///  Returns a tuple containing
+    /// - Original psbt
+    /// - Input Error detailing why the input finalization failed
+    pub fn finalize_inp<C: secp256k1::Verification>(
         mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
@@ -470,7 +342,8 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
+    /// Same as [`Psbt::finalize_inp_mut`], but allows for malleable satisfactions
+    pub fn finalize_inp_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
@@ -481,7 +354,8 @@ impl PsbtExt for Psbt {
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
-    fn finalize_inp_mall<C: secp256k1::Verification>(
+    /// Same as [`Psbt::finalize_inp`], but allows for malleable satisfactions
+    pub fn finalize_inp_mall<C: secp256k1::Verification>(
         mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
@@ -492,7 +366,12 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn extract<C: secp256k1::Verification>(
+    /// Psbt extractor as defined in BIP174 that takes in a psbt reference
+    /// and outputs a extracted bitcoin::Transaction
+    /// Also does the interpreter sanity check
+    /// Will error if the final ScriptSig or final Witness are missing
+    /// or the interpreter check fails.
+    pub fn extract<C: secp256k1::Verification>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::Transaction, Error> {
@@ -515,7 +394,25 @@ impl PsbtExt for Psbt {
         Ok(ret)
     }
 
-    fn update_input_with_descriptor(
+    /// Update PSBT input with a descriptor and check consistency of `*_utxo` fields.
+    ///
+    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
+    /// `witness_utxo` and `non_witness_utxo` are sane and have a `script_pubkey` that matches the
+    /// descriptor. In particular, it makes sure pre-segwit descriptors always have `non_witness_utxo`
+    /// present (and the txid matches). If both `witness_utxo` and `non_witness_utxo` are present
+    /// then it also checks they are consistent with each other.
+    ///
+    /// Hint: because of the *[segwit bug]* some PSBT signers require that `non_witness_utxo` is
+    /// present on segwitv0 inputs regardless but this function doesn't enforce this so you will
+    /// have to do this check its presence manually (if it is present this *will* check its
+    /// validity).
+    ///
+    /// The `descriptor` **must not have any wildcards** in it
+    /// otherwise an error will be returned however it can (and should) have extended keys in it.
+    ///
+    /// [`update_with_descriptor_unchecked`]: PsbtInputExt::update_with_descriptor_unchecked
+    /// [segwit bug]: https://bitcoinhackers.org/@lukedashjr/104287698361196952
+    pub fn update_input_with_descriptor(
         &mut self,
         input_index: usize,
         desc: &Descriptor<DefiniteDescriptorKey>,
@@ -581,7 +478,16 @@ impl PsbtExt for Psbt {
         Ok(())
     }
 
-    fn update_output_with_descriptor(
+    /// Update PSBT output with a descriptor and check consistency of the output's `script_pubkey`
+    ///
+    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
+    /// output's `script_pubkey` matches the descriptor.
+    ///
+    /// The `descriptor` **must not have any wildcards** in it
+    /// otherwise an error will be returned however it can (and should) have extended keys in it.
+    ///
+    /// [`update_with_descriptor_unchecked`]: PsbtOutputExt::update_with_descriptor_unchecked
+    pub fn update_output_with_descriptor(
         &mut self,
         output_index: usize,
         desc: &Descriptor<DefiniteDescriptorKey>,
@@ -609,8 +515,29 @@ impl PsbtExt for Psbt {
         Ok(())
     }
 
+    /// Get the sighash message(data to sign) at input index `idx`.
+    ///
+    /// Based on the sighash
+    /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
+    /// the [`sighash::TapSighashType::Default`](bitcoin::sighash::TapSighashType::Default) is chosen
+    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
+    /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
+    /// If the utxo at `idx` is a pre-taproot segwit output, returns a [`PsbtSighashMsg::SegwitV0Sighash`] variant.
+    /// For legacy outputs, returns a [`PsbtSighashMsg::LegacySighash`] variant.
+    /// The `tapleaf_hash` parameter can be used to specify which tapleaf script hash has to be computed. If
+    /// `tapleaf_hash` is [`None`], and the output is taproot output, the key spend hash is computed. This parameter must be
+    /// set to [`None`] while computing sighash for pre-taproot outputs.
+    /// The function also updates the sighash cache with transaction computed during sighash computation of this input
+    ///
+    /// # Arguments:
+    ///
+    /// * `idx`: The input index of psbt to sign
+    /// * `cache`: The [`SighashCache`] for used to cache/read previously cached computations
+    /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
+    ///
+    /// [`SighashCache`]: bitcoin::sighash::SighashCache
     #[allow(deprecated)] // Still using segwit_signature_hash
-    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
+    pub fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
         &self,
         idx: usize,
         cache: &mut SighashCache<T>,
@@ -691,8 +618,7 @@ impl PsbtExt for Psbt {
     }
 }
 
-/// Extension trait for PSBT inputs
-pub trait PsbtInputExt {
+impl Input {
     /// Given the descriptor for a utxo being spent populate the PSBT input's fields so it can be signed.
     ///
     /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
@@ -708,15 +634,8 @@ pub trait PsbtInputExt {
     /// out the PSBT input fields. This can be used to manually check that the `script_pubkey` in
     /// `witness_utxo` and/or `non_witness_utxo` is consistent with the descriptor.
     ///
-    /// [`update_input_with_descriptor`]: PsbtExt::update_input_with_descriptor
-    fn update_with_descriptor_unchecked(
-        &mut self,
-        descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
-}
-
-impl PsbtInputExt for Input {
-    fn update_with_descriptor_unchecked(
+    /// [`update_input_with_descriptor`]: Psbt::update_input_with_descriptor
+    pub fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
@@ -725,8 +644,7 @@ impl PsbtInputExt for Input {
     }
 }
 
-/// Extension trait for PSBT outputs
-pub trait PsbtOutputExt {
+impl Output {
     /// Given the descriptor of a PSBT output populate the relevant metadata
     ///
     /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
@@ -742,15 +660,8 @@ pub trait PsbtOutputExt {
     /// out the PSBT output fields. This can be used to manually check that the `script_pubkey` is
     /// consistent with the descriptor.
     ///
-    /// [`update_output_with_descriptor`]: PsbtExt::update_output_with_descriptor
-    fn update_with_descriptor_unchecked(
-        &mut self,
-        descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
-}
-
-impl PsbtOutputExt for Output {
-    fn update_with_descriptor_unchecked(
+    /// [`update_output_with_descriptor`]: Psbt::update_output_with_descriptor
+    pub fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {

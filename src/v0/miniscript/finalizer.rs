@@ -346,7 +346,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
 /// finalized psbt which involves checking the signatures/ preimages/timelocks.
 /// The functions fails it is not possible to satisfy any of the inputs non-malleably
 /// See [finalize_mall] if you want to allow malleable satisfactions
-#[deprecated(since = "7.0.0", note = "Please use PsbtExt::finalize instead")]
+#[deprecated(since = "7.0.0", note = "Please use Psbt::finalize instead")]
 pub fn finalize<C: secp256k1::Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
@@ -474,7 +474,6 @@ pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
 mod tests {
     use super::*;
     use crate::bitcoin::hashes::hex::FromHex;
-    use crate::v0::miniscript::PsbtExt;
 
     #[test]
     fn tests_from_bip174() {

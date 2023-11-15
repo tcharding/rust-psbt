@@ -206,7 +206,7 @@ impl From<bitcoin::key::Error> for InputError {
     fn from(e: bitcoin::key::Error) -> InputError { InputError::KeyErr(e) }
 }
 
-/// Return error type for [`PsbtExt::update_input_with_descriptor`]
+/// Return error type for [`Psbt::update_input_with_descriptor`]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum UtxoUpdateError {
     /// Index out of bounds
@@ -255,7 +255,7 @@ impl std::error::Error for UtxoUpdateError {
     }
 }
 
-/// Return error type for [`PsbtExt::update_output_with_descriptor`]
+/// Return error type for [`Psbt::update_output_with_descriptor`]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum OutputUpdateError {
     /// Index out of bounds
@@ -297,7 +297,7 @@ impl std::error::Error for OutputUpdateError {
     }
 }
 
-/// Return error type for [`PsbtExt::sighash_msg`]
+/// Return error type for [`Psbt::sighash_msg`]
 #[derive(Debug, PartialEq, Eq)]
 pub enum SighashError {
     /// Index out of bounds
