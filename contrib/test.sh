@@ -22,38 +22,38 @@ cargo test
 
 if [ "$DO_LINT" = true ]
 then
-    cargo clippy --locked --all-features --all-targets -- -D warnings
+    cargo clippy --all-features --all-targets -- -D warnings
 fi
 
 # Test without any features other than std first (same as default)
-cargo build --locked --no-default-features --features="std"
-cargo test --locked --no-default-features --features="std"
+cargo build --no-default-features --features="std"
+cargo test --no-default-features --features="std"
 
 # Test each feature with default enabled ("std").
 for feature in ${FEATURES}
 do
-    cargo build --locked --features="$feature"
-    cargo test --locked --features="$feature"
+    cargo build --features="$feature"
+    cargo test --features="$feature"
 done
 
 if [ "$DO_NO_STD" = true ]
 then
     # Build no_std, to make sure that cfg(test) doesn't hide any issues
-    cargo build --locked --no-default-features --features="no-std"
+    cargo build --no-default-features --features="no-std"
 
     # Build std + no_std, to make sure they are not incompatible
-    cargo build --locked --features="no-std"
+    cargo build --features="no-std"
 
     # Test no_std
-    cargo test --locked --no-default-features --features="no-std"
+    cargo test --no-default-features --features="no-std"
 
     # Build all features
-    cargo build --locked --no-default-features --features="no-std $FEATURES"
+    cargo build --no-default-features --features="no-std $FEATURES"
 
     # Build specific features
     for feature in ${FEATURES}
     do
-        cargo build --locked --no-default-features --features="no-std $feature"
+        cargo build --no-default-features --features="no-std $feature"
     done
 fi
 
