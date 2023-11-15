@@ -8,6 +8,9 @@ use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicK
 use crate::prelude::*;
 use crate::v0::Psbt;
 
+// TODO: Make the fields private and enforce invariant that index
+// is within range, thereby removing potential panics.
+
 /// A PSBT [`Satisfier`] for an input at a particular index.
 ///
 /// Contains reference to the [`Psbt`] because multiple inputs will share the same PSBT. All
