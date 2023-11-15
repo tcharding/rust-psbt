@@ -5,6 +5,7 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
 mod error;
+mod extractor;
 mod satisfy;
 
 use core::convert::TryFrom;
@@ -17,9 +18,7 @@ use crate::bitcoin::sighash::{self, EcdsaSighashType, Prevouts, SighashCache, Ta
 use crate::bitcoin::taproot::{
     ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TapTree, TaprootBuilder,
 };
-use crate::bitcoin::{
-    bip32, Address, Network, Script, ScriptBuf, Transaction, TxOut, VarInt, Witness,
-};
+use crate::bitcoin::{bip32, Address, Network, Script, ScriptBuf, TxOut, VarInt, Witness};
 use crate::miniscript::miniscript::satisfy::Placeholder;
 use crate::miniscript::{
     descriptor, interpreter, translate_hash_clone, BareCtx, DefiniteDescriptorKey, Descriptor,
@@ -258,31 +257,6 @@ impl Psbt {
         self.interpreter_inp_check(secp, index, utxos, &witness, &script_sig)?;
 
         Ok((witness, script_sig))
-    }
-
-    /// Psbt extractor as defined in BIP174 that takes in a psbt reference
-    /// and outputs a extracted bitcoin::Transaction
-    /// Also does the interpreter sanity check
-    /// Will error if the final ScriptSig or final Witness are missing
-    /// or the interpreter check fails.
-    pub fn extract<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<Transaction, Error> {
-        self.sanity_check()?;
-
-        let mut ret = self.global.unsigned_tx.clone();
-        for (n, input) in self.inputs.iter().enumerate() {
-            if input.final_script_sig.is_none() && input.final_script_witness.is_none() {
-                return Err(Error::InputError(InputError::MissingWitness, n));
-            }
-
-            if let Some(witness) = input.final_script_witness.as_ref() {
-                ret.input[n].witness = witness.clone();
-            }
-            if let Some(script_sig) = input.final_script_sig.as_ref() {
-                ret.input[n].script_sig = script_sig.clone();
-            }
-        }
-        self.interpreter_check(secp)?;
-        Ok(ret)
     }
 
     /// Update PSBT input with a descriptor and check consistency of `*_utxo` fields.
