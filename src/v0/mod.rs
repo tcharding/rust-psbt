@@ -543,7 +543,7 @@ mod tests {
     use bitcoin::{ScriptBuf, Witness};
 
     use super::*;
-    use crate::raw;
+    use crate::{io, raw};
     use crate::serialize::{Deserialize, Serialize};
 
     #[track_caller]
@@ -714,8 +714,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ser = &expected.serialize_map();
-        let mut decoder = std::io::Cursor::new(&ser);
+        let mut decoder = io::Cursor::new(expected.serialize_map());
         let actual = Output::decode(&mut decoder).unwrap();
 
         assert_eq!(expected, actual);
