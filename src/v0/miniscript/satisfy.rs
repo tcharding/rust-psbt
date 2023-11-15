@@ -13,19 +13,19 @@ use crate::v0::Psbt;
 /// operations on this structure will panic if index is more than number of inputs in pbst
 ///
 /// [`Satisfier`]: crate::miniscript::Satisfier
-pub struct PsbtInputSatisfier<'psbt> {
+pub struct PsbtInputSatisfier<'a> {
     /// Reference to the [`Psbt`].
-    pub psbt: &'psbt Psbt,
+    pub psbt: &'a Psbt,
     /// Index of the input we are satisfying.
     pub index: usize,
 }
 
-impl<'psbt> PsbtInputSatisfier<'psbt> {
+impl<'a> PsbtInputSatisfier<'a> {
     /// Creates a new `PsbtInputSatisfier` from `psbt` and `index`.
-    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
+    pub fn new(psbt: &'a Psbt, index: usize) -> Self { Self { psbt, index } }
 }
 
-impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'a> {
     fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }
