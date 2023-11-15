@@ -2,9 +2,12 @@
 
 //! Raw PSBT key-value pairs.
 //!
-//! Raw PSBT key-value pairs as defined at
-//! <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>.
+//! [BIP-174] defines the following:
 //!
+//! - `<keypair> := <key> <value>`
+//! - `<key> := <keylen> <keytype> <keydata>`
+//!
+//! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>.
 
 use core::convert::TryFrom;
 use core::fmt;
@@ -19,60 +22,66 @@ use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::{io, Error};
 
-/// A PSBT key in its raw byte form.
-#[derive(Debug, PartialEq, Hash, Eq, Clone, Ord, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
-pub struct Key {
-    /// The type of this PSBT key.
-    pub type_value: u8,
-    /// The key itself in raw byte form.
-    /// `<key> := <keylen> <keytype> <keydata>`
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
-    pub key: Vec<u8>,
-}
-
 /// A PSBT key-value pair in its raw byte form.
-/// `<keypair> := <key> <value>`
+///
+/// - `<keypair> := <key> <value>`
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Pair {
     /// The key of this key-value pair.
     pub key: Key,
-    /// The value data of this key-value pair in raw byte form.
-    /// `<value> := <valuelen> <valuedata>`
+    /// The value of this key-value pair in raw byte form.
+    ///
+    /// - `<value> := <valuelen> <valuedata>`
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
     pub value: Vec<u8>,
 }
 
-/// Default implementation for proprietary key subtyping
-pub type ProprietaryType = u8;
-
-/// Proprietary keys (i.e. keys starting with 0xFC byte) with their internal
-/// structure according to BIP 174.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
-pub struct ProprietaryKey<Subtype = ProprietaryType>
-where
-    Subtype: Copy + From<u8> + Into<u8>,
-{
-    /// Proprietary type prefix used for grouping together keys under some
-    /// application and avoid namespace collision
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
-    pub prefix: Vec<u8>,
-    /// Custom proprietary subtype
-    pub subtype: Subtype,
-    /// Additional key bytes (like serialized public key data etc)
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
-    pub key: Vec<u8>,
+impl Pair {
+    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, Error> {
+        Ok(Pair { key: Key::decode(r)?, value: Decodable::consensus_decode(r)? })
+    }
 }
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "type: {:#x}, key: {:x}", self.type_value, self.key.as_hex())
     }
+}
+
+impl Serialize for Pair {
+    fn serialize(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(self.key.serialize());
+        // <value> := <valuelen> <valuedata>
+        self.value.consensus_encode(&mut buf).unwrap();
+        buf
+    }
+}
+
+impl Deserialize for Pair {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        let mut decoder = bytes;
+        Pair::decode(&mut decoder)
+    }
+}
+
+/// The key of a key-value PSBT pair, in its raw byte form.
+///
+/// - `<key> := <keylen> <keytype> <keydata>`
+///
+/// We do not carry the `keylen` around, we just create the `VarInt` length when serializing and
+/// deserializing.
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
+pub struct Key {
+    /// The `keytype` of this PSBT map key (`keytype`).
+    pub type_value: u8,
+    /// The `keydata` itself in raw byte form.
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    pub key: Vec<u8>,
 }
 
 impl Key {
@@ -121,53 +130,27 @@ impl Serialize for Key {
     }
 }
 
-impl Serialize for Pair {
-    fn serialize(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        buf.extend(self.key.serialize());
-        // <value> := <valuelen> <valuedata>
-        self.value.consensus_encode(&mut buf).unwrap();
-        buf
-    }
-}
+/// Default implementation for proprietary key subtyping
+pub type ProprietaryType = u8;
 
-impl Deserialize for Pair {
-    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        let mut decoder = bytes;
-        Pair::decode(&mut decoder)
-    }
-}
-
-impl Pair {
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, Error> {
-        Ok(Pair { key: Key::decode(r)?, value: Decodable::consensus_decode(r)? })
-    }
-}
-
-impl<Subtype> Encodable for ProprietaryKey<Subtype>
+/// Proprietary keys (i.e. keys starting with 0xFC byte) with their internal
+/// structure according to BIP 174.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
+pub struct ProprietaryKey<Subtype = ProprietaryType>
 where
     Subtype: Copy + From<u8> + Into<u8>,
 {
-    fn consensus_encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
-        let mut len = self.prefix.consensus_encode(w)? + 1;
-        w.emit_u8(self.subtype.into())?;
-        w.write_all(&self.key)?;
-        len += self.key.len();
-        Ok(len)
-    }
-}
-
-impl<Subtype> Decodable for ProprietaryKey<Subtype>
-where
-    Subtype: Copy + From<u8> + Into<u8>,
-{
-    fn consensus_decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, consensus::Error> {
-        let prefix = Vec::<u8>::consensus_decode(r)?;
-        let subtype = Subtype::from(r.read_u8()?);
-        let key = read_to_end(r)?;
-
-        Ok(ProprietaryKey { prefix, subtype, key })
-    }
+    /// Proprietary type prefix used for grouping together keys under some
+    /// application and avoid namespace collision
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    pub prefix: Vec<u8>,
+    /// Custom proprietary subtype
+    pub subtype: Subtype,
+    /// Additional key bytes (like serialized public key data etc)
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    pub key: Vec<u8>,
 }
 
 impl<Subtype> ProprietaryKey<Subtype>
@@ -194,6 +177,32 @@ where
         }
 
         Ok(deserialize(&key.key)?)
+    }
+}
+
+impl<Subtype> Encodable for ProprietaryKey<Subtype>
+where
+    Subtype: Copy + From<u8> + Into<u8>,
+{
+    fn consensus_encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
+        let mut len = self.prefix.consensus_encode(w)? + 1;
+        w.emit_u8(self.subtype.into())?;
+        w.write_all(&self.key)?;
+        len += self.key.len();
+        Ok(len)
+    }
+}
+
+impl<Subtype> Decodable for ProprietaryKey<Subtype>
+where
+    Subtype: Copy + From<u8> + Into<u8>,
+{
+    fn consensus_decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, consensus::Error> {
+        let prefix = Vec::<u8>::consensus_decode(r)?;
+        let subtype = Subtype::from(r.read_u8()?);
+        let key = read_to_end(r)?;
+
+        Ok(ProprietaryKey { prefix, subtype, key })
     }
 }
 
