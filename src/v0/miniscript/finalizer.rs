@@ -10,21 +10,20 @@
 
 use core::mem;
 
+use super::{sanity_check, Error, InputError, PsbtInputSatisfier};
 use crate::bitcoin::hashes::hash160;
 use crate::bitcoin::key::XOnlyPublicKey;
 use crate::bitcoin::secp256k1::{self, Secp256k1};
 use crate::bitcoin::sighash::Prevouts;
 use crate::bitcoin::taproot::LeafVersion;
 use crate::bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
-use crate::miniscript::{
-    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, Satisfier, Segwitv0, SigType,
-    Tap, ToPublicKey, MiniscriptKey,
-};
 use crate::miniscript::miniscript::satisfy::Placeholder;
-
-use super::{sanity_check, Error, InputError, PsbtInputSatisfier};
-use crate::v0::Psbt;
+use crate::miniscript::{
+    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, MiniscriptKey, Satisfier,
+    Segwitv0, SigType, Tap, ToPublicKey,
+};
 use crate::prelude::*;
+use crate::v0::Psbt;
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
 // descriptor from psbt because the information about all the scripts might not
@@ -401,12 +400,8 @@ fn finalize_input_helper<C: secp256k1::Verification>(
 
             //generate the satisfaction witness and scriptsig
             let sat = PsbtInputSatisfier::new(psbt, index);
-            if !allow_mall {
-                desc.get_satisfaction(sat)
-            } else {
-                desc.get_satisfaction_mall(sat)
-            }
-            .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+            if !allow_mall { desc.get_satisfaction(sat) } else { desc.get_satisfaction_mall(sat) }
+                .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
         }
     };
 
@@ -433,16 +428,8 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         let input = &mut psbt.inputs[index];
         input.non_witness_utxo = original.non_witness_utxo;
         input.witness_utxo = original.witness_utxo;
-        input.final_script_sig = if script_sig.is_empty() {
-            None
-        } else {
-            Some(script_sig)
-        };
-        input.final_script_witness = if witness.is_empty() {
-            None
-        } else {
-            Some(witness)
-        };
+        input.final_script_sig = if script_sig.is_empty() { None } else { Some(script_sig) };
+        input.final_script_witness = if witness.is_empty() { None } else { Some(witness) };
     }
 
     Ok(())
@@ -457,9 +444,8 @@ impl<Pk: MiniscriptKey> ItemSize for Placeholder<Pk> {
             Placeholder::Pubkey(_, size) => *size,
             Placeholder::PubkeyHash(_, size) => *size,
             Placeholder::EcdsaSigPk(_) | Placeholder::EcdsaSigPkHash(_) => 73,
-            Placeholder::SchnorrSigPk(_, _, size) | Placeholder::SchnorrSigPkHash(_, _, size) => {
-                size + 1
-            } // +1 for the OP_PUSH
+            Placeholder::SchnorrSigPk(_, _, size) | Placeholder::SchnorrSigPkHash(_, _, size) =>
+                size + 1, // +1 for the OP_PUSH
             Placeholder::HashDissatisfaction
             | Placeholder::Sha256Preimage(_)
             | Placeholder::Hash256Preimage(_)
@@ -486,9 +472,8 @@ pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
 
 #[cfg(test)]
 mod tests {
-    use crate::bitcoin::hashes::hex::FromHex;
-
     use super::*;
+    use crate::bitcoin::hashes::hex::FromHex;
     use crate::v0::miniscript::PsbtExt;
 
     #[test]

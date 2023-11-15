@@ -17,11 +17,10 @@ use crate::bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use crate::bitcoin::sighash::{self, SighashCache};
 use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use crate::bitcoin::{absolute, bip32, transaction, Script, ScriptBuf, Sequence};
-use crate::miniscript::SigType;
-use crate::miniscript::translate_hash_clone;
-use crate::miniscript::{self,
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
+use crate::miniscript::{
+    self, descriptor, interpreter, translate_hash_clone, DefiniteDescriptorKey, Descriptor,
+    DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey, TranslatePk,
+    Translator,
 };
 
 mod finalizer;
@@ -29,8 +28,8 @@ mod finalizer;
 #[allow(deprecated)]
 pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 use crate::prelude::*;
-use crate::v0::Psbt;
 use crate::v0::map::{Input, Output};
+use crate::v0::Psbt;
 
 /// Error type for entire Psbt
 #[derive(Debug)]
@@ -212,7 +211,8 @@ impl fmt::Display for InputError {
                 pubkey, got, required
             ),
             InputError::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
-            InputError::NonStandardSighashType(ref e) => write!(f, "Non-standard sighash type {}", e),
+            InputError::NonStandardSighashType(ref e) =>
+                write!(f, "Non-standard sighash type {}", e),
         }
     }
 }
@@ -260,10 +260,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         pk: &Pk,
         lh: &TapLeafHash,
     ) -> Option<bitcoin::taproot::Signature> {
-        self.psbt.inputs[self.index]
-            .tap_script_sigs
-            .get(&(pk.to_x_only_pubkey(), *lh))
-            .copied()
+        self.psbt.inputs[self.index].tap_script_sigs.get(&(pk.to_x_only_pubkey(), *lh)).copied()
     }
 
     fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
@@ -294,10 +291,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     }
 
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.psbt.inputs[self.index]
-            .partial_sigs
-            .get(&pk.to_public_key())
-            .copied()
+        self.psbt.inputs[self.index].partial_sigs.get(&pk.to_public_key()).copied()
     }
 
     fn lookup_raw_pkh_ecdsa_sig(
@@ -330,7 +324,9 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             return true;
         }
 
-        if self.psbt.global.unsigned_tx.version < transaction::Version::TWO || !seq.is_relative_lock_time() {
+        if self.psbt.global.unsigned_tx.version < transaction::Version::TWO
+            || !seq.is_relative_lock_time()
+        {
             return false;
         }
 
@@ -746,13 +742,12 @@ impl PsbtExt for Psbt {
 
         let expected_spk = {
             match (&input.witness_utxo, &input.non_witness_utxo) {
-                (Some(witness_utxo), None) => {
+                (Some(witness_utxo), None) =>
                     if desc_type.segwit_version().is_some() {
                         witness_utxo.script_pubkey.clone()
                     } else {
                         return Err(UtxoUpdateError::UtxoCheck);
-                    }
-                }
+                    },
                 (None, Some(non_witness_utxo)) => non_witness_utxo
                     .output
                     .get(txin.previous_output.vout as usize)
@@ -814,7 +809,7 @@ impl PsbtExt for Psbt {
         Ok(())
     }
 
-    #[allow(deprecated)]        // Still using segwit_signature_hash
+    #[allow(deprecated)] // Still using segwit_signature_hash
     fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
         &self,
         idx: usize,
@@ -856,26 +851,16 @@ impl PsbtExt for Psbt {
                 .map(|sighash_type| sighash_type.ecdsa_hash_ty())
                 .unwrap_or(Ok(sighash::EcdsaSighashType::All))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
-            let amt = finalizer::get_utxo(self, idx)
-                .map_err(|_e| SighashError::MissingInputUtxo)?
-                .value;
+            let amt =
+                finalizer::get_utxo(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?.value;
             let is_nested_wpkh = inp_spk.is_p2sh()
-                && inp
-                    .redeem_script
-                    .as_ref()
-                    .map(|x| x.is_p2wpkh())
-                    .unwrap_or(false);
+                && inp.redeem_script.as_ref().map(|x| x.is_p2wpkh()).unwrap_or(false);
             let is_nested_wsh = inp_spk.is_p2sh()
-                && inp
-                    .redeem_script
-                    .as_ref()
-                    .map(|x| x.is_p2wsh())
-                    .unwrap_or(false);
+                && inp.redeem_script.as_ref().map(|x| x.is_p2wsh()).unwrap_or(false);
             if inp_spk.is_p2wpkh() || inp_spk.is_p2wsh() || is_nested_wpkh || is_nested_wsh {
                 let msg = if inp_spk.is_p2wpkh() {
-                    let script_code = inp_spk
-                        .p2wpkh_script_code()
-                        .expect("checked is p2wpkh above");
+                    let script_code =
+                        inp_spk.p2wpkh_script_code().expect("checked is p2wpkh above");
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else if is_nested_wpkh {
                     let script_code = inp
@@ -887,19 +872,15 @@ impl PsbtExt for Psbt {
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else {
                     // wsh and nested wsh, script code is witness script
-                    let script_code = inp
-                        .witness_script
-                        .as_ref()
-                        .ok_or(SighashError::MissingWitnessScript)?;
+                    let script_code =
+                        inp.witness_script.as_ref().ok_or(SighashError::MissingWitnessScript)?;
                     cache.segwit_signature_hash(idx, script_code, amt, hash_ty)?
                 };
                 Ok(PsbtSighashMsg::SegwitV0Sighash(msg))
             } else {
                 // legacy sighash case
                 let script_code = if inp_spk.is_p2sh() {
-                    inp.redeem_script
-                        .as_ref()
-                        .ok_or(SighashError::MissingRedeemScript)?
+                    inp.redeem_script.as_ref().ok_or(SighashError::MissingRedeemScript)?
                 } else {
                     &inp_spk
                 };
@@ -997,8 +978,7 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
             derived.to_public_key().inner,
             (
                 xpk.master_fingerprint(),
-                xpk.full_derivation_path()
-                    .ok_or(descriptor::ConversionError::MultiKey)?,
+                xpk.full_derivation_path().ok_or(descriptor::ConversionError::MultiKey)?,
             ),
         );
         Ok(derived)
@@ -1141,9 +1121,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk().zip(ms.iter_pk()) {
                     let (xonly, xpk) = (pk_pkh_derived.to_x_only_pubkey(), pk_pkh_xpk);
 
-                    let xpk_full_derivation_path = xpk
-                        .full_derivation_path()
-                        .ok_or(descriptor::ConversionError::MultiKey)?;
+                    let xpk_full_derivation_path =
+                        xpk.full_derivation_path().ok_or(descriptor::ConversionError::MultiKey)?;
                     item.tap_key_origins()
                         .entry(xonly)
                         .and_modify(|(tapleaf_hashes, _)| {
@@ -1204,9 +1183,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                     *item.redeem_script() = Some(wsh.inner_script().to_p2wsh());
                 }
                 descriptor::ShInner::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
-                descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
-                    *item.redeem_script() = Some(sh.inner_script())
-                }
+                descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) =>
+                    *item.redeem_script() = Some(sh.inner_script()),
             },
             Descriptor::Wsh(wsh) => *item.witness_script() = Some(wsh.inner_script()),
             Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
@@ -1384,15 +1362,11 @@ impl PsbtSighashMsg {
     /// Convert the message to a [`secp256k1::Message`].
     pub fn to_secp_msg(&self) -> secp256k1::Message {
         match *self {
-            PsbtSighashMsg::TapSighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
-            PsbtSighashMsg::LegacySighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
-            PsbtSighashMsg::SegwitV0Sighash(msg) => {
-                secp256k1::Message::from_digest(msg.to_byte_array())
-            }
+            PsbtSighashMsg::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
+            PsbtSighashMsg::LegacySighash(msg) =>
+                secp256k1::Message::from_digest(msg.to_byte_array()),
+            PsbtSighashMsg::SegwitV0Sighash(msg) =>
+                secp256k1::Message::from_digest(msg.to_byte_array()),
         }
     }
 }
@@ -1401,14 +1375,13 @@ impl PsbtSighashMsg {
 mod tests {
     use std::str::FromStr;
 
+    use super::*;
     use crate::bitcoin::bip32::{DerivationPath, Xpub};
     use crate::bitcoin::consensus::encode::deserialize;
     use crate::bitcoin::hashes::hex::FromHex;
     use crate::bitcoin::key::XOnlyPublicKey;
     use crate::bitcoin::secp256k1::PublicKey;
-    use crate::bitcoin::{absolute, transaction, OutPoint, TxIn, TxOut, Amount};
-
-    use super::*;
+    use crate::bitcoin::{absolute, transaction, Amount, OutPoint, TxIn, TxOut};
     use crate::miniscript::Miniscript;
 
     #[test]
