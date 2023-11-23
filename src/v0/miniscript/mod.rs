@@ -66,7 +66,7 @@ impl Psbt {
     /// finalized psbt which involves checking the signatures/ preimages/timelocks.
     ///
     /// Input finalization also fails if it is not possible to satisfy any of the inputs non-malleably
-    /// See [finalizer::finalize_mall] if you want to allow malleable satisfactions
+    /// See `finalizer::finalize_mall` if you want to allow malleable satisfactions
     ///
     /// For finalizing individual inputs, see also [`Psbt::finalize_inp`]
     ///
@@ -261,7 +261,7 @@ impl Psbt {
 
     /// Update PSBT input with a descriptor and check consistency of `*_utxo` fields.
     ///
-    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
+    /// This is the checked version of `update_with_descriptor_unchecked`. It checks that the
     /// `witness_utxo` and `non_witness_utxo` are sane and have a `script_pubkey` that matches the
     /// descriptor. In particular, it makes sure pre-segwit descriptors always have `non_witness_utxo`
     /// present (and the txid matches). If both `witness_utxo` and `non_witness_utxo` are present
@@ -275,7 +275,6 @@ impl Psbt {
     /// The `descriptor` **must not have any wildcards** in it
     /// otherwise an error will be returned however it can (and should) have extended keys in it.
     ///
-    /// [`update_with_descriptor_unchecked`]: PsbtInputExt::update_with_descriptor_unchecked
     /// [segwit bug]: https://bitcoinhackers.org/@lukedashjr/104287698361196952
     pub fn update_input_with_descriptor(
         &mut self,
@@ -345,13 +344,11 @@ impl Psbt {
 
     /// Update PSBT output with a descriptor and check consistency of the output's `script_pubkey`
     ///
-    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
+    /// This is the checked version of `update_with_descriptor_unchecked`. It checks that the
     /// output's `script_pubkey` matches the descriptor.
     ///
     /// The `descriptor` **must not have any wildcards** in it
     /// otherwise an error will be returned however it can (and should) have extended keys in it.
-    ///
-    /// [`update_with_descriptor_unchecked`]: PsbtOutputExt::update_with_descriptor_unchecked
     pub fn update_output_with_descriptor(
         &mut self,
         output_index: usize,
@@ -384,8 +381,8 @@ impl Psbt {
     ///
     /// Based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`sighash::TapSighashType::Default`](bitcoin::sighash::TapSighashType::Default) is chosen
-    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
+    /// the [`sighash::TapSighashType::Default`] is chosen
+    /// for for taproot spends, otherwise [`EcdsaSighashType::All`] is chosen.
     /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
     /// If the utxo at `idx` is a pre-taproot segwit output, returns a [`PsbtSighashMsg::SegwitV0Sighash`] variant.
     /// For legacy outputs, returns a [`PsbtSighashMsg::LegacySighash`] variant.
