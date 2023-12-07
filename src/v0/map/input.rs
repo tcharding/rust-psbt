@@ -10,10 +10,11 @@ use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{ecdsa, secp256k1, taproot, ScriptBuf, Transaction, TxOut, Witness};
 
 use crate::prelude::*;
-use crate::serialize::Deserialize;
-use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
+use crate::v0::serialize::Deserialize;
+use crate::v0::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 use crate::v0::map::Map;
-use crate::{error, raw, Error};
+use crate::v0::{error, raw, Error};
+use crate::v0::macros::{impl_psbtmap_decoding, impl_psbt_get_pair, combine, impl_psbt_insert_pair,};
 
 /// Type: Non-Witness UTXO PSBT_IN_NON_WITNESS_UTXO = 0x00
 const PSBT_IN_NON_WITNESS_UTXO: u8 = 0x00;
@@ -82,7 +83,7 @@ pub struct Input {
     pub witness_script: Option<ScriptBuf>,
     /// A map from public keys needed to sign this input to their corresponding
     /// master key fingerprints and derivation paths.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub bip32_derivation: BTreeMap<secp256k1::PublicKey, KeySource>,
     /// The finalized, fully-constructed scriptSig with signatures and any other
     /// scripts necessary for this input to pass validation.
@@ -92,37 +93,37 @@ pub struct Input {
     pub final_script_witness: Option<Witness>,
     /// TODO: Proof of reserves commitment
     /// RIPEMD160 hash to preimage map.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_byte_values"))]
     pub ripemd160_preimages: BTreeMap<ripemd160::Hash, Vec<u8>>,
     /// SHA256 hash to preimage map.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_byte_values"))]
     pub sha256_preimages: BTreeMap<sha256::Hash, Vec<u8>>,
     /// HSAH160 hash to preimage map.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_byte_values"))]
     pub hash160_preimages: BTreeMap<hash160::Hash, Vec<u8>>,
     /// HAS256 hash to preimage map.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_byte_values"))]
     pub hash256_preimages: BTreeMap<sha256d::Hash, Vec<u8>>,
     /// Serialized taproot signature with sighash type for key spend.
     pub tap_key_sig: Option<taproot::Signature>,
     /// Map of `<xonlypubkey>|<leafhash>` with signature.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub tap_script_sigs: BTreeMap<(XOnlyPublicKey, TapLeafHash), taproot::Signature>,
     /// Map of Control blocks to Script version pair.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub tap_scripts: BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>,
     /// Map of tap root x only keys to origin info and leaf hashes contained in it.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub tap_key_origins: BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
     /// Taproot Internal key.
     pub tap_internal_key: Option<XOnlyPublicKey>,
     /// Taproot Merkle root.
     pub tap_merkle_root: Option<TapNodeHash>,
     /// Proprietary key-value pairs for this input.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown key-value pairs for this input.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub unknown: BTreeMap<raw::Key, Vec<u8>>,
 }
 
@@ -416,14 +417,14 @@ where
     H: hashes::Hash + Deserialize,
 {
     if raw_key.key.is_empty() {
-        return Err(crate::Error::InvalidKey(raw_key));
+        return Err(crate::v0::Error::InvalidKey(raw_key));
     }
     let key_val: H = Deserialize::deserialize(&raw_key.key)?;
     match map.entry(key_val) {
         btree_map::Entry::Vacant(empty_key) => {
             let val: Vec<u8> = Deserialize::deserialize(&raw_value)?;
             if <H as hashes::Hash>::hash(&val) != key_val {
-                return Err(crate::Error::InvalidPreimageHashPair {
+                return Err(crate::v0::Error::InvalidPreimageHashPair {
                     preimage: val.into_boxed_slice(),
                     hash: Box::from(key_val.borrow()),
                     hash_type,
@@ -432,7 +433,7 @@ where
             empty_key.insert(val);
             Ok(())
         }
-        btree_map::Entry::Occupied(_) => Err(crate::Error::DuplicateKey(raw_key)),
+        btree_map::Entry::Occupied(_) => Err(crate::v0::Error::DuplicateKey(raw_key)),
     }
 }
 

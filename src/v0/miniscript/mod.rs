@@ -26,9 +26,8 @@ use crate::miniscript::{
     Segwitv0, SigType, Tap, ToPublicKey, TranslatePk, Translator,
 };
 use crate::prelude::*;
-use crate::raw;
 use crate::v0::map::{Input, Output};
-use crate::v0::Psbt;
+use crate::v0::{raw, Psbt};
 
 const ALLOW_MAL: bool = true;
 const NO_MAL: bool = false;
@@ -845,8 +844,8 @@ trait PsbtFields {
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
-    fn proprietary(&mut self) -> &mut BTreeMap<crate::raw::ProprietaryKey, Vec<u8>>;
-    fn unknown(&mut self) -> &mut BTreeMap<crate::raw::Key, Vec<u8>>;
+    fn proprietary(&mut self) -> &mut BTreeMap<raw::ProprietaryKey, Vec<u8>>;
+    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { None }

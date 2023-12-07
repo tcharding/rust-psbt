@@ -9,6 +9,18 @@
 mod error;
 mod extractor;
 mod map;
+
+#[macro_use]
+mod macros;
+
+#[cfg(feature = "serde")]
+mod serde_utils;
+mod sighash_type;
+
+pub mod raw;
+#[macro_use]
+pub mod serialize;
+
 #[cfg(feature = "miniscript")]
 pub mod miniscript;
 
@@ -28,9 +40,10 @@ use crate::error::write_err;
 use crate::prelude::*;
 use crate::v0::error::{IndexOutOfBoundsError, SignError};
 use crate::v0::map::{Global, Input, Map, Output};
-use crate::Error;
 
 #[rustfmt::skip]                // Keep public re-exports separate.
+pub use self::error::Error;
+
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
 
@@ -717,12 +730,13 @@ mod tests {
     use bitcoin::{FeeRate, ScriptBuf, Witness};
 
     use super::*;
-    use crate::serialize::{Deserialize, Serialize};
+    use crate::v0::serialize::{Deserialize, Serialize};
     use crate::v0::error::ExtractTxError;
-    use crate::{io, raw};
+    use crate::v0::raw;
+    use crate::io;
 
     #[track_caller]
-    pub fn hex_psbt(s: &str) -> Result<Psbt, crate::error::Error> {
+    pub fn hex_psbt(s: &str) -> Result<Psbt, crate::v0::error::Error> {
         let r: Result<Vec<u8>, bitcoin::hex::HexToBytesError> = Vec::from_hex(s);
         match r {
             Err(_e) => panic!("unable to parse hex string {}", s),
@@ -969,7 +983,7 @@ mod tests {
         //! Create a full PSBT value with various fields filled and make sure it can be JSONized.
         use bitcoin::hashes::sha256d;
 
-        use crate::sighash_type::PsbtSighashType;
+        use crate::v0::sighash_type::PsbtSighashType;
         use crate::v0::map::Input;
 
         // create some values to use in the PSBT
@@ -1090,7 +1104,7 @@ mod tests {
         use bitcoin::witness::Witness;
 
         use super::*;
-        use crate::raw;
+        use crate::v0::raw;
         use crate::v0::map::{Input, Map, Output};
 
         #[test]

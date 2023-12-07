@@ -13,7 +13,7 @@ use bitcoin::transaction::Transaction;
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
 use crate::v0::map::Map;
-use crate::{raw, Error};
+use crate::v0::{raw, Error};
 
 /// Type: Unsigned Transaction PSBT_GLOBAL_UNSIGNED_TX = 0x00
 const PSBT_GLOBAL_UNSIGNED_TX: u8 = 0x00;
@@ -37,10 +37,10 @@ pub struct Global {
     /// derivation path as defined by BIP 32.
     pub xpub: BTreeMap<Xpub, KeySource>,
     /// Global proprietary key-value pairs.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown global key-value pairs.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub unknown: BTreeMap<raw::Key, Vec<u8>>,
 }
 
@@ -167,7 +167,7 @@ impl Global {
                         },
                     }
                 }
-                Err(crate::Error::NoMorePairs) => break,
+                Err(crate::v0::Error::NoMorePairs) => break,
                 Err(e) => return Err(e),
             }
         }

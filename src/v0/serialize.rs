@@ -21,8 +21,9 @@ use bitcoin::taproot::{
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
 use crate::prelude::*;
-use crate::sighash_type::PsbtSighashType;
-use crate::{io, Error};
+use crate::v0::sighash_type::PsbtSighashType;
+use crate::v0::Error;
+use crate::io;
 
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.

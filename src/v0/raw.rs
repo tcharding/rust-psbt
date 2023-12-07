@@ -19,8 +19,9 @@ use bitcoin::consensus::encode::{
 };
 
 use crate::prelude::*;
-use crate::serialize::{Deserialize, Serialize};
-use crate::{io, Error};
+use crate::v0::serialize::{Deserialize, Serialize};
+use crate::v0::Error;
+use crate::io;
 
 /// A PSBT key-value pair in its raw byte form.
 ///
@@ -34,7 +35,7 @@ pub struct Pair {
     /// The value of this key-value pair in raw byte form.
     ///
     /// - `<value> := <valuelen> <valuedata>`
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::hex_bytes"))]
     pub value: Vec<u8>,
 }
 
@@ -80,7 +81,7 @@ pub struct Key {
     /// The `keytype` of this PSBT map key (`keytype`).
     pub type_value: u8,
     /// The `keydata` itself in raw byte form.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::hex_bytes"))]
     pub key: Vec<u8>,
 }
 
@@ -144,12 +145,12 @@ where
 {
     /// Proprietary type prefix used for grouping together keys under some
     /// application and avoid namespace collision
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::hex_bytes"))]
     pub prefix: Vec<u8>,
     /// Custom proprietary subtype
     pub subtype: Subtype,
     /// Additional key bytes (like serialized public key data etc)
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::hex_bytes"))]
     pub key: Vec<u8>,
 }
 

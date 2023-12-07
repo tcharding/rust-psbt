@@ -9,8 +9,7 @@
 use bitcoin::{FeeRate, Transaction};
 
 use crate::v0::error::ExtractTxError;
-use crate::v0::Psbt;
-use crate::Error;
+use crate::v0::{Psbt, Error};
 
 impl Psbt {
     /// The default `max_fee_rate` value used for extracting transactions with [`extract_tx`]

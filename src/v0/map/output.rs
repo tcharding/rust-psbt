@@ -9,7 +9,8 @@ use bitcoin::{secp256k1, ScriptBuf};
 
 use crate::prelude::*;
 use crate::v0::map::Map;
-use crate::{raw, Error};
+use crate::v0::{raw, Error};
+use crate::v0::macros::{impl_psbt_get_pair, impl_psbtmap_decoding, combine, impl_psbt_insert_pair};
 
 /// Type: Redeem ScriptBuf PSBT_OUT_REDEEM_SCRIPT = 0x00
 const PSBT_OUT_REDEEM_SCRIPT: u8 = 0x00;
@@ -38,20 +39,20 @@ pub struct Output {
     pub witness_script: Option<ScriptBuf>,
     /// A map from public keys needed to spend this output to their
     /// corresponding master key fingerprints and derivation paths.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub bip32_derivation: BTreeMap<secp256k1::PublicKey, KeySource>,
     /// The internal pubkey.
     pub tap_internal_key: Option<XOnlyPublicKey>,
     /// Taproot Output tree.
     pub tap_tree: Option<TapTree>,
     /// Map of tap root x only keys to origin info and leaf hashes contained in it.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq"))]
     pub tap_key_origins: BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
     /// Proprietary key-value pairs for this output.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown key-value pairs for this output.
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::v0::serde_utils::btreemap_as_seq_byte_values"))]
     pub unknown: BTreeMap<raw::Key, Vec<u8>>,
 }
 

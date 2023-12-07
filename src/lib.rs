@@ -40,14 +40,6 @@ pub extern crate bitcoin;
 pub extern crate miniscript;
 
 mod error;
-#[macro_use]
-mod macros;
-#[cfg(feature = "serde")]
-mod serde_utils;
-mod sighash_type;
-
-pub mod raw;
-pub mod serialize;
 pub mod v0;
 
 #[cfg(feature = "std")]
@@ -55,12 +47,6 @@ use std::io;
 
 #[cfg(not(feature = "std"))]
 use core2::io;
-
-#[rustfmt::skip]                // Keep pubic re-exports separate
-pub use crate::{
-    error::Error,
-    sighash_type::PsbtSighashType,
-};
 
 #[rustfmt::skip]
 mod prelude {

@@ -5,8 +5,8 @@ mod input;
 mod output;
 
 use crate::prelude::*;
-use crate::raw;
-use crate::serialize::Serialize;
+use crate::v0::raw;
+use crate::v0::serialize::Serialize;
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use self::{
