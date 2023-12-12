@@ -1,14 +1,10 @@
-//! BIP-174 PSBT v0 valid parsing test - fails signer checks.
+//! BIP-174 test vectors - fails signer checks.
 //!
-//! This is everything in the test vectors section of the bip below the line:
+//! This is everything in the test vectors section of the bip between the lines:
 //!
 //! > Fails Signer checks
 //!
-//! And above the line:
-//!
 //! > The private keys in the tests below are derived from the following master private key:
-//!
-//! [BIP-174] <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#test-vectors>
 
 #![cfg(all(feature = "std", feature = "base64"))]
 

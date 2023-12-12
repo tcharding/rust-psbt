@@ -1,6 +1,4 @@
-//! BIP-174 PSBT v0 test vectors - parse invalid PSBT.
-//!
-//! [BIP-174] <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#test-vectors>
+//! BIP-174 test vectors - parse invalid PSBT.
 
 #![cfg(all(feature = "std", feature = "base64"))]
 
