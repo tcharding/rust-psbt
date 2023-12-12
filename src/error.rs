@@ -6,10 +6,10 @@ use bitcoin::bip32::Xpub;
 // TODO: This should be exposed like this in rust-bitcoin.
 use bitcoin::consensus::encode as consensus;
 use bitcoin::transaction::Transaction;
-use bitcoin::{hashes, secp256k1, taproot};
+use bitcoin::{absolute, hashes, secp256k1, taproot};
 
 use crate::prelude::*;
-use crate::{io, raw};
+use crate::{io, raw, version};
 
 /// Enum for marking psbt hash error.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -104,6 +104,12 @@ pub enum Error {
     PartialDataConsumption,
     /// I/O error.
     Io(io::Error),
+    /// Couldn't converting parsed u32 to a lock time.
+    LockTime(absolute::Error),
+    /// Found a keypair type that is explicitly excluded.
+    ExcludedKey(u8),
+    /// Unsupported PSBT version.
+    UnsupportedVersion(version::UnsupportedVersionError),
 }
 
 impl fmt::Display for Error {
@@ -158,6 +164,10 @@ impl fmt::Display for Error {
             PartialDataConsumption =>
                 f.write_str("data not consumed entirely when explicitly deserializing"),
             Io(ref e) => write_err!(f, "I/O error"; e),
+            LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
+            ExcludedKey(t) =>
+                write!(f, "found a keypair type that is explicitly excluded: {:x}", t),
+            UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
         }
     }
 }
@@ -171,6 +181,8 @@ impl std::error::Error for Error {
             InvalidHash(ref e) => Some(e),
             ConsensusEncoding(ref e) => Some(e),
             Io(ref e) => Some(e),
+            LockTime(ref e) => Some(e),
+            UnsupportedVersion(ref e) => Some(e),
             InvalidMagic
             | MissingUtxo
             | InvalidSeparator
@@ -199,7 +211,8 @@ impl std::error::Error for Error {
             | TapTree(_)
             | XPubKey(_)
             | Version(_)
-            | PartialDataConsumption => None,
+            | PartialDataConsumption
+            | ExcludedKey(_) => None,
         }
     }
 }
@@ -214,6 +227,14 @@ impl From<consensus::Error> for Error {
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self { Error::Io(e) }
+}
+
+impl From<absolute::Error> for Error {
+    fn from(e: absolute::Error) -> Self { Error::LockTime(e) }
+}
+
+impl From<version::UnsupportedVersionError> for Error {
+    fn from(e: version::UnsupportedVersionError) -> Self { Error::UnsupportedVersion(e) }
 }
 
 /// Formats error.

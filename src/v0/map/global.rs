@@ -10,16 +10,15 @@ use bitcoin::consensus::encode::MAX_VEC_SIZE;
 use bitcoin::consensus::Decodable;
 use bitcoin::transaction::Transaction;
 
+use crate::consts::{
+    PSBT_GLOBAL_FALLBACK_LOCKTIME, PSBT_GLOBAL_INPUT_COUNT, PSBT_GLOBAL_OUTPUT_COUNT,
+    PSBT_GLOBAL_PROPRIETARY, PSBT_GLOBAL_TX_MODIFIABLE, PSBT_GLOBAL_TX_VERSION,
+    PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_VERSION, PSBT_GLOBAL_XPUB,
+};
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
 use crate::v0::map::Map;
 use crate::{raw, Error};
-use crate::consts::{
-PSBT_GLOBAL_UNSIGNED_TX,
-PSBT_GLOBAL_XPUB,
-PSBT_GLOBAL_VERSION,
-PSBT_GLOBAL_PROPRIETARY,
-};
 
 /// The global key-value map.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -54,7 +53,7 @@ impl Global {
             match raw::Pair::decode(&mut r) {
                 Ok(pair) => {
                     match pair.key.type_value {
-                        PSBT_GLOBAL_UNSIGNED_TX => {
+                        v if v == PSBT_GLOBAL_UNSIGNED_TX => {
                             // key has to be empty
                             if pair.key.key.is_empty() {
                                 // there can only be one unsigned transaction
@@ -82,7 +81,7 @@ impl Global {
                                 return Err(Error::InvalidKey(pair.key));
                             }
                         }
-                        PSBT_GLOBAL_XPUB => {
+                        v if v == PSBT_GLOBAL_XPUB => {
                             if !pair.key.key.is_empty() {
                                 let xpub = Xpub::decode(&pair.key.key)
                                     .map_err(|_| Error::XPubKey(
@@ -119,7 +118,7 @@ impl Global {
                                 ));
                             }
                         }
-                        PSBT_GLOBAL_VERSION => {
+                        v if v == PSBT_GLOBAL_VERSION => {
                             // key has to be empty
                             if pair.key.key.is_empty() {
                                 // there can only be one version
@@ -146,7 +145,7 @@ impl Global {
                                 return Err(Error::InvalidKey(pair.key));
                             }
                         }
-                        PSBT_GLOBAL_PROPRIETARY => match proprietary
+                        v if v == PSBT_GLOBAL_PROPRIETARY => match proprietary
                             .entry(raw::ProprietaryKey::try_from(pair.key.clone())?)
                         {
                             btree_map::Entry::Vacant(empty_key) => {
@@ -155,6 +154,22 @@ impl Global {
                             btree_map::Entry::Occupied(_) =>
                                 return Err(Error::DuplicateKey(pair.key)),
                         },
+                        // PSBT v2 explicit excludes.
+                        v if v == PSBT_GLOBAL_TX_VERSION => {
+                            return Err(Error::ExcludedKey(v));
+                        }
+                        v if v == PSBT_GLOBAL_TX_MODIFIABLE => {
+                            return Err(Error::ExcludedKey(v));
+                        }
+                        v if v == PSBT_GLOBAL_FALLBACK_LOCKTIME => {
+                            return Err(Error::ExcludedKey(v));
+                        }
+                        v if v == PSBT_GLOBAL_INPUT_COUNT => {
+                            return Err(Error::ExcludedKey(v));
+                        }
+                        v if v == PSBT_GLOBAL_OUTPUT_COUNT => {
+                            return Err(Error::ExcludedKey(v));
+                        }
                         _ => match unknowns.entry(pair.key) {
                             btree_map::Entry::Vacant(empty_key) => {
                                 empty_key.insert(pair.value);
@@ -213,7 +228,8 @@ impl Global {
 
         Ok(())
     }
-    /// Combines this [`Psbt`] with `other` PSBT as described by BIP 174.
+
+    /// Combines this [`Global`] with `other`.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
     pub fn combine(&mut self, other: Self) -> Result<(), Error> {

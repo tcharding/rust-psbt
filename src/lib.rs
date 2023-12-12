@@ -50,6 +50,8 @@ mod sighash_type;
 pub mod raw;
 pub mod serialize;
 pub mod v0;
+pub mod v2;
+mod version;
 
 #[cfg(feature = "std")]
 use std::io;
@@ -57,11 +59,18 @@ use std::io;
 #[cfg(not(feature = "std"))]
 use core2::io;
 
+use crate::version::Version;
+
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use crate::{
     error::Error,
     sighash_type::PsbtSighashType,
 };
+
+/// PSBT version 0 - the original PSBT version.
+pub const V0: Version = Version::ZERO;
+/// PSBT version 2 - the second PSBT version.
+pub const V2: Version = Version::TWO;
 
 #[rustfmt::skip]
 mod prelude {

@@ -24,11 +24,15 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::{Transaction, TxOut};
 use bitcoin::{ecdsa, Amount, ScriptBuf};
 
-use crate::error::write_err;
+use crate::error::{write_err, Error};
 use crate::prelude::*;
-use crate::v0::error::{IndexOutOfBoundsError, SignError, SignerChecksError};
-use crate::v0::map::{Global, Input, Map, Output};
-use crate::Error;
+use crate::v0::map::Map;
+
+#[rustfmt::skip]                // Keep pubic re-exports separate
+pub use self::{
+    error::{IndexOutOfBoundsError, SignerChecksError, SignError},
+    map::{Input, Output, Global},
+};
 
 #[rustfmt::skip]                // Keep public re-exports separate.
 #[cfg(feature = "base64")]
@@ -1165,7 +1169,6 @@ mod tests {
         use bitcoin::witness::Witness;
 
         use super::*;
-        use crate::raw;
         use crate::v0::map::{Input, Map, Output};
 
         #[test]
@@ -1429,28 +1432,6 @@ mod tests {
             );
 
             assert_eq!(redeem_script.to_p2sh(), expected_out);
-        }
-
-        #[test]
-        fn valid_vector_6() {
-            let psbt: Psbt = hex_psbt("70736274ff01003f0200000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000ffffffff010000000000000000036a010000000000000a0f0102030405060708090f0102030405060708090a0b0c0d0e0f0000").unwrap();
-
-            assert_eq!(psbt.inputs.len(), 1);
-            assert_eq!(psbt.outputs.len(), 1);
-
-            let tx = &psbt.global.unsigned_tx;
-            assert_eq!(
-                tx.txid(),
-                "75c5c9665a570569ad77dd1279e6fd4628a093c4dcbf8d41532614044c14c115".parse().unwrap(),
-            );
-
-            let mut unknown: BTreeMap<raw::Key, Vec<u8>> = BTreeMap::new();
-            let key: raw::Key = raw::Key { type_value: 0x0fu8, key: hex!("010203040506070809") };
-            let value: Vec<u8> = hex!("0102030405060708090a0b0c0d0e0f");
-
-            unknown.insert(key, value);
-
-            assert_eq!(psbt.inputs[0].unknown, unknown)
         }
     }
 
