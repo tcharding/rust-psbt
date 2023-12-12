@@ -6,13 +6,14 @@
 //! We sign invalid inputs, this code is not run against Bitcoin Core so everything here should be
 //! taken as NOT PROVEN CORRECT.
 
+use std::collections::BTreeMap;
+
 use psbt::bitcoin::hashes::Hash as _;
 use psbt::bitcoin::locktime::absolute;
 use psbt::bitcoin::opcodes::all::OP_CHECKMULTISIG;
-use psbt::bitcoin::secp256k1::{self, rand, Message, SECP256K1};
-use psbt::bitcoin::sighash::{self, EcdsaSighashType, SighashCache};
+use psbt::bitcoin::secp256k1::{self, rand, SECP256K1};
 use psbt::bitcoin::{
-    ecdsa, script, transaction, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence,
+    script, transaction, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence,
     Transaction, TxIn, TxOut, Txid, Witness,
 };
 use psbt::v0::{self, Psbt};
@@ -37,11 +38,10 @@ fn main() -> anyhow::Result<()> {
     // provides an unspent input to create the multisig output (and any change details if needed).
 
     // Alice has a UTXO that is too big, she needs change.
-    let (previous_output_a, change_address_a, change_value_a) =
-        alice.contribute_to_multisig_output();
+    let (previous_output_a, change_address_a, change_value_a) = alice.contribute_to_multisig();
 
     // Bob has a UTXO the right size so no change needed.
-    let previous_output_b = bob.contribute_to_multisig_output();
+    let previous_output_b = bob.contribute_to_multisig();
 
     // In PSBT v0 the creator is responsible for creating the transaction.
 
@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     let tx = Transaction {
         version: transaction::Version::TWO,  // Post BIP-68.
         lock_time: absolute::LockTime::ZERO, // Ignore the locktime.
-        input: vec![input_0, input_1],       // The order matters!
+        input: vec![input_0, input_1],
         output: vec![multi, change],
     };
 
@@ -120,7 +120,7 @@ impl Alice {
 
     /// Alice provides an input to be used to create the multisig and the details required to get
     /// some change back (change address and amount).
-    pub fn contribute_to_multisig_output(&self) -> (OutPoint, Address, Amount) {
+    pub fn contribute_to_multisig(&self) -> (OutPoint, Address, Amount) {
         // An obviously invalid output, we just use all zeros then use the `vout` to differentiate
         // Alice's output from Bob's.
         let out = OutPoint { txid: Txid::all_zeros(), vout: 0 };
@@ -145,11 +145,7 @@ impl Alice {
     }
 
     /// Signs `psbt`.
-    pub fn sign(&self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
-        let sig = self.0.sign_p2wpkh_input(&psbt, 0)?;
-        psbt.inputs[0].partial_sigs.insert(self.public_key(), sig);
-        Ok(psbt)
-    }
+    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> { self.0.sign_ecdsa(psbt) }
 }
 
 impl Default for Alice {
@@ -167,7 +163,7 @@ impl Bob {
     pub fn public_key(&self) -> bitcoin::PublicKey { self.0.public_key() }
 
     /// Bob provides an input to be used to create the multisig, its the right size so no change.
-    pub fn contribute_to_multisig_output(&self) -> OutPoint {
+    pub fn contribute_to_multisig(&self) -> OutPoint {
         // An obviously invalid output, we just use all zeros then use the `vout` to differentiate
         // Alice's output from Bob's.
         OutPoint { txid: Txid::all_zeros(), vout: 1 }
@@ -182,11 +178,7 @@ impl Bob {
     }
 
     /// Signs `psbt`.
-    pub fn sign(&self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
-        let sig = self.0.sign_p2wpkh_input(&psbt, 0)?;
-        psbt.inputs[1].partial_sigs.insert(self.public_key(), sig);
-        Ok(psbt)
-    }
+    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> { self.0.sign_ecdsa(psbt) }
 }
 
 impl Default for Bob {
@@ -205,39 +197,28 @@ impl Entity {
         let (sk, pk) = random_keys();
         Entity { sk, pk }
     }
+
+    /// Returns the private key for this entity.
+    fn private_key(&self) -> bitcoin::PrivateKey { bitcoin::PrivateKey::new(self.sk, MAINNET) }
+
     /// Returns the public key for this entity.
     ///
     /// All examples use segwit so this key is serialize in compressed form.
     pub fn public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(self.pk) }
 
-    /// Signs a P2WPKH input using the `bitcoin::sighash::SighashCache` API.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `input_index` is out of range.
-    pub fn sign_p2wpkh_input(
-        &self,
-        psbt: &Psbt,
-        input_index: usize,
-    ) -> Result<ecdsa::Signature, sighash::Error> {
-        let input = psbt.inputs[input_index].witness_utxo.as_ref().expect("witness utxo");
+    /// Signs any ECDSA inputs for which we have keys.
+    pub fn sign_ecdsa(&self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
+        // TODO: Should this be called internally in the `v0` module?
+        psbt.signer_checks()?;
 
-        // Get the sighash to sign.
-        let sighash_type = EcdsaSighashType::All;
-        let mut sighasher = SighashCache::new(&psbt.global.unsigned_tx);
-        let sighash = sighasher.p2wpkh_signature_hash(
-            input_index,
-            &input.script_pubkey,
-            SPEND_AMOUNT,
-            sighash_type,
-        )?;
+        let sk = self.private_key();
+        let pk = self.public_key();
 
-        // Sign the sighash using the secp256k1 library (exported by rust-bitcoin).
-        let msg = Message::from(sighash);
-        let sig = SECP256K1.sign_ecdsa(&msg, &self.sk);
+        let mut keys = BTreeMap::new();
+        keys.insert(pk, sk);
+        psbt.sign(&keys, SECP256K1).expect("failed to sign psbt");
 
-        let sig = ecdsa::Signature { sig, hash_ty: sighash_type };
-        Ok(sig)
+        Ok(psbt)
     }
 }
 
