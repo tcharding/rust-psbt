@@ -22,11 +22,11 @@ use bitcoin::key::{PrivateKey, PublicKey};
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::{Transaction, TxOut};
-use bitcoin::{ecdsa, Amount};
+use bitcoin::{ecdsa, Amount, ScriptBuf};
 
 use crate::error::write_err;
 use crate::prelude::*;
-use crate::v0::error::{IndexOutOfBoundsError, SignError};
+use crate::v0::error::{IndexOutOfBoundsError, SignError, SignerChecksError};
 use crate::v0::map::{Global, Input, Map, Output};
 use crate::Error;
 
@@ -175,6 +175,81 @@ impl Psbt {
             self_output.combine(other_output);
         }
 
+        Ok(())
+    }
+
+    /// Returns `Ok` if PSBT is
+    ///
+    /// From BIP-174:
+    ///
+    /// For a Signer to only produce valid signatures for what it expects to sign, it must check that the following conditions are true:
+    ///
+    /// - If a non-witness UTXO is provided, its hash must match the hash specified in the prevout
+    /// - If a witness UTXO is provided, no non-witness signature may be created
+    /// - If a redeemScript is provided, the scriptPubKey must be for that redeemScript
+    /// - If a witnessScript is provided, the scriptPubKey or the redeemScript must be for that witnessScript
+    /// - If a sighash type is provided, the signer must check that the sighash is acceptable. If unacceptable, they must fail.
+    /// - If a sighash type is not provided, the signer should sign using SIGHASH_ALL, but may use any sighash type they wish.
+    pub fn signer_checks(&self) -> Result<(), SignerChecksError> {
+        let unsigned_tx = &self.global.unsigned_tx;
+        for (i, input) in self.inputs.iter().enumerate() {
+            if input.witness_utxo.is_some() {
+                match self.output_type(i) {
+                    Ok(OutputType::Bare) => return Err(SignerChecksError::NonWitnessSig),
+                    Ok(_) => {}
+                    Err(_) => {} // TODO: Is this correct?
+                }
+            }
+
+            if let Some(ref tx) = input.non_witness_utxo {
+                if tx.txid() != unsigned_tx.input[i].previous_output.txid {
+                    return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
+                }
+            }
+
+            if let Some(ref redeem_script) = input.redeem_script {
+                match input.witness_utxo {
+                    Some(ref tx_out) => {
+                        let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
+                        if tx_out.script_pubkey != script_pubkey {
+                            return Err(SignerChecksError::RedeemScriptMismatch);
+                        }
+                    }
+                    None => return Err(SignerChecksError::MissingTxOut),
+                }
+            }
+
+            if let Some(ref witness_script) = input.witness_script {
+                match input.witness_utxo {
+                    Some(ref utxo) => {
+                        let script_pubkey = &utxo.script_pubkey;
+                        if script_pubkey.is_p2wsh() {
+                            if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
+                                != *script_pubkey
+                            {
+                                return Err(SignerChecksError::WitnessScriptMismatchWsh);
+                            }
+                        } else if script_pubkey.is_p2sh() {
+                            if let Some(ref redeem_script) = input.redeem_script {
+                                if ScriptBuf::new_p2wsh(&redeem_script.wscript_hash())
+                                    != *script_pubkey
+                                {
+                                    return Err(SignerChecksError::WitnessScriptMismatchShWsh);
+                                }
+                            }
+                        } else {
+                            // BIP does not specifically say there should not be a witness script here?
+                        }
+                    }
+                    None => return Err(SignerChecksError::MissingTxOut),
+                }
+            }
+
+            if let Some(_sighash_type) = input.sighash_type {
+                // TODO: Check that sighash is accetable, what does that mean?
+                {}
+            }
+        }
         Ok(())
     }
 
