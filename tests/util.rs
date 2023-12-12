@@ -25,3 +25,9 @@ pub fn assert_valid_v0(hex: &str, base64: &str) {
     // If we got this far decoding works so this is basically just a sanity check.
     assert!(v0::Psbt::from_str(base64).is_ok());
 }
+
+#[track_caller]
+pub fn assert_invalid_v0(hex: &str, base64: &str) {
+    assert!(hex_psbt_v0(hex).is_err());
+    assert!(v0::Psbt::from_str(base64).is_err());
+}
