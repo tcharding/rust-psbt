@@ -1,10 +1,8 @@
-//! [BIP-174] test vectors excluding the stuff which is in the other `bip-174-*.rs` files.
+//! BIP-174 test vectors excluding the stuff which is in the other `bip174-*.rs` files.
 //!
 //! I.e., this is everything in the test vectors section of the bip below the line:
 //!
 //! > The private keys in the tests below are derived from the following master private key:
-//!
-//! [BIP-174] <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#test-vectors>
 
 use std::collections::BTreeMap;
 use std::convert::TryFrom;

@@ -1,14 +1,10 @@
-//! BIP-174 PSBT v0 valid parsing test - fails signer checks.
+//! BIP-174 test vectors - fails signer checks.
 //!
-//! This is everything in the test vectors section of the bip below the line:
+//! This is everything in the test vectors section of the bip between the lines:
 //!
 //! > Fails Signer checks
 //!
-//! And above the line:
-//!
 //! > The private keys in the tests below are derived from the following master private key:
-//!
-//! [BIP-174] <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#test-vectors>
 
 #![cfg(all(feature = "std", feature = "base64"))]
 
@@ -29,7 +25,7 @@ fn assert_fails_signer_checks_v0(hex: &str, base64: &str) {
 }
 
 #[test]
-fn fails_signer_checks() {
+fn bip174_fails_signer_checks() {
     // Case: A Witness UTXO is provided for a non-witness input
     let hex = "70736274ff0100a00200000002ab0949a08c5af7c49b8212f417e2f15ab3f5c33dcf153821a8139f877a5b7be40000000000feffffffab0949a08c5af7c49b8212f417e2f15ab3f5c33dcf153821a8139f877a5b7be40100000000feffffff02603bea0b000000001976a914768a40bbd740cbe81d988e71de2a4d5c71396b1d88ac8e240000000000001976a9146f4620b553fa095e721b9ee0efe9fa039cca459788ac0000000000010122d3dff505000000001976a914d48ed3110b94014cb114bd32d6f4d066dc74256b88ac0001012000e1f5050000000017a9143545e6e33b832c47050f24d3eeb93c9c03948bc787010416001485d13537f2e265405a34dbafa9e3dda01fb8230800220202ead596687ca806043edc3de116cdf29d5e9257c196cd055cf698c8d02bf24e9910b4a6ba670000008000000080020000800022020394f62be9df19952c5587768aeb7698061ad2c4a25c894f47d8c162b4d7213d0510b4a6ba6700000080010000800200008000";
     let base64 = "cHNidP8BAKACAAAAAqsJSaCMWvfEm4IS9Bfi8Vqz9cM9zxU4IagTn4d6W3vkAAAAAAD+////qwlJoIxa98SbghL0F+LxWrP1wz3PFTghqBOfh3pbe+QBAAAAAP7///8CYDvqCwAAAAAZdqkUdopAu9dAy+gdmI5x3ipNXHE5ax2IrI4kAAAAAAAAGXapFG9GILVT+glechue4O/p+gOcykWXiKwAAAAAAAEBItPf9QUAAAAAGXapFNSO0xELlAFMsRS9Mtb00GbcdCVriKwAAQEgAOH1BQAAAAAXqRQ1RebjO4MsRwUPJNPuuTycA5SLx4cBBBYAFIXRNTfy4mVAWjTbr6nj3aAfuCMIACICAurVlmh8qAYEPtw94RbN8p1eklfBls0FXPaYyNAr8k6ZELSmumcAAACAAAAAgAIAAIAAIgIDlPYr6d8ZlSxVh3aK63aYBhrSxKJciU9H2MFitNchPQUQtKa6ZwAAAIABAACAAgAAgAA=";
