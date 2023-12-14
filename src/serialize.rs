@@ -18,7 +18,10 @@ use bitcoin::secp256k1::{self, XOnlyPublicKey};
 use bitcoin::taproot::{
     ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TapTree, TaprootBuilder,
 };
-use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
+use bitcoin::{
+    absolute, ecdsa, taproot, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid,
+    VarInt, Witness,
+};
 
 use crate::prelude::*;
 use crate::sighash_type::PsbtSighashType;
@@ -37,13 +40,18 @@ pub(crate) trait Deserialize: Sized {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error>;
 }
 
+impl_psbt_de_serialize!(absolute::LockTime);
+impl_psbt_de_serialize!(Amount);
 impl_psbt_de_serialize!(Transaction);
+impl_psbt_de_serialize!(transaction::Version);
 impl_psbt_de_serialize!(TxOut);
 impl_psbt_de_serialize!(Witness);
+impl_psbt_de_serialize!(VarInt);
 impl_psbt_hash_de_serialize!(ripemd160::Hash);
 impl_psbt_hash_de_serialize!(sha256::Hash);
 impl_psbt_hash_de_serialize!(TapLeafHash);
 impl_psbt_hash_de_serialize!(TapNodeHash);
+impl_psbt_hash_de_serialize!(Txid);
 impl_psbt_hash_de_serialize!(hash160::Hash);
 impl_psbt_hash_de_serialize!(sha256d::Hash);
 
@@ -143,6 +151,52 @@ impl Deserialize for KeySource {
         }
 
         Ok((fprint, dpath.into()))
+    }
+}
+
+impl Serialize for u32 {
+    fn serialize(&self) -> Vec<u8> { serialize(&self) }
+}
+
+impl Deserialize for u32 {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        let val: u32 = consensus::deserialize(bytes)?;
+        Ok(val)
+    }
+}
+
+impl Serialize for Sequence {
+    fn serialize(&self) -> Vec<u8> { serialize(&self) }
+}
+
+impl Deserialize for Sequence {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        let n: Sequence = consensus::deserialize(bytes)?;
+        Ok(n)
+    }
+}
+
+impl Serialize for absolute::Height {
+    fn serialize(&self) -> Vec<u8> { serialize(&self.to_consensus_u32()) }
+}
+
+impl Deserialize for absolute::Height {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        let n: u32 = consensus::deserialize(bytes)?;
+        let lock = absolute::Height::from_consensus(n)?;
+        Ok(lock)
+    }
+}
+
+impl Serialize for absolute::Time {
+    fn serialize(&self) -> Vec<u8> { serialize(&self.to_consensus_u32()) }
+}
+
+impl Deserialize for absolute::Time {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+        let n: u32 = consensus::deserialize(bytes)?;
+        let lock = absolute::Time::from_consensus(n)?;
+        Ok(lock)
     }
 }
 

@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use core::convert::TryFrom;
+use core::fmt;
 
 use bitcoin::bip32::KeySource;
-use bitcoin::hashes::{self, hash160, ripemd160, sha256, sha256d};
+use bitcoin::consensus::encode as consensus;
+use bitcoin::hashes::{self, hash160, ripemd160, sha256, sha256d, Hash as _};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
+use bitcoin::locktime::absolute;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
-use bitcoin::{ecdsa, secp256k1, taproot, ScriptBuf, Transaction, TxOut, Witness};
+use bitcoin::{
+    ecdsa, secp256k1, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
+    Witness,
+};
 
 use crate::consts::{
     PSBT_IN_BIP32_DERIVATION, PSBT_IN_FINAL_SCRIPTSIG, PSBT_IN_FINAL_SCRIPTWITNESS,
@@ -18,18 +24,41 @@ use crate::consts::{
     PSBT_IN_TAP_INTERNAL_KEY, PSBT_IN_TAP_KEY_SIG, PSBT_IN_TAP_LEAF_SCRIPT,
     PSBT_IN_TAP_MERKLE_ROOT, PSBT_IN_TAP_SCRIPT_SIG, PSBT_IN_WITNESS_SCRIPT, PSBT_IN_WITNESS_UTXO,
 };
+use crate::error::write_err;
 use crate::prelude::*;
-use crate::serialize::Deserialize;
+use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
-use crate::v0::map::Map;
-use crate::{error, raw, Error};
+use crate::v2::error::FundingUtxoError;
+use crate::v2::map::Map;
+use crate::{error, io, raw, v0, Error};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Input {
+    /// The txid of the previous transaction whose output at `self.spent_output_index` is being spent.
+    ///
+    /// In other words, the output being spent by this `Input` is:
+    ///
+    ///  `OutPoint { txid: self.previous_txid, vout: self.spent_output_index }`
+    pub previous_txid: Txid,
+
+    /// The index of the output being spent in the transaction with the txid of `self.previous_txid`.
+    pub spent_output_index: u32,
+
+    /// The sequence number of this input.
+    ///
+    /// If omitted, assumed to be the final sequence number ([`Sequence::MAX`]).
+    pub sequence: Option<Sequence>,
+
+    /// The minimum Unix timestamp that this input requires to be set as the transaction's lock time.
+    pub min_time: Option<absolute::Time>,
+
+    /// The minimum block height that this input requires to be set as the transaction's lock time.
+    pub min_height: Option<absolute::Height>,
+
     /// The non-witness transaction this input spends from. Should only be
     /// `Option::Some` for inputs which spend non-segwit outputs or
     /// if it is unknown whether an input spends a segwit output.
@@ -95,6 +124,124 @@ pub struct Input {
 }
 
 impl Input {
+    /// Creates a new `Input` that spends the `previous_output`.
+    pub fn new(previous_output: OutPoint) -> Self {
+        Input {
+            previous_txid: previous_output.txid,
+            spent_output_index: previous_output.vout,
+            sequence: None,
+            min_time: None,
+            min_height: None,
+            non_witness_utxo: None,
+            witness_utxo: None,
+            partial_sigs: BTreeMap::new(),
+            sighash_type: None,
+            redeem_script: None,
+            witness_script: None,
+            bip32_derivation: BTreeMap::new(),
+            final_script_sig: None,
+            final_script_witness: None,
+            ripemd160_preimages: BTreeMap::new(),
+            sha256_preimages: BTreeMap::new(),
+            hash160_preimages: BTreeMap::new(),
+            hash256_preimages: BTreeMap::new(),
+            tap_key_sig: None,
+            tap_script_sigs: BTreeMap::new(),
+            tap_scripts: BTreeMap::new(),
+            tap_key_origins: BTreeMap::new(),
+            tap_internal_key: None,
+            tap_merkle_root: None,
+            proprietary: BTreeMap::new(),
+            unknown: BTreeMap::new(),
+        }
+    }
+
+    /// Converts this `Input` to a `v0::Input`.
+    pub(crate) fn into_v0(self) -> v0::Input {
+        v0::Input {
+            non_witness_utxo: self.non_witness_utxo,
+            witness_utxo: self.witness_utxo,
+            partial_sigs: self.partial_sigs,
+            sighash_type: self.sighash_type,
+            redeem_script: self.redeem_script,
+            witness_script: self.witness_script,
+            bip32_derivation: self.bip32_derivation,
+            final_script_sig: self.final_script_sig,
+            final_script_witness: self.final_script_witness,
+            ripemd160_preimages: self.ripemd160_preimages,
+            sha256_preimages: self.sha256_preimages,
+            hash160_preimages: self.hash160_preimages,
+            hash256_preimages: self.hash256_preimages,
+            tap_key_sig: self.tap_key_sig,
+            tap_script_sigs: self.tap_script_sigs,
+            tap_scripts: self.tap_scripts,
+            tap_key_origins: self.tap_key_origins,
+            tap_internal_key: self.tap_internal_key,
+            tap_merkle_root: self.tap_merkle_root,
+            proprietary: self.proprietary,
+            unknown: self.unknown,
+        }
+    }
+
+    pub(crate) fn has_lock_time(&self) -> bool {
+        self.min_time.is_some() || self.min_height.is_some()
+    }
+
+    pub(crate) fn is_satisfied_with_height_based_lock_time(&self) -> bool {
+        self.requires_height_based_lock_time()
+            || self.min_time.is_some() && self.min_height.is_some()
+            || self.min_time.is_none() && self.min_height.is_none()
+    }
+
+    pub(crate) fn requires_time_based_lock_time(&self) -> bool {
+        self.min_time.is_some() && self.min_height.is_none()
+    }
+
+    pub(crate) fn requires_height_based_lock_time(&self) -> bool {
+        self.min_height.is_some() && self.min_time.is_none()
+    }
+
+    /// Constructs a [`TxIn`] for this input, excluding any signature material.
+    pub(crate) fn tx_in(&self) -> TxIn {
+        TxIn {
+            previous_output: self.out_point(),
+            script_sig: ScriptBuf::default(),
+            sequence: self.sequence.unwrap_or(Sequence::ZERO),
+            witness: Witness::default(),
+        }
+    }
+
+    /// Returns a reference to the funding utxo for this input.
+    pub fn funding_utxo(&self) -> Result<&TxOut, FundingUtxoError> {
+        if let Some(ref utxo) = self.witness_utxo {
+            Ok(utxo)
+        } else if let Some(ref tx) = self.non_witness_utxo {
+            let vout = self.spent_output_index as usize;
+            tx.output.get(vout).ok_or(FundingUtxoError::OutOfBounds { vout, len: tx.output.len() })
+        } else {
+            Err(FundingUtxoError::MissingUtxo)
+        }
+    }
+
+    /// TODO: Use this.
+    #[allow(dead_code)]
+    fn is_finalized(&self) -> bool {
+        // TODO: Confirm this covers taproot sigs?
+        self.final_script_sig.is_some() || self.final_script_witness.is_some()
+    }
+
+    /// TODO: Use this.
+    #[allow(dead_code)]
+    fn has_sig_data(&self) -> bool {
+        !(self.partial_sigs.is_empty()
+            && self.tap_key_sig.is_none()
+            && self.tap_script_sigs.is_empty())
+    }
+
+    fn out_point(&self) -> OutPoint {
+        OutPoint { txid: self.previous_txid, vout: self.spent_output_index }
+    }
+
     /// Obtains the [`EcdsaSighashType`] for this input if one is specified. If no sighash type is
     /// specified, returns [`EcdsaSighashType::All`].
     ///
@@ -119,13 +266,59 @@ impl Input {
             .unwrap_or(Ok(TapSighashType::Default))
     }
 
+    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+        let invalid = OutPoint { txid: Txid::all_zeros(), vout: u32::MAX };
+        let mut rv = Self::new(invalid);
+
+        loop {
+            match raw::Pair::decode(r) {
+                Ok(pair) => rv.insert_pair(pair)?,
+                Err(crate::Error::NoMorePairs) => {
+                    if rv.previous_txid == Txid::all_zeros() {
+                        return Err(DecodeError::MissingPreviousTxid);
+                    }
+
+                    if rv.spent_output_index == u32::MAX {
+                        return Err(DecodeError::MissingSpentOutputIndex);
+                    }
+                    return Ok(rv);
+                }
+                Err(e) => return Err(DecodeError::Crate(e)),
+            }
+        }
+    }
+
     pub(super) fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), Error> {
         let raw::Pair { key: raw_key, value: raw_value } = pair;
 
         match raw_key.type_value {
-            v if v == PSBT_IN_NON_WITNESS_UTXO => {
+            v if v == PSBT_IN_PREVIOUS_TXID => {
+                if self.previous_txid != Txid::all_zeros() {
+                    return Err(Error::DuplicateKey(raw_key));
+                }
+                let txid: Txid = Deserialize::deserialize(&raw_value)?;
+                self.previous_txid = txid;
+            }
+            v if v == PSBT_IN_OUTPUT_INDEX => {
+                if self.spent_output_index != u32::MAX {
+                    return Err(Error::DuplicateKey(raw_key));
+                }
+                let vout: u32 = Deserialize::deserialize(&raw_value)?;
+                self.spent_output_index = vout;
+            }
+            v if v == PSBT_IN_SEQUENCE => {
                 impl_psbt_insert_pair! {
-                    self.non_witness_utxo <= <raw_key: _>|<raw_value: Transaction>
+                    self.sequence <= <raw_key: _>|<raw_value: Sequence>
+                }
+            }
+            v if v == PSBT_IN_REQUIRED_TIME_LOCKTIME => {
+                impl_psbt_insert_pair! {
+                    self.min_time <= <raw_key: _>|<raw_value: absolute::Time>
+                }
+            }
+            v if v == PSBT_IN_REQUIRED_HEIGHT_LOCKTIME => {
+                impl_psbt_insert_pair! {
+                    self.min_height <= <raw_key: _>|<raw_value: absolute::Height>
                 }
             }
             v if v == PSBT_IN_WITNESS_UTXO => {
@@ -239,22 +432,6 @@ impl Input {
                     btree_map::Entry::Occupied(_) => return Err(Error::DuplicateKey(raw_key)),
                 }
             }
-            // PSBT v2 explicit excludes.
-            v if v == PSBT_IN_PREVIOUS_TXID => {
-                return Err(Error::ExcludedKey(v));
-            }
-            v if v == PSBT_IN_OUTPUT_INDEX => {
-                return Err(Error::ExcludedKey(v));
-            }
-            v if v == PSBT_IN_SEQUENCE => {
-                return Err(Error::ExcludedKey(v));
-            }
-            v if v == PSBT_IN_REQUIRED_TIME_LOCKTIME => {
-                return Err(Error::ExcludedKey(v));
-            }
-            v if v == PSBT_IN_REQUIRED_HEIGHT_LOCKTIME => {
-                return Err(Error::ExcludedKey(v));
-            }
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
@@ -300,6 +477,26 @@ impl Input {
 impl Map for Input {
     fn get_pairs(&self) -> Vec<raw::Pair> {
         let mut rv: Vec<raw::Pair> = Default::default();
+
+        rv.push(raw::Pair {
+            key: raw::Key { type_value: PSBT_IN_PREVIOUS_TXID, key: vec![] },
+            value: self.previous_txid.serialize(),
+        });
+
+        rv.push(raw::Pair {
+            key: raw::Key { type_value: PSBT_IN_OUTPUT_INDEX, key: vec![] },
+            value: self.spent_output_index.serialize(),
+        });
+
+        impl_psbt_get_pair! {
+            rv.push(self.sequence, PSBT_IN_SEQUENCE)
+        }
+        impl_psbt_get_pair! {
+            rv.push(self.min_time, PSBT_IN_REQUIRED_TIME_LOCKTIME)
+        }
+        impl_psbt_get_pair! {
+            rv.push(self.min_height, PSBT_IN_REQUIRED_HEIGHT_LOCKTIME)
+        }
 
         impl_psbt_get_pair! {
             rv.push(self.non_witness_utxo, PSBT_IN_NON_WITNESS_UTXO)
@@ -388,8 +585,6 @@ impl Map for Input {
     }
 }
 
-impl_psbtmap_decoding!(Input);
-
 fn psbt_insert_hash_pair<H>(
     map: &mut BTreeMap<H, Vec<u8>>,
     raw_key: raw::Key,
@@ -418,6 +613,91 @@ where
         }
         btree_map::Entry::Occupied(_) => Err(crate::Error::DuplicateKey(raw_key)),
     }
+}
+
+/// Enables building an [`Input`] using the standard builder pattern.
+pub struct InputBuilder(Input);
+
+impl InputBuilder {
+    /// Creates a new builder that can be used to build an [`Input`] that spends `previous_output`.
+    pub fn new(previous_output: OutPoint) -> Self { Self(Input::new(previous_output)) }
+
+    /// Sets the [`Input::min_time`] field.
+    pub fn minimum_required_time_based_lock_time(mut self, lock: absolute::Time) -> Self {
+        self.0.min_time = Some(lock);
+        self
+    }
+
+    /// Sets the [`Input::min_height`] field.
+    pub fn minimum_required_height_based_lock_time(mut self, lock: absolute::Height) -> Self {
+        self.0.min_height = Some(lock);
+        self
+    }
+
+    /// Builds the [`Input`].
+    pub fn build(self) -> Input { self.0 }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum DecodeError {
+    /// Error consensus deserializing type.
+    Consensus(consensus::Error),
+    /// Known keys must be according to spec.
+    InvalidKey(raw::Key),
+    /// Non-proprietary key type found when proprietary key was expected
+    InvalidProprietaryKey,
+    /// Keys within key-value map should never be duplicated.
+    DuplicateKey(raw::Key),
+    /// Input must contain a previous txid.
+    MissingPreviousTxid,
+    /// Input must contain a spent output index.
+    MissingSpentOutputIndex,
+    /// TODO: Remove this variant, its a kludge
+    Crate(crate::error::Error),
+}
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DecodeError::*;
+
+        match *self {
+            Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
+            InvalidKey(ref key) => write!(f, "invalid key: {}", key),
+            InvalidProprietaryKey =>
+                write!(f, "non-proprietary key type found when proprietary key was expected"),
+            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            MissingPreviousTxid => write!(f, "input must contain a previous txid"),
+            MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
+            Crate(ref e) => write_err!(f, "kludge"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DecodeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use DecodeError::*;
+
+        match *self {
+            Consensus(ref e) => Some(e),
+            Crate(ref e) => Some(e),
+            InvalidKey(_)
+            | InvalidProprietaryKey
+            | DuplicateKey(_)
+            | MissingPreviousTxid
+            | MissingSpentOutputIndex => None,
+        }
+    }
+}
+
+impl From<consensus::Error> for DecodeError {
+    fn from(e: consensus::Error) -> Self { Self::Consensus(e) }
+}
+
+// TODO: Remove this.
+impl From<crate::error::Error> for DecodeError {
+    fn from(e: crate::error::Error) -> Self { Self::Crate(e) }
 }
 
 #[cfg(test)]
@@ -474,5 +754,23 @@ mod test {
         // TODO: Uncomment this stuff.
         // assert_eq!(back.ecdsa_hash_ty(), Err(NonStandardSighashTypeError(nonstd)));
         // assert_eq!(back.taproot_hash_ty(), Err(InvalidSighashTypeError(nonstd)));
+    }
+
+    fn out_point() -> OutPoint {
+        let txid = Txid::hash(b"some arbitrary bytes");
+        let vout = 0xab;
+        OutPoint { txid, vout }
+    }
+
+    #[test]
+    fn serialize_roundtrip() {
+        let input = Input::new(out_point());
+
+        let ser = input.serialize_map();
+        let mut d = std::io::Cursor::new(ser);
+
+        let decoded = Input::decode(&mut d).expect("failed to decode");
+
+        assert_eq!(decoded, input);
     }
 }

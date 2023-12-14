@@ -24,6 +24,8 @@ if [ "$DO_LINT" = true ]
 then
     cargo clippy --all-features --all-targets -- -D warnings
     cargo clippy --example v0 -- -D warnings
+    cargo clippy --example v2 -- -D warnings
+    cargo clippy --example v2-separate-creator-constructor -- -D warnings
 fi
 
 # Test without any features other than std first (same as default)
@@ -38,6 +40,8 @@ do
 done
 
 cargo run --example v0
+cargo run --example v2
+cargo clippy --example v2-separate-creator-constructor
 
 if [ "$DO_NO_STD" = true ]
 then

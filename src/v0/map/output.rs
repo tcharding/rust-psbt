@@ -7,24 +7,14 @@ use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{secp256k1, ScriptBuf};
 
+use crate::consts::{
+    PSBT_OUT_AMOUNT, PSBT_OUT_BIP32_DERIVATION, PSBT_OUT_PROPRIETARY, PSBT_OUT_REDEEM_SCRIPT,
+    PSBT_OUT_SCRIPT, PSBT_OUT_TAP_BIP32_DERIVATION, PSBT_OUT_TAP_INTERNAL_KEY, PSBT_OUT_TAP_TREE,
+    PSBT_OUT_WITNESS_SCRIPT,
+};
 use crate::prelude::*;
 use crate::v0::map::Map;
 use crate::{raw, Error};
-
-/// Type: Redeem ScriptBuf PSBT_OUT_REDEEM_SCRIPT = 0x00
-const PSBT_OUT_REDEEM_SCRIPT: u8 = 0x00;
-/// Type: Witness ScriptBuf PSBT_OUT_WITNESS_SCRIPT = 0x01
-const PSBT_OUT_WITNESS_SCRIPT: u8 = 0x01;
-/// Type: BIP 32 Derivation Path PSBT_OUT_BIP32_DERIVATION = 0x02
-const PSBT_OUT_BIP32_DERIVATION: u8 = 0x02;
-/// Type: Taproot Internal Key PSBT_OUT_TAP_INTERNAL_KEY = 0x05
-const PSBT_OUT_TAP_INTERNAL_KEY: u8 = 0x05;
-/// Type: Taproot Tree PSBT_OUT_TAP_TREE = 0x06
-const PSBT_OUT_TAP_TREE: u8 = 0x06;
-/// Type: Taproot Key BIP 32 Derivation Path PSBT_OUT_TAP_BIP32_DERIVATION = 0x07
-const PSBT_OUT_TAP_BIP32_DERIVATION: u8 = 0x07;
-/// Type: Proprietary Use Type PSBT_IN_PROPRIETARY = 0xFC
-const PSBT_OUT_PROPRIETARY: u8 = 0xFC;
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -60,22 +50,22 @@ impl Output {
         let raw::Pair { key: raw_key, value: raw_value } = pair;
 
         match raw_key.type_value {
-            PSBT_OUT_REDEEM_SCRIPT => {
+            v if v == PSBT_OUT_REDEEM_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.redeem_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            PSBT_OUT_WITNESS_SCRIPT => {
+            v if v == PSBT_OUT_WITNESS_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.witness_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            PSBT_OUT_BIP32_DERIVATION => {
+            v if v == PSBT_OUT_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
                     self.bip32_derivation <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
-            PSBT_OUT_PROPRIETARY => {
+            v if v == PSBT_OUT_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
                 match self.proprietary.entry(key) {
                     btree_map::Entry::Vacant(empty_key) => {
@@ -84,21 +74,29 @@ impl Output {
                     btree_map::Entry::Occupied(_) => return Err(Error::DuplicateKey(raw_key)),
                 }
             }
-            PSBT_OUT_TAP_INTERNAL_KEY => {
+            v if v == PSBT_OUT_TAP_INTERNAL_KEY => {
                 impl_psbt_insert_pair! {
                     self.tap_internal_key <= <raw_key: _>|<raw_value: XOnlyPublicKey>
                 }
             }
-            PSBT_OUT_TAP_TREE => {
+            v if v == PSBT_OUT_TAP_TREE => {
                 impl_psbt_insert_pair! {
                     self.tap_tree <= <raw_key: _>|<raw_value: TapTree>
                 }
             }
-            PSBT_OUT_TAP_BIP32_DERIVATION => {
+            v if v == PSBT_OUT_TAP_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
+            // PSBT v2 explicit excludes.
+            v if v == PSBT_OUT_AMOUNT => {
+                return Err(Error::ExcludedKey(v));
+            }
+            v if v == PSBT_OUT_SCRIPT => {
+                return Err(Error::ExcludedKey(v));
+            }
+
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);

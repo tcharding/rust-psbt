@@ -8,7 +8,8 @@ description = "Partially signed Bitcoin Transaction, v0 and v1"
 categories = ["cryptography::cryptocurrencies"]
 keywords = [ "crypto", "bitcoin" ]
 readme = "../README.md"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56.1"
 exclude = ["tests", "contrib"]
 
 [package.metadata.docs.rs]
@@ -47,3 +48,10 @@ secp256k1 = { version = "0.28", features = ["rand-std", "global-context"] }
 [[example]]
 name = "v0"
 required-features = ["std"]
+
+[[example]]
+name = "v2"
+required-features = ["std"]
+
+[[example]]
+name = "v2-separate-creator-constructor"

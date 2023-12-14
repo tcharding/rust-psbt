@@ -12,11 +12,11 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-// TODO: This should be exposed like this in rust-bitcoin.
 use bitcoin::consensus::encode as consensus;
 use bitcoin::consensus::encode::{
     deserialize, serialize, Decodable, Encodable, ReadExt, VarInt, WriteExt, MAX_VEC_SIZE,
 };
+use bitcoin::hex::DisplayHex;
 
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
