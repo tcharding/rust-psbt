@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: CC0-1.0
 
-#![allow(unused)]
-
 use core::convert::TryFrom;
 use core::{cmp, fmt};
 
@@ -19,11 +17,11 @@ use crate::consts::{
 use crate::error::write_err;
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
-use crate::serialize::{Deserialize, Serialize};
+use crate::serialize::Serialize;
 use crate::v2::error::InconsistentKeySourcesError;
 use crate::v2::map::Map;
 use crate::version::Version;
-use crate::{raw, v0, Error, V0, V2};
+use crate::{raw, v0, V2};
 
 /// The Inputs Modifiable Flag, set to 1 to indicate whether inputs can be added or removed.
 const INPUTS_MODIFIABLE: u8 = 0x01 << 0;
@@ -103,6 +101,8 @@ impl Global {
         self.tx_modifiable_flags |= OUTPUTS_MODIFIABLE;
     }
 
+    // TODO: Handle SIGHASH_SINGLE correctly.
+    #[allow(dead_code)]
     pub(crate) fn set_sighash_single_flag(&mut self) { self.tx_modifiable_flags |= SIGHASH_SINGLE; }
 
     pub(crate) fn clear_inputs_modifiable_flag(&mut self) {
@@ -113,6 +113,8 @@ impl Global {
         self.tx_modifiable_flags &= !OUTPUTS_MODIFIABLE;
     }
 
+    // TODO: Handle SIGHASH_SINGLE correctly.
+    #[allow(dead_code)]
     pub(crate) fn clear_sighash_single_flag(&mut self) {
         self.tx_modifiable_flags &= !SIGHASH_SINGLE;
     }
@@ -183,10 +185,10 @@ impl Global {
                             if pair.key.key.is_empty() {
                                 if fallback_lock_time.is_none() {
                                     let vlen: usize = pair.value.len();
-                                    let mut decoder = Cursor::new(pair.value);
                                     if vlen != 4 {
                                         return Err(DecodeError::ValueWrongLength(vlen, 4));
                                     }
+                                    let mut decoder = Cursor::new(pair.value);
                                     fallback_lock_time =
                                         Some(Decodable::consensus_decode(&mut decoder)?);
                                 } else {
@@ -198,7 +200,8 @@ impl Global {
                         v if v == PSBT_GLOBAL_INPUT_COUNT =>
                             if pair.key.key.is_empty() {
                                 if output_count.is_none() {
-                                    let vlen: usize = pair.value.len();
+                                    // TODO: Do we need to check the length for a VarInt?
+                                    // let vlen: usize = pair.value.len();
                                     let mut decoder = Cursor::new(pair.value);
                                     let count: VarInt = Decodable::consensus_decode(&mut decoder)?;
                                     input_count = Some(count.0);
@@ -211,7 +214,8 @@ impl Global {
                         v if v == PSBT_GLOBAL_OUTPUT_COUNT =>
                             if pair.key.key.is_empty() {
                                 if output_count.is_none() {
-                                    let vlen: usize = pair.value.len();
+                                    // TODO: Do we need to check the length for a VarInt?
+                                    // let vlen: usize = pair.value.len();
                                     let mut decoder = Cursor::new(pair.value);
                                     let count: VarInt = Decodable::consensus_decode(&mut decoder)?;
                                     output_count = Some(count.0);
@@ -225,10 +229,10 @@ impl Global {
                             if pair.key.key.is_empty() {
                                 if tx_modifiable_flags.is_none() {
                                     let vlen: usize = pair.value.len();
-                                    let mut decoder = Cursor::new(pair.value);
                                     if vlen != 1 {
                                         return Err(DecodeError::ValueWrongLength(vlen, 1));
                                     }
+                                    let mut decoder = Cursor::new(pair.value);
                                     tx_modifiable_flags =
                                         Some(Decodable::consensus_decode(&mut decoder)?);
                                 } else {
@@ -491,19 +495,20 @@ impl fmt::Display for DecodeError {
                 write!(f, "value (keyvalue pair) wrong length (got, want) {} {}", got, want),
             Bip32(ref e) => write_err!(f, "BIP-32 error"; e),
             PathNotMod4(len) =>
-                write!(f, "derivation path should be a list of u32s i.e., modulo 4"),
+                write!(f, "derivation path should be a list of u32s i.e., modulo 4: {}", len),
             MissingInputCount => write!(f, "serialized PSBT is missing the input count"),
             MissingOutputCount => write!(f, "serialized PSBT is missing the output count"),
             InvalidKey(ref key) => write!(f, "invalid key: {}", key),
             InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
             DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
-            CountOverflow(u64) => write!(f, "count overflows word size for current architecture"),
+            CountOverflow(count) =>
+                write!(f, "count overflows word size for current architecture: {}", count),
             // TODO: Use tuple instead of KeySource because this is ugly.
             DuplicateXpub(ref key_source) =>
                 write!(f, "found duplicate xpub: ({}, {})", key_source.0, key_source.1),
             UnsignedTx => write!(f, "PSBT v2 requires exclusion of unsigned transaction"),
-            Error(ref e) => write!(f, "TODO: Remove this"),
+            Error(_) => write!(f, "TODO: Remove this"),
         }
     }
 }
