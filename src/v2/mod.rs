@@ -39,21 +39,23 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, Error};
+use crate::error::write_err;
 use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::{global, input, output, Map};
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::{
-    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, FundingUtxoError, FeeError},
+    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, FundingUtxoError, FeeError, InconsistentKeySourcesError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
-pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, Error> { this.combine_with(that) }
+pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
+    this.combine_with(that)
+}
 // TODO: Consider adding an iterator API that combines a list of PSBTs.
 
 /// Implements the BIP-370 Creator role.
@@ -644,7 +646,7 @@ impl Psbt {
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP-174.
     ///
     /// In accordance with BIP-174 this function is commutative i.e., `A.combine(B) == B.combine(A)`.
-    pub fn combine_with(mut self, other: Self) -> Result<Psbt, Error> {
+    pub fn combine_with(mut self, other: Self) -> Result<Psbt, InconsistentKeySourcesError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {

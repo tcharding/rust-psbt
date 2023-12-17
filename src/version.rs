@@ -5,8 +5,8 @@ use core::fmt;
 
 use bitcoin::consensus::encode as consensus;
 
-use crate::serialize::{Deserialize, Serialize};
 use crate::prelude::Vec;
+use crate::serialize::{Deserialize, Serialize};
 
 /// The PSBT version.
 #[derive(Copy, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]

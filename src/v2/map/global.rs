@@ -20,6 +20,7 @@ use crate::error::write_err;
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
+use crate::v2::error::InconsistentKeySourcesError;
 use crate::v2::map::Map;
 use crate::version::Version;
 use crate::{raw, v0, Error, V0, V2};
@@ -326,7 +327,7 @@ impl Global {
     /// Combines [`Global`] with `other`.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), Error> {
+    pub fn combine(&mut self, other: Self) -> Result<(), InconsistentKeySourcesError> {
         // BIP 174: The Combiner must remove any duplicate key-value pairs, in accordance with
         //          the specification. It can pick arbitrarily when conflicts occur.
 
@@ -363,7 +364,7 @@ impl Global {
                         entry.insert((fingerprint1, derivation1));
                         continue;
                     }
-                    return Err(Error::CombineInconsistentKeySources(Box::new(xpub)));
+                    return Err(InconsistentKeySourcesError(xpub));
                 }
             }
         }
