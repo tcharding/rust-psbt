@@ -39,14 +39,14 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, FundingUtxoError, InconsistentKeySourcesError};
+use crate::error::{write_err, FeeError, FundingUtxoError, InconsistentKeySourcesError};
 use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::{global, input, output, Map};
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::{
-    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, FeeError},
+    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
 };
 #[cfg(feature = "base64")]

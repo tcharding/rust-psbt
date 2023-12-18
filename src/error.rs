@@ -253,6 +253,49 @@ impl std::error::Error for InconsistentKeySourcesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
+/// An error while calculating the fee.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FeeError {
+    /// Funding utxo error for input.
+    FundingUtxo(FundingUtxoError),
+    /// Integer overflow in fee calculation adding input.
+    InputOverflow,
+    /// Integer overflow in fee calculation adding output.
+    OutputOverflow,
+    /// Negative fee.
+    Negative,
+}
+
+impl fmt::Display for FeeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use FeeError::*;
+
+        match *self {
+            FundingUtxo(ref e) => write_err!(f, "funding utxo error for input"; e),
+            InputOverflow => f.write_str("integer overflow in fee calculation adding input"),
+            OutputOverflow => f.write_str("integer overflow in fee calculation adding output"),
+            Negative => f.write_str("PSBT has a negative fee which is not allowed"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for FeeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use FeeError::*;
+
+        match *self {
+            FundingUtxo(ref e) => Some(e),
+            InputOverflow | OutputOverflow | Negative => None,
+        }
+    }
+}
+
+impl From<FundingUtxoError> for FeeError {
+    fn from(e: FundingUtxoError) -> Self { Self::FundingUtxo(e) }
+}
+
 /// An error getting the funding transaction for this input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
