@@ -24,7 +24,7 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::{Transaction, TxOut};
 use bitcoin::{ecdsa, Amount, ScriptBuf};
 
-use crate::error::{write_err, Error};
+use crate::error::{write_err, Error, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v0::map::Map;
 
@@ -133,7 +133,9 @@ impl Psbt {
     /// ## Panics
     ///
     /// The function panics if the length of transaction inputs is not equal to the length of PSBT inputs.
-    pub fn iter_funding_utxos(&self) -> impl Iterator<Item = Result<&TxOut, Error>> {
+    pub fn iter_funding_utxos(&self) -> impl Iterator<Item = Result<&TxOut, FundingUtxoError>> {
+        use FundingUtxoError::*;
+
         assert_eq!(self.inputs.len(), self.global.unsigned_tx.input.len());
         self.global.unsigned_tx.input.iter().zip(&self.inputs).map(|(tx_input, psbt_input)| match (
             &psbt_input.witness_utxo,
@@ -142,9 +144,12 @@ impl Psbt {
             (Some(witness_utxo), _) => Ok(witness_utxo),
             (None, Some(non_witness_utxo)) => {
                 let vout = tx_input.previous_output.vout as usize;
-                non_witness_utxo.output.get(vout).ok_or(Error::PsbtUtxoOutOfbounds)
+                non_witness_utxo
+                    .output
+                    .get(vout)
+                    .ok_or(OutOfBounds { vout, len: non_witness_utxo.output.len() })
             }
-            (None, None) => Err(Error::MissingUtxo),
+            (None, None) => Err(MissingUtxo),
         })
     }
 
@@ -514,16 +519,18 @@ impl Psbt {
     /// - [`Error::MissingUtxo`] when UTXO information for any input is not present or is invalid.
     /// - [`Error::NegativeFee`] if calculated value is negative.
     /// - [`Error::FeeOverflow`] if an integer overflow occurs.
-    pub fn fee(&self) -> Result<Amount, Error> {
+    pub fn fee(&self) -> Result<Amount, FeeError> {
+        use FeeError::*;
+
         let mut inputs: u64 = 0;
         for utxo in self.iter_funding_utxos() {
-            inputs = inputs.checked_add(utxo?.value.to_sat()).ok_or(Error::FeeOverflow)?;
+            inputs = inputs.checked_add(utxo?.value.to_sat()).ok_or(InputOverflow)?;
         }
         let mut outputs: u64 = 0;
         for out in &self.global.unsigned_tx.output {
-            outputs = outputs.checked_add(out.value.to_sat()).ok_or(Error::FeeOverflow)?;
+            outputs = outputs.checked_add(out.value.to_sat()).ok_or(OutputOverflow)?;
         }
-        inputs.checked_sub(outputs).map(Amount::from_sat).ok_or(Error::NegativeFee)
+        inputs.checked_sub(outputs).map(Amount::from_sat).ok_or(Negative)
     }
 }
 
@@ -1806,21 +1813,21 @@ mod tests {
         let mut t2 = t.clone();
         t2.inputs[0].non_witness_utxo = None;
         match t2.fee().unwrap_err() {
-            Error::MissingUtxo => {}
+            FeeError::FundingUtxo(FundingUtxoError::MissingUtxo) => {}
             e => panic!("unexpected error: {:?}", e),
         }
         //  negative fee
         let mut t3 = t.clone();
         t3.global.unsigned_tx.output[0].value = prev_output_val;
         match t3.fee().unwrap_err() {
-            Error::NegativeFee => {}
+            FeeError::Negative => {}
             e => panic!("unexpected error: {:?}", e),
         }
         // overflow
         t.global.unsigned_tx.output[0].value = Amount::MAX;
         t.global.unsigned_tx.output[1].value = Amount::MAX;
         match t.fee().unwrap_err() {
-            Error::FeeOverflow => {}
+            FeeError::OutputOverflow => {}
             e => panic!("unexpected error: {:?}", e),
         }
     }

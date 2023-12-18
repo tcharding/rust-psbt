@@ -74,10 +74,6 @@ pub enum Error {
     CombineInconsistentKeySources(Box<Xpub>),
     /// Serialization error in bitcoin consensus-encoded structures
     ConsensusEncoding(consensus::Error),
-    /// Negative fee
-    NegativeFee,
-    /// Integer overflow in fee calculation
-    FeeOverflow,
     /// Parsing error indicating invalid public keys
     InvalidPublicKey(bitcoin::key::Error),
     /// Parsing error indicating invalid secp256k1 public keys
@@ -148,8 +144,6 @@ impl fmt::Display for Error {
                 write!(f, "combine conflict: {}", s)
             }
             ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
-            NegativeFee => f.write_str("PSBT has a negative fee which is not allowed"),
-            FeeOverflow => f.write_str("integer overflow in fee calculation"),
             InvalidPublicKey(ref e) => write_err!(f, "invalid public key"; e),
             InvalidSecp256k1PublicKey(ref e) => write_err!(f, "invalid secp256k1 public key"; e),
             InvalidXOnlyPublicKey => f.write_str("invalid xonly public key"),
@@ -198,8 +192,6 @@ impl std::error::Error for Error {
             | NonStandardSighashType(_)
             | InvalidPreimageHashPair { .. }
             | CombineInconsistentKeySources(_)
-            | NegativeFee
-            | FeeOverflow
             | InvalidPublicKey(_)
             | InvalidSecp256k1PublicKey(_)
             | InvalidXOnlyPublicKey
