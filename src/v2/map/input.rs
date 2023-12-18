@@ -5,14 +5,14 @@ use core::fmt;
 
 use bitcoin::bip32::KeySource;
 use bitcoin::consensus::encode as consensus;
-use bitcoin::hashes::{self, hash160, ripemd160, sha256, sha256d, Hash as _};
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash as _};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{
-    ecdsa, secp256k1, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
-    Witness,
+    ecdsa, hashes, secp256k1, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
+    Txid, Witness,
 };
 
 use crate::consts::{
@@ -28,8 +28,9 @@ use crate::error::{write_err, FundingUtxoError};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
+use crate::v2::error::{HashType, InsertPairError};
 use crate::v2::map::Map;
-use crate::{error, io, raw, v0, Error};
+use crate::{io, raw, v0};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
@@ -287,20 +288,20 @@ impl Input {
         }
     }
 
-    pub(super) fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), Error> {
+    pub(super) fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), InsertPairError> {
         let raw::Pair { key: raw_key, value: raw_value } = pair;
 
         match raw_key.type_value {
             v if v == PSBT_IN_PREVIOUS_TXID => {
                 if self.previous_txid != Txid::all_zeros() {
-                    return Err(Error::DuplicateKey(raw_key));
+                    return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let txid: Txid = Deserialize::deserialize(&raw_value)?;
                 self.previous_txid = txid;
             }
             v if v == PSBT_IN_OUTPUT_INDEX => {
                 if self.spent_output_index != u32::MAX {
-                    return Err(Error::DuplicateKey(raw_key));
+                    return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let vout: u32 = Deserialize::deserialize(&raw_value)?;
                 self.spent_output_index = vout;
@@ -365,7 +366,7 @@ impl Input {
                     &mut self.ripemd160_preimages,
                     raw_key,
                     raw_value,
-                    error::PsbtHash::Ripemd,
+                    HashType::Ripemd,
                 )?;
             }
             v if v == PSBT_IN_SHA256 => {
@@ -373,7 +374,7 @@ impl Input {
                     &mut self.sha256_preimages,
                     raw_key,
                     raw_value,
-                    error::PsbtHash::Sha256,
+                    HashType::Sha256,
                 )?;
             }
             v if v == PSBT_IN_HASH160 => {
@@ -381,7 +382,7 @@ impl Input {
                     &mut self.hash160_preimages,
                     raw_key,
                     raw_value,
-                    error::PsbtHash::Hash160,
+                    HashType::Hash160,
                 )?;
             }
             v if v == PSBT_IN_HASH256 => {
@@ -389,7 +390,7 @@ impl Input {
                     &mut self.hash256_preimages,
                     raw_key,
                     raw_value,
-                    error::PsbtHash::Hash256,
+                    HashType::Hash256,
                 )?;
             }
             v if v == PSBT_IN_TAP_KEY_SIG => {
@@ -428,14 +429,16 @@ impl Input {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(raw_value);
                     }
-                    btree_map::Entry::Occupied(_) => return Err(Error::DuplicateKey(raw_key)),
+                    btree_map::Entry::Occupied(_) =>
+                        return Err(InsertPairError::DuplicateKey(raw_key)),
                 }
             }
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
                 }
-                btree_map::Entry::Occupied(k) => return Err(Error::DuplicateKey(k.key().clone())),
+                btree_map::Entry::Occupied(k) =>
+                    return Err(InsertPairError::DuplicateKey(k.key().clone())),
             },
         }
 
@@ -588,20 +591,22 @@ fn psbt_insert_hash_pair<H>(
     map: &mut BTreeMap<H, Vec<u8>>,
     raw_key: raw::Key,
     raw_value: Vec<u8>,
-    hash_type: error::PsbtHash,
-) -> Result<(), Error>
+    hash_type: HashType,
+) -> Result<(), InsertPairError>
 where
     H: hashes::Hash + Deserialize,
 {
     if raw_key.key.is_empty() {
-        return Err(crate::Error::InvalidKey(raw_key));
+        return Err(InsertPairError::InvalidKey(raw_key));
     }
+
     let key_val: H = Deserialize::deserialize(&raw_key.key)?;
     match map.entry(key_val) {
         btree_map::Entry::Vacant(empty_key) => {
             let val: Vec<u8> = Deserialize::deserialize(&raw_value)?;
+
             if <H as hashes::Hash>::hash(&val) != key_val {
-                return Err(crate::Error::InvalidPreimageHashPair {
+                return Err(InsertPairError::InvalidHashPreimage {
                     preimage: val.into_boxed_slice(),
                     hash: Box::from(key_val.borrow()),
                     hash_type,
@@ -610,7 +615,7 @@ where
             empty_key.insert(val);
             Ok(())
         }
-        btree_map::Entry::Occupied(_) => Err(crate::Error::DuplicateKey(raw_key)),
+        btree_map::Entry::Occupied(_) => Err(InsertPairError::DuplicateKey(raw_key)),
     }
 }
 
@@ -652,6 +657,8 @@ pub enum DecodeError {
     MissingPreviousTxid,
     /// Input must contain a spent output index.
     MissingSpentOutputIndex,
+    /// Error inserting a key-value pair.
+    InsertPair(InsertPairError),
     /// TODO: Remove this variant, its a kludge
     Crate(crate::error::Error),
 }
@@ -668,6 +675,7 @@ impl fmt::Display for DecodeError {
             DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
             MissingPreviousTxid => write!(f, "input must contain a previous txid"),
             MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
+            InsertPair(ref e) => write_err!(f, "error inserting a key-value pair"; e),
             Crate(ref e) => write_err!(f, "kludge"; e),
         }
     }
@@ -681,6 +689,7 @@ impl std::error::Error for DecodeError {
         match *self {
             Consensus(ref e) => Some(e),
             Crate(ref e) => Some(e),
+            InsertPair(ref e) => Some(e),
             InvalidKey(_)
             | InvalidProprietaryKey
             | DuplicateKey(_)
@@ -692,6 +701,10 @@ impl std::error::Error for DecodeError {
 
 impl From<consensus::Error> for DecodeError {
     fn from(e: consensus::Error) -> Self { Self::Consensus(e) }
+}
+
+impl From<InsertPairError> for DecodeError {
+    fn from(e: InsertPairError) -> Self { Self::InsertPair(e) }
 }
 
 // TODO: Remove this.
