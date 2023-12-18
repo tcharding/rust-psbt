@@ -237,6 +237,22 @@ impl From<version::UnsupportedVersionError> for Error {
     fn from(e: version::UnsupportedVersionError) -> Self { Error::UnsupportedVersion(e) }
 }
 
+/// Error combining two PSBTs, global extended public key has inconsistent key sources.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct InconsistentKeySourcesError(pub Xpub);
+
+impl fmt::Display for InconsistentKeySourcesError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "combining PSBT, key-source conflict for xpub {}", self.0)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InconsistentKeySourcesError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
 /// Formats error.
 ///
 /// If `std` feature is OFF appends error source (delimited by `: `). We do this because

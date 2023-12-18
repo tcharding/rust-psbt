@@ -6,7 +6,7 @@ use core::fmt;
 
 use bitcoin::{sighash, FeeRate, Transaction};
 
-use crate::error::write_err;
+use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::v0::Psbt;
 
 /// Input index out of bounds (actual index, maximum index allowed).
@@ -248,4 +248,48 @@ impl From<sighash::Error> for SignError {
 
 impl From<IndexOutOfBoundsError> for SignError {
     fn from(e: IndexOutOfBoundsError) -> Self { SignError::IndexOutOfBounds(e) }
+}
+
+/// Error combining two PSBTs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// Attempting to combine with a PSBT describing a different unsigned transaction.
+    UnexpectedUnsignedTx {
+        /// Expected transaction.
+        expected: Transaction,
+        /// Actual transaction.
+        actual: Transaction,
+    },
+    /// Global extended public key has inconsistent key sources.
+    InconsistentKeySources(InconsistentKeySourcesError),
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            UnexpectedUnsignedTx { ref expected, ref actual } =>
+                write!(f, "combine, transaction differs from actual {:?} {:?}", expected, actual),
+            InconsistentKeySources(ref e) =>
+                write_err!(f, "combine with inconsistent key sources"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            UnexpectedUnsignedTx { .. } => None,
+            InconsistentKeySources(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<InconsistentKeySourcesError> for CombineError {
+    fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
 }

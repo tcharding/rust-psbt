@@ -14,11 +14,10 @@ use crate::consts::{
     PSBT_GLOBAL_PROPRIETARY, PSBT_GLOBAL_TX_MODIFIABLE, PSBT_GLOBAL_TX_VERSION,
     PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_VERSION, PSBT_GLOBAL_XPUB,
 };
-use crate::error::write_err;
+use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
 use crate::serialize::Serialize;
-use crate::v2::error::InconsistentKeySourcesError;
 use crate::v2::map::Map;
 use crate::version::Version;
 use crate::{raw, v0, V2};

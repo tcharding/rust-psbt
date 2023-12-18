@@ -15,8 +15,10 @@ use crate::consts::{
     PSBT_GLOBAL_PROPRIETARY, PSBT_GLOBAL_TX_MODIFIABLE, PSBT_GLOBAL_TX_VERSION,
     PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_VERSION, PSBT_GLOBAL_XPUB,
 };
+use crate::error::InconsistentKeySourcesError;
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
+use crate::v0::error::CombineError;
 use crate::v0::map::Map;
 use crate::{raw, Error};
 
@@ -232,11 +234,11 @@ impl Global {
     /// Combines this [`Global`] with `other`.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), Error> {
+    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
         if self.unsigned_tx != other.unsigned_tx {
-            return Err(Error::UnexpectedUnsignedTx {
-                expected: Box::new(self.unsigned_tx.clone()),
-                actual: Box::new(other.unsigned_tx),
+            return Err(CombineError::UnexpectedUnsignedTx {
+                expected: self.unsigned_tx.clone(),
+                actual: other.unsigned_tx,
             });
         }
 
@@ -276,7 +278,7 @@ impl Global {
                         entry.insert((fingerprint1, derivation1));
                         continue;
                     }
-                    return Err(Error::CombineInconsistentKeySources(Box::new(xpub)));
+                    return Err(InconsistentKeySourcesError(xpub).into());
                 }
             }
         }
