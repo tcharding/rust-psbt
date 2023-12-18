@@ -7,7 +7,52 @@ use core::fmt;
 use bitcoin::{sighash, FeeRate, Transaction};
 
 use crate::error::{write_err, FundingUtxoError};
+use crate::v2::map::{global, input, output};
 use crate::v2::Psbt;
+
+/// Error while deserializing a PSBT.
+///
+/// This error is returned when deserializing a complete PSBT, not for deserializing parts
+/// of it or individual data types.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum DeserializePsbtError {
+    /// Invalid magic bytes, expected the ASCII for "psbt" serialized in most significant byte order.
+    // TODO: Consider adding the invalid bytes.
+    InvalidMagic,
+    /// The separator for a PSBT must be `0xff`.
+    // TODO: Consider adding the invalid separator byte.
+    InvalidSeparator,
+    /// Signals that there are no more key-value pairs in a key-value map.
+    NoMorePairs,
+    /// Error decoding the global map.
+    DecodeGlobal(global::DecodeError),
+    /// Error decoding an input map.
+    DecodeInput(input::DecodeError),
+    /// Error decoding an output map.
+    DecodeOutput(output::DecodeError),
+}
+
+impl fmt::Display for DeserializePsbtError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DeserializePsbtError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
+}
+
+impl From<global::DecodeError> for DeserializePsbtError {
+    fn from(e: global::DecodeError) -> Self { Self::DecodeGlobal(e) }
+}
+
+impl From<input::DecodeError> for DeserializePsbtError {
+    fn from(e: input::DecodeError) -> Self { Self::DecodeInput(e) }
+}
+
+impl From<output::DecodeError> for DeserializePsbtError {
+    fn from(e: output::DecodeError) -> Self { Self::DecodeOutput(e) }
+}
 
 /// Input index out of bounds (actual index, maximum index allowed).
 #[derive(Debug, Clone, PartialEq, Eq)]

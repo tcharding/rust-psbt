@@ -46,7 +46,7 @@ use crate::v2::map::{global, input, output, Map};
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::{
-    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError},
+    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
 };
 #[cfg(feature = "base64")]
@@ -591,18 +591,20 @@ impl Psbt {
     }
 
     /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, DecodeError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializePsbtError> {
+        use DeserializePsbtError::*;
+
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(DecodeError::InvalidMagic);
+            return Err(InvalidMagic);
         }
 
         const PSBT_SERPARATOR: u8 = 0xff_u8;
         if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
-            return Err(DecodeError::InvalidSeparator);
+            return Err(InvalidSeparator);
         }
 
-        let mut d = bytes.get(5..).ok_or(DecodeError::NoMorePairs)?;
+        let mut d = bytes.get(5..).ok_or(NoMorePairs)?;
 
         let global = Global::decode(&mut d)?;
 
@@ -1219,7 +1221,7 @@ mod display_from_str {
     #[non_exhaustive]
     pub enum PsbtParseError {
         /// Error in internal PSBT data structure.
-        PsbtEncoding(DecodeError),
+        PsbtEncoding(DeserializePsbtError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }
