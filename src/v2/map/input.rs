@@ -24,11 +24,10 @@ use crate::consts::{
     PSBT_IN_TAP_INTERNAL_KEY, PSBT_IN_TAP_KEY_SIG, PSBT_IN_TAP_LEAF_SCRIPT,
     PSBT_IN_TAP_MERKLE_ROOT, PSBT_IN_TAP_SCRIPT_SIG, PSBT_IN_WITNESS_SCRIPT, PSBT_IN_WITNESS_UTXO,
 };
-use crate::error::write_err;
+use crate::error::{write_err, FundingUtxoError};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
-use crate::v2::error::FundingUtxoError;
 use crate::v2::map::Map;
 use crate::{error, io, raw, v0, Error};
 

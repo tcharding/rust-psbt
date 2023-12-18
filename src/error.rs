@@ -253,6 +253,44 @@ impl std::error::Error for InconsistentKeySourcesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
+/// An error getting the funding transaction for this input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FundingUtxoError {
+    /// The vout is out of bounds for non-witness transaction.
+    OutOfBounds {
+        /// The vout used as list index.
+        vout: usize,
+        /// The length of the utxo list.
+        len: usize,
+    },
+    /// No funding utxo found.
+    MissingUtxo,
+}
+
+impl fmt::Display for FundingUtxoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use FundingUtxoError::*;
+
+        match *self {
+            OutOfBounds { vout, len } =>
+                write!(f, "vout {} out of bounds for tx list len: {}", vout, len),
+            MissingUtxo => write!(f, "no funding utxo found"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for FundingUtxoError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use FundingUtxoError::*;
+
+        match *self {
+            OutOfBounds { .. } | MissingUtxo => None,
+        }
+    }
+}
+
 /// Formats error.
 ///
 /// If `std` feature is OFF appends error source (delimited by `: `). We do this because
