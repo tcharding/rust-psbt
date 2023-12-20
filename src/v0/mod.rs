@@ -154,11 +154,7 @@ impl Psbt {
     }
 
     /// Creates a PSBT from an unsigned transaction.
-    ///
-    /// # Errors
-    ///
-    /// If transactions is not unsigned.
-    pub fn from_unsigned_tx(tx: Transaction) -> Result<Self, Error> {
+    pub fn from_unsigned_tx(tx: Transaction) -> Result<Self, UnsignedTxChecksError> {
         let input_len = tx.input.len();
         let output_len = tx.output.len();
 
