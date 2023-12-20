@@ -30,8 +30,6 @@ pub enum Error {
     /// Magic bytes for a PSBT must be the ASCII for "psbt" serialized in most
     /// significant byte order.
     InvalidMagic,
-    /// Missing both the witness and non-witness utxo.
-    MissingUtxo,
     /// The separator for a PSBT must be `0xff`.
     InvalidSeparator,
     /// Returned when output index is out of bounds in relation to the output in non-witness UTXO.
@@ -115,7 +113,6 @@ impl fmt::Display for Error {
         match *self {
             NotEnoughData => f.write_str("not enough data to deserialize object"),
             InvalidMagic => f.write_str("invalid magic"),
-            MissingUtxo => f.write_str("UTXO information is not present in PSBT"),
             InvalidSeparator => f.write_str("invalid separator"),
             PsbtUtxoOutOfbounds =>
                 f.write_str("output index is out of bounds of non witness script output array"),
@@ -178,7 +175,6 @@ impl std::error::Error for Error {
             UnsupportedVersion(ref e) => Some(e),
             NotEnoughData
             | InvalidMagic
-            | MissingUtxo
             | InvalidSeparator
             | PsbtUtxoOutOfbounds
             | InvalidKey(_)
