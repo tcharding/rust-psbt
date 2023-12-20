@@ -25,7 +25,7 @@ use bitcoin::{
 
 use crate::prelude::*;
 use crate::sighash_type::PsbtSighashType;
-use crate::{io, Error};
+use crate::{Error};
 
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
@@ -136,7 +136,7 @@ impl Serialize for KeySource {
 impl Deserialize for KeySource {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.len() < 4 {
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+            return Err(Error::NotEnoughData);
         }
 
         let fprint: Fingerprint = bytes[0..4].try_into().expect("4 is the fingerprint length");
@@ -261,7 +261,7 @@ impl Serialize for (XOnlyPublicKey, TapLeafHash) {
 impl Deserialize for (XOnlyPublicKey, TapLeafHash) {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.len() < 32 {
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+            return Err(Error::NotEnoughData);
         }
         let a: XOnlyPublicKey = Deserialize::deserialize(&bytes[..32])?;
         let b: TapLeafHash = Deserialize::deserialize(&bytes[32..])?;
@@ -292,7 +292,7 @@ impl Serialize for (ScriptBuf, LeafVersion) {
 impl Deserialize for (ScriptBuf, LeafVersion) {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.is_empty() {
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+            return Err(Error::NotEnoughData);
         }
         // The last byte is LeafVersion.
         let script = ScriptBuf::deserialize(&bytes[..bytes.len() - 1])?;

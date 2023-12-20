@@ -9,7 +9,7 @@ use bitcoin::transaction::Transaction;
 use bitcoin::{absolute, hashes, secp256k1, taproot};
 
 use crate::prelude::*;
-use crate::{io, raw, version};
+use crate::{raw, version};
 
 /// Enum for marking psbt hash error.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -25,6 +25,8 @@ pub enum PsbtHash {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Not enough data to deserialize object.
+    NotEnoughData,
     /// Magic bytes for a PSBT must be the ASCII for "psbt" serialized in most
     /// significant byte order.
     InvalidMagic,
@@ -98,8 +100,6 @@ pub enum Error {
     Version(&'static str),
     /// PSBT data is not consumed entirely
     PartialDataConsumption,
-    /// I/O error.
-    Io(io::Error),
     /// Couldn't converting parsed u32 to a lock time.
     LockTime(absolute::Error),
     /// Found a keypair type that is explicitly excluded.
@@ -113,6 +113,7 @@ impl fmt::Display for Error {
         use Error::*;
 
         match *self {
+            NotEnoughData => f.write_str("not enough data to deserialize object"),
             InvalidMagic => f.write_str("invalid magic"),
             MissingUtxo => f.write_str("UTXO information is not present in PSBT"),
             InvalidSeparator => f.write_str("invalid separator"),
@@ -157,7 +158,6 @@ impl fmt::Display for Error {
             Version(s) => write!(f, "version error {}", s),
             PartialDataConsumption =>
                 f.write_str("data not consumed entirely when explicitly deserializing"),
-            Io(ref e) => write_err!(f, "I/O error"; e),
             LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
             ExcludedKey(t) =>
                 write!(f, "found a keypair type that is explicitly excluded: {:x}", t),
@@ -174,10 +174,10 @@ impl std::error::Error for Error {
         match *self {
             InvalidHash(ref e) => Some(e),
             ConsensusEncoding(ref e) => Some(e),
-            Io(ref e) => Some(e),
             LockTime(ref e) => Some(e),
             UnsupportedVersion(ref e) => Some(e),
-            InvalidMagic
+            NotEnoughData
+            | InvalidMagic
             | MissingUtxo
             | InvalidSeparator
             | PsbtUtxoOutOfbounds
@@ -215,10 +215,6 @@ impl From<hashes::FromSliceError> for Error {
 
 impl From<consensus::Error> for Error {
     fn from(e: consensus::Error) -> Self { Error::ConsensusEncoding(e) }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self { Error::Io(e) }
 }
 
 impl From<absolute::Error> for Error {
