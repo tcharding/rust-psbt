@@ -293,3 +293,35 @@ impl std::error::Error for CombineError {
 impl From<InconsistentKeySourcesError> for CombineError {
     fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
 }
+
+/// Unsigned transaction checks error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnsignedTxChecksError {
+    /// Unsigned transaction already contains script sig data.
+    HasScriptSigs,
+    /// Unsigned transaction already contains witness data.
+    HasScriptWitnesses,
+}
+
+impl fmt::Display for UnsignedTxChecksError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use UnsignedTxChecksError::*;
+
+        match *self {
+            HasScriptSigs => write!(f, "unsigned transaction already contains script sig data"),
+            HasScriptWitnesses => write!(f, "nsigned transaction already contains witness data"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for UnsignedTxChecksError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use UnsignedTxChecksError::*;
+
+        match *self {
+            HasScriptSigs | HasScriptWitnesses => None
+        }
+    }
+}

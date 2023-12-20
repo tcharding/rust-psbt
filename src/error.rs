@@ -9,7 +9,7 @@ use bitcoin::transaction::Transaction;
 use bitcoin::{absolute, hashes, secp256k1, taproot};
 
 use crate::prelude::*;
-use crate::{raw, version};
+use crate::{raw, version, v0};
 
 /// Enum for marking psbt hash error.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -38,10 +38,6 @@ pub enum Error {
     InvalidProprietaryKey,
     /// Keys within key-value map should never be duplicated.
     DuplicateKey(raw::Key),
-    /// The scriptSigs for the unsigned transaction must be empty.
-    UnsignedTxHasScriptSigs,
-    /// The scriptWitnesses for the unsigned transaction must be empty.
-    UnsignedTxHasScriptWitnesses,
     /// A PSBT must have an unsigned transaction.
     MustHaveUnsignedTx,
     /// Signals that there are no more key-value pairs in a key-value map.
@@ -102,6 +98,9 @@ pub enum Error {
     ExcludedKey(u8),
     /// Unsupported PSBT version.
     UnsupportedVersion(version::UnsupportedVersionError),
+    /// Error doing unsigned transaction checks (v0 only).
+    // TODO: Consider splitting error into v0 an v2 specific types.
+    UnsignedTxChecks(v0::UnsignedTxChecksError),
 }
 
 impl fmt::Display for Error {
@@ -116,9 +115,6 @@ impl fmt::Display for Error {
             InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
             DuplicateKey(ref rkey) => write!(f, "duplicate key: {}", rkey),
-            UnsignedTxHasScriptSigs => f.write_str("the unsigned transaction has script sigs"),
-            UnsignedTxHasScriptWitnesses =>
-                f.write_str("the unsigned transaction has script witnesses"),
             MustHaveUnsignedTx =>
                 f.write_str("partially signed transactions must have an unsigned transaction"),
             NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
@@ -155,6 +151,7 @@ impl fmt::Display for Error {
             ExcludedKey(t) =>
                 write!(f, "found a keypair type that is explicitly excluded: {:x}", t),
             UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
+            UnsignedTxChecks(ref e) => write_err!(f, "error doing unsigned transaction checks (v0 only)"; e),
         }
     }
 }
@@ -169,14 +166,13 @@ impl std::error::Error for Error {
             ConsensusEncoding(ref e) => Some(e),
             LockTime(ref e) => Some(e),
             UnsupportedVersion(ref e) => Some(e),
+            UnsignedTxChecks(ref e) => Some(e),
             NotEnoughData
             | InvalidMagic
             | InvalidSeparator
             | InvalidKey(_)
             | InvalidProprietaryKey
             | DuplicateKey(_)
-            | UnsignedTxHasScriptSigs
-            | UnsignedTxHasScriptWitnesses
             | MustHaveUnsignedTx
             | NoMorePairs
             | UnexpectedUnsignedTx { .. }
@@ -214,6 +210,10 @@ impl From<absolute::Error> for Error {
 
 impl From<version::UnsupportedVersionError> for Error {
     fn from(e: version::UnsupportedVersionError) -> Self { Error::UnsupportedVersion(e) }
+}
+
+impl From<v0::UnsignedTxChecksError> for Error {
+    fn from(e: v0::UnsignedTxChecksError) -> Self { Error::UnsignedTxChecks(e) }
 }
 
 /// Error combining two PSBTs, global extended public key has inconsistent key sources.

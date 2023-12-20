@@ -18,7 +18,7 @@ use crate::consts::{
 use crate::error::InconsistentKeySourcesError;
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
-use crate::v0::error::CombineError;
+use crate::v0::error::{CombineError, UnsignedTxChecksError};
 use crate::v0::map::Map;
 use crate::{raw, Error};
 
@@ -204,7 +204,7 @@ impl Global {
     /// # Errors
     ///
     /// If transactions is not unsigned.
-    pub fn from_unsigned_tx(tx: Transaction) -> Result<Self, Error> {
+    pub fn from_unsigned_tx(tx: Transaction) -> Result<Self, UnsignedTxChecksError> {
         let global = Global {
             unsigned_tx: tx,
             xpub: Default::default(),
@@ -217,14 +217,16 @@ impl Global {
     }
 
     /// Checks that unsigned transaction does not have scriptSig's or witness data.
-    pub fn unsigned_tx_checks(&self) -> Result<(), Error> {
+    pub fn unsigned_tx_checks(&self) -> Result<(), UnsignedTxChecksError> {
+        use UnsignedTxChecksError::*;
+
         for txin in &self.unsigned_tx.input {
             if !txin.script_sig.is_empty() {
-                return Err(Error::UnsignedTxHasScriptSigs);
+                return Err(HasScriptSigs);
             }
 
             if !txin.witness.is_empty() {
-                return Err(Error::UnsignedTxHasScriptWitnesses);
+                return Err(HasScriptWitnesses);
             }
         }
 
