@@ -38,18 +38,8 @@ pub enum Error {
     InvalidProprietaryKey,
     /// Keys within key-value map should never be duplicated.
     DuplicateKey(raw::Key),
-    /// A PSBT must have an unsigned transaction.
-    MustHaveUnsignedTx,
     /// Signals that there are no more key-value pairs in a key-value map.
     NoMorePairs,
-    /// Attempting to combine with a PSBT describing a different unsigned
-    /// transaction.
-    UnexpectedUnsignedTx {
-        /// Expected
-        expected: Box<Transaction>,
-        /// Actual
-        actual: Box<Transaction>,
-    },
     /// Unable to parse as a standard sighash type.
     NonStandardSighashType(u32),
     /// Invalid hash when parsing slice.
@@ -87,8 +77,10 @@ pub enum Error {
     /// Taproot tree deserilaization error
     TapTree(taproot::IncompleteBuilderError),
     /// Error related to an xpub key
+    // TODO: Use proper error variant instead of static string.
     XPubKey(&'static str),
     /// Error related to PSBT version
+    // TODO: Use proper error variant instead of static string.
     Version(&'static str),
     /// PSBT data is not consumed entirely
     PartialDataConsumption,
@@ -98,9 +90,21 @@ pub enum Error {
     ExcludedKey(u8),
     /// Unsupported PSBT version.
     UnsupportedVersion(version::UnsupportedVersionError),
-    /// Error doing unsigned transaction checks (v0 only).
+
     // TODO: Consider splitting error into v0 an v2 specific types.
+
+    /// Error doing unsigned transaction checks (v0 only).
     UnsignedTxChecks(v0::UnsignedTxChecksError),
+    /// A PSBT v0 must have an unsigned transaction.
+    MustHaveUnsignedTx,
+    /// Attempting to combine with a PSBT describing a different unsigned
+    /// transaction.
+    UnexpectedUnsignedTx {
+        /// Expected
+        expected: Box<Transaction>,
+        /// Actual
+        actual: Box<Transaction>,
+    },
 }
 
 impl fmt::Display for Error {
@@ -115,15 +119,7 @@ impl fmt::Display for Error {
             InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
             DuplicateKey(ref rkey) => write!(f, "duplicate key: {}", rkey),
-            MustHaveUnsignedTx =>
-                f.write_str("partially signed transactions must have an unsigned transaction"),
             NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
-            UnexpectedUnsignedTx { expected: ref e, actual: ref a } => write!(
-                f,
-                "different unsigned transaction: expected {}, actual {}",
-                e.txid(),
-                a.txid()
-            ),
             NonStandardSighashType(ref sht) => write!(f, "non-standard sighash type: {}", sht),
             InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),
             InvalidPreimageHashPair { ref preimage, ref hash, ref hash_type } => {
@@ -152,6 +148,14 @@ impl fmt::Display for Error {
                 write!(f, "found a keypair type that is explicitly excluded: {:x}", t),
             UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
             UnsignedTxChecks(ref e) => write_err!(f, "error doing unsigned transaction checks (v0 only)"; e),
+            MustHaveUnsignedTx =>
+                f.write_str("partially signed transactions must have an unsigned transaction"),
+            UnexpectedUnsignedTx { expected: ref e, actual: ref a } => write!(
+                f,
+                "different unsigned transaction: expected {}, actual {}",
+                e.txid(),
+                a.txid()
+            ),
         }
     }
 }
@@ -173,9 +177,7 @@ impl std::error::Error for Error {
             | InvalidKey(_)
             | InvalidProprietaryKey
             | DuplicateKey(_)
-            | MustHaveUnsignedTx
             | NoMorePairs
-            | UnexpectedUnsignedTx { .. }
             | NonStandardSighashType(_)
             | InvalidPreimageHashPair { .. }
             | CombineInconsistentKeySources(_)
@@ -191,7 +193,9 @@ impl std::error::Error for Error {
             | XPubKey(_)
             | Version(_)
             | PartialDataConsumption
-            | ExcludedKey(_) => None,
+            | ExcludedKey(_)
+            | MustHaveUnsignedTx
+            | UnexpectedUnsignedTx { .. } => None,
         }
     }
 }
