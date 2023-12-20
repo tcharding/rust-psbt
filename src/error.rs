@@ -32,8 +32,6 @@ pub enum Error {
     InvalidMagic,
     /// The separator for a PSBT must be `0xff`.
     InvalidSeparator,
-    /// Returned when output index is out of bounds in relation to the output in non-witness UTXO.
-    PsbtUtxoOutOfbounds,
     /// Known keys must be according to spec.
     InvalidKey(raw::Key),
     /// Non-proprietary key type found when proprietary key was expected
@@ -114,8 +112,6 @@ impl fmt::Display for Error {
             NotEnoughData => f.write_str("not enough data to deserialize object"),
             InvalidMagic => f.write_str("invalid magic"),
             InvalidSeparator => f.write_str("invalid separator"),
-            PsbtUtxoOutOfbounds =>
-                f.write_str("output index is out of bounds of non witness script output array"),
             InvalidKey(ref rkey) => write!(f, "invalid key: {}", rkey),
             InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
@@ -176,7 +172,6 @@ impl std::error::Error for Error {
             NotEnoughData
             | InvalidMagic
             | InvalidSeparator
-            | PsbtUtxoOutOfbounds
             | InvalidKey(_)
             | InvalidProprietaryKey
             | DuplicateKey(_)
