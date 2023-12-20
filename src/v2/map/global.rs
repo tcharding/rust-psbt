@@ -251,7 +251,7 @@ impl Global {
                                 let child_count = pair.value.len() / 4 - 1;
                                 let mut decoder = Cursor::new(pair.value);
                                 let mut fingerprint = [0u8; 4];
-                                decoder.read_exact(&mut fingerprint[..])?;
+                                decoder.read_exact(&mut fingerprint[..]).expect("in-memory readers don't err");
                                 let mut path = Vec::<ChildNumber>::with_capacity(child_count);
                                 while let Ok(index) = u32::consensus_decode(&mut decoder) {
                                     path.push(ChildNumber::from(index))
@@ -442,8 +442,6 @@ impl Map for Global {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
-    /// I/O error.
-    Io(io::Error),
     /// Error consensus deserializing type.
     Consensus(consensus::encode::Error),
     /// Serialized PSBT is missing the version number.
@@ -484,7 +482,6 @@ impl fmt::Display for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Io(ref e) => write_err!(f, "I/O error decoding global map"; e),
             Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
             MissingVersion => write!(f, "serialized PSBT is missing the version number"),
             WrongVersion(v) => write!(f, "PSBT v2 expects the version to be 2, found: {}", v),
@@ -518,7 +515,6 @@ impl std::error::Error for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Io(ref e) => Some(e),
             Consensus(ref e) => Some(e),
             Bip32(ref e) => Some(e),
             Error(ref e) => Some(e),
@@ -537,10 +533,6 @@ impl std::error::Error for DecodeError {
             | UnsignedTx => None,
         }
     }
-}
-
-impl From<io::Error> for DecodeError {
-    fn from(e: io::Error) -> Self { Self::Io(e) }
 }
 
 impl From<consensus::encode::Error> for DecodeError {
