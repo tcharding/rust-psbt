@@ -63,7 +63,6 @@ use crate::version::Version;
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use crate::{
-    error::Error,
     sighash_type::PsbtSighashType,
 };
 

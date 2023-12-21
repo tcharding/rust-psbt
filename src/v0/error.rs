@@ -6,8 +6,60 @@ use core::fmt;
 
 use bitcoin::{sighash, FeeRate, Transaction};
 
-use crate::error::write_err;
+use crate::error::{write_err, InconsistentKeySourcesError};
+use crate::v0::map::{global, input, output};
 use crate::v0::Psbt;
+
+/// Error while deserializing a PSBT.
+///
+/// This error is returned when deserializing a complete PSBT, not for deserializing parts
+/// of it or individual data types.
+// TODO: This can change to `serialize::Error` if we rename `serialize::Error` to `serialize::Error`.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum DeserializePsbtError {
+    /// Invalid magic bytes, expected the ASCII for "psbt" serialized in most significant byte order.
+    // TODO: Consider adding the invalid bytes.
+    InvalidMagic,
+    /// The separator for a PSBT must be `0xff`.
+    // TODO: Consider adding the invalid separator byte.
+    InvalidSeparator,
+    /// Signals that there are no more key-value pairs in a key-value map.
+    NoMorePairs,
+    /// Error decoding the global map.
+    DecodeGlobal(global::DecodeError),
+    /// Error decoding an input map.
+    DecodeInput(input::DecodeError),
+    /// Error decoding an output map.
+    DecodeOutput(output::DecodeError),
+    /// Error doing unsigned transaction checks.
+    UnsignedTxChecks(UnsignedTxChecksError),
+}
+
+impl fmt::Display for DeserializePsbtError {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DeserializePsbtError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
+}
+
+impl From<global::DecodeError> for DeserializePsbtError {
+    fn from(e: global::DecodeError) -> Self { Self::DecodeGlobal(e) }
+}
+
+impl From<input::DecodeError> for DeserializePsbtError {
+    fn from(e: input::DecodeError) -> Self { Self::DecodeInput(e) }
+}
+
+impl From<output::DecodeError> for DeserializePsbtError {
+    fn from(e: output::DecodeError) -> Self { Self::DecodeOutput(e) }
+}
+
+impl From<UnsignedTxChecksError> for DeserializePsbtError {
+    fn from(e: UnsignedTxChecksError) -> Self { Self::UnsignedTxChecks(e) }
+}
 
 /// Input index out of bounds (actual index, maximum index allowed).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,4 +300,80 @@ impl From<sighash::Error> for SignError {
 
 impl From<IndexOutOfBoundsError> for SignError {
     fn from(e: IndexOutOfBoundsError) -> Self { SignError::IndexOutOfBounds(e) }
+}
+
+/// Error combining two PSBTs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// Attempting to combine with a PSBT describing a different unsigned transaction.
+    UnexpectedUnsignedTx {
+        /// Expected transaction.
+        expected: Transaction,
+        /// Actual transaction.
+        actual: Transaction,
+    },
+    /// Global extended public key has inconsistent key sources.
+    InconsistentKeySources(InconsistentKeySourcesError),
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            UnexpectedUnsignedTx { ref expected, ref actual } =>
+                write!(f, "combine, transaction differs from actual {:?} {:?}", expected, actual),
+            InconsistentKeySources(ref e) =>
+                write_err!(f, "combine with inconsistent key sources"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            UnexpectedUnsignedTx { .. } => None,
+            InconsistentKeySources(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<InconsistentKeySourcesError> for CombineError {
+    fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
+}
+
+/// Unsigned transaction checks error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnsignedTxChecksError {
+    /// Unsigned transaction already contains script sig data.
+    HasScriptSigs,
+    /// Unsigned transaction already contains witness data.
+    HasScriptWitnesses,
+}
+
+impl fmt::Display for UnsignedTxChecksError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use UnsignedTxChecksError::*;
+
+        match *self {
+            HasScriptSigs => write!(f, "unsigned transaction already contains script sig data"),
+            HasScriptWitnesses => write!(f, "nsigned transaction already contains witness data"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for UnsignedTxChecksError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use UnsignedTxChecksError::*;
+
+        match *self {
+            HasScriptSigs | HasScriptWitnesses => None,
+        }
+    }
 }

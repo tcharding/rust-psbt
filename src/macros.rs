@@ -20,8 +20,9 @@ macro_rules! impl_psbt_de_serialize {
 macro_rules! impl_psbt_deserialize {
     ($thing:ty) => {
         impl $crate::serialize::Deserialize for $thing {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::Error> {
-                bitcoin::consensus::deserialize(&bytes[..]).map_err(|e| $crate::Error::from(e))
+            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::serialize::Error> {
+                bitcoin::consensus::deserialize(&bytes[..])
+                    .map_err(|e| $crate::serialize::Error::from(e))
             }
         }
     };
@@ -35,26 +36,7 @@ macro_rules! impl_psbt_serialize {
     };
 }
 
-macro_rules! impl_psbtmap_decoding {
-    ($thing:ty) => {
-        impl $thing {
-            pub(crate) fn decode<R: $crate::io::Read + ?Sized>(
-                r: &mut R,
-            ) -> Result<Self, $crate::Error> {
-                let mut rv: Self = core::default::Default::default();
-
-                loop {
-                    match $crate::raw::Pair::decode(r) {
-                        Ok(pair) => rv.insert_pair(pair)?,
-                        Err($crate::Error::NoMorePairs) => return Ok(rv),
-                        Err(e) => return Err(e),
-                    }
-                }
-            }
-        }
-    };
-}
-
+// Note we purposefully do not use the fully qualified path for `InsertPairError`.
 #[rustfmt::skip]
 macro_rules! impl_psbt_insert_pair {
     ($slf:ident.$unkeyed_name:ident <= <$raw_key:ident: _>|<$raw_value:ident: $unkeyed_value_type:ty>) => {
@@ -63,10 +45,10 @@ macro_rules! impl_psbt_insert_pair {
                 let val: $unkeyed_value_type = $crate::serialize::Deserialize::deserialize(&$raw_value)?;
                 $slf.$unkeyed_name = Some(val)
             } else {
-                return Err($crate::Error::DuplicateKey($raw_key).into());
+                return Err(InsertPairError::DuplicateKey($raw_key).into());
             }
         } else {
-            return Err($crate::Error::InvalidKey($raw_key).into());
+            return Err(InsertPairError::InvalidKeyDataNotEmpty($raw_key).into());
         }
     };
     ($slf:ident.$keyed_name:ident <= <$raw_key:ident: $keyed_key_type:ty>|<$raw_value:ident: $keyed_value_type:ty>) => {
@@ -77,10 +59,10 @@ macro_rules! impl_psbt_insert_pair {
                     let val: $keyed_value_type = $crate::serialize::Deserialize::deserialize(&$raw_value)?;
                     empty_key.insert(val);
                 }
-                $crate::prelude::btree_map::Entry::Occupied(_) => return Err($crate::Error::DuplicateKey($raw_key).into()),
+                $crate::prelude::btree_map::Entry::Occupied(_) => return Err(InsertPairError::DuplicateKey($raw_key).into()),
             }
         } else {
-            return Err($crate::Error::InvalidKey($raw_key).into());
+            return Err(InsertPairError::InvalidKeyDataEmpty($raw_key).into());
         }
     };
 }
@@ -122,8 +104,8 @@ macro_rules! impl_psbt_hash_de_serialize {
 macro_rules! impl_psbt_hash_deserialize {
     ($hash_type:ty) => {
         impl $crate::serialize::Deserialize for $hash_type {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::Error> {
-                <$hash_type>::from_slice(&bytes[..]).map_err(|e| $crate::Error::from(e))
+            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::serialize::Error> {
+                <$hash_type>::from_slice(&bytes[..]).map_err(|e| $crate::serialize::Error::from(e))
             }
         }
     };

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: CC0-1.0
 
-mod global;
-mod input;
-mod output;
+pub mod global;
+pub mod input;
+pub mod output;
 
 use crate::prelude::*;
 use crate::raw;

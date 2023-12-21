@@ -39,21 +39,23 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, Error};
+use crate::error::{write_err, FeeError, FundingUtxoError, InconsistentKeySourcesError};
 use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::{global, input, output, Map};
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::{
-    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, FundingUtxoError, FeeError},
+    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
-pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, Error> { this.combine_with(that) }
+pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
+    this.combine_with(that)
+}
 // TODO: Consider adding an iterator API that combines a list of PSBTs.
 
 /// Implements the BIP-370 Creator role.
@@ -589,18 +591,20 @@ impl Psbt {
     }
 
     /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, DecodeError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializePsbtError> {
+        use DeserializePsbtError::*;
+
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(DecodeError::InvalidMagic);
+            return Err(InvalidMagic);
         }
 
         const PSBT_SERPARATOR: u8 = 0xff_u8;
         if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
-            return Err(DecodeError::InvalidSeparator);
+            return Err(InvalidSeparator);
         }
 
-        let mut d = bytes.get(5..).ok_or(DecodeError::NoMorePairs)?;
+        let mut d = bytes.get(5..).ok_or(NoMorePairs)?;
 
         let global = Global::decode(&mut d)?;
 
@@ -644,7 +648,7 @@ impl Psbt {
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP-174.
     ///
     /// In accordance with BIP-174 this function is commutative i.e., `A.combine(B) == B.combine(A)`.
-    pub fn combine_with(mut self, other: Self) -> Result<Psbt, Error> {
+    pub fn combine_with(mut self, other: Self) -> Result<Psbt, InconsistentKeySourcesError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {
@@ -756,7 +760,7 @@ impl Psbt {
         let input = &mut self.inputs[input_index]; // Index checked in call to `sighash_ecdsa`.
         let mut used = vec![]; // List of pubkeys used to sign the input.
 
-        for (pk, key_source) in input.bip32_derivation.iter() {
+        for (pk, key_source) in input.bip32_derivations.iter() {
             let sk = if let Ok(Some(sk)) = k.get_key(KeyRequest::Bip32(key_source.clone()), secp) {
                 sk
             } else if let Ok(Some(sk)) = k.get_key(KeyRequest::Pubkey(PublicKey::new(*pk)), secp) {
@@ -1217,7 +1221,7 @@ mod display_from_str {
     #[non_exhaustive]
     pub enum PsbtParseError {
         /// Error in internal PSBT data structure.
-        PsbtEncoding(DecodeError),
+        PsbtEncoding(DeserializePsbtError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }

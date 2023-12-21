@@ -564,7 +564,7 @@ impl Psbt {
         let psbt_inputs = &self.inputs;
         for psbt_input in psbt_inputs {
             // Use BIP32 Derviation to get set of all possible keys.
-            let public_keys = psbt_input.bip32_derivation.keys();
+            let public_keys = psbt_input.bip32_derivations.keys();
             for key in public_keys {
                 let bitcoin_key = bitcoin::PublicKey::new(*key);
                 let hash = bitcoin_key.pubkey_hash().to_raw_hash();
@@ -862,7 +862,7 @@ impl PsbtFields for Input {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
     fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
-        &mut self.bip32_derivation
+        &mut self.bip32_derivations
     }
     fn tap_internal_key(&mut self) -> &mut Option<XOnlyPublicKey> { &mut self.tap_internal_key }
     fn tap_key_origins(
@@ -871,9 +871,9 @@ impl PsbtFields for Input {
         &mut self.tap_key_origins
     }
     fn proprietary(&mut self) -> &mut BTreeMap<raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
+        &mut self.proprietaries
     }
-    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknowns }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -887,7 +887,7 @@ impl PsbtFields for Output {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
     fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
-        &mut self.bip32_derivation
+        &mut self.bip32_derivations
     }
     fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
         &mut self.tap_internal_key
@@ -898,9 +898,9 @@ impl PsbtFields for Output {
         &mut self.tap_key_origins
     }
     fn proprietary(&mut self) -> &mut BTreeMap<raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
+        &mut self.proprietaries
     }
-    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<raw::Key, Vec<u8>> { &mut self.unknowns }
 
     fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { Some(&mut self.tap_tree) }
 }
@@ -1337,10 +1337,10 @@ mod tests {
             let mut psbt_output = Output::default();
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
-            assert_eq!(expected_bip32, psbt_input.bip32_derivation);
+            assert_eq!(expected_bip32, psbt_input.bip32_derivations);
             assert_eq!(psbt_input.witness_script, Some(derived.explicit_script().unwrap()));
 
-            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.bip32_derivations, psbt_input.bip32_derivations);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
         }
 
@@ -1357,11 +1357,11 @@ mod tests {
             let mut psbt_output = Output::default();
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
-            assert_eq!(psbt_input.bip32_derivation, expected_bip32);
+            assert_eq!(psbt_input.bip32_derivations, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
             assert_eq!(psbt_input.redeem_script, Some(derived.explicit_script().unwrap()));
 
-            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.bip32_derivations, psbt_input.bip32_derivations);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
             assert_eq!(psbt_output.redeem_script, psbt_input.redeem_script);
         }

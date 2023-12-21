@@ -8,9 +8,9 @@
 
 use bitcoin::{FeeRate, Transaction};
 
+use crate::error::FeeError;
 use crate::v0::error::ExtractTxError;
 use crate::v0::Psbt;
-use crate::Error;
 
 impl Psbt {
     /// The default `max_fee_rate` value used for extracting transactions with [`extract_tx`]
@@ -77,17 +77,18 @@ impl Psbt {
         self,
         max_fee_rate: FeeRate,
     ) -> Result<Transaction, ExtractTxError> {
+        use FeeError::*;
+
         let fee = match self.fee() {
             Ok(fee) => fee,
-            Err(Error::MissingUtxo) =>
+            Err(FundingUtxo(_)) =>
                 return Err(ExtractTxError::MissingInputValue { tx: self.internal_extract_tx() }),
-            Err(Error::NegativeFee) => return Err(ExtractTxError::SendingTooMuch { psbt: self }),
-            Err(Error::FeeOverflow) =>
+            Err(Negative) => return Err(ExtractTxError::SendingTooMuch { psbt: self }),
+            Err(InputOverflow) | Err(OutputOverflow) =>
                 return Err(ExtractTxError::AbsurdFeeRate {
                     fee_rate: FeeRate::MAX,
                     tx: self.internal_extract_tx(),
                 }),
-            _ => unreachable!(),
         };
 
         // Note: Move prevents usage of &self from now on.

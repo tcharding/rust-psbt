@@ -8,7 +8,7 @@
 
 use bitcoin::{FeeRate, Transaction};
 
-use crate::v2::error::FeeError;
+use crate::error::FeeError;
 use crate::v2::{ExtractTxError, Psbt};
 
 impl Psbt {

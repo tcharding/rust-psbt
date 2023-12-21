@@ -20,7 +20,7 @@ use bitcoin::hex::DisplayHex;
 
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
-use crate::{io, Error};
+use crate::{io, serialize};
 
 /// A PSBT key-value pair in its raw byte form.
 ///
@@ -39,7 +39,7 @@ pub struct Pair {
 }
 
 impl Pair {
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
         Ok(Pair { key: Key::decode(r)?, value: Decodable::consensus_decode(r)? })
     }
 }
@@ -61,7 +61,7 @@ impl Serialize for Pair {
 }
 
 impl Deserialize for Pair {
-    fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
+    fn deserialize(bytes: &[u8]) -> Result<Self, serialize::Error> {
         let mut decoder = bytes;
         Pair::decode(&mut decoder)
     }
@@ -80,16 +80,17 @@ pub struct Key {
     /// The `keytype` of this PSBT map key (`keytype`).
     pub type_value: u8,
     /// The `keydata` itself in raw byte form.
+    // TODO: Consider renaming to `data`.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
     pub key: Vec<u8>,
 }
 
 impl Key {
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
         let VarInt(byte_size): VarInt = Decodable::consensus_decode(r)?;
 
         if byte_size == 0 {
-            return Err(Error::NoMorePairs);
+            return Err(serialize::Error::NoMorePairs);
         }
 
         let key_byte_size: u64 = byte_size - 1;
@@ -165,7 +166,7 @@ impl<Subtype> TryFrom<Key> for ProprietaryKey<Subtype>
 where
     Subtype: Copy + From<u8> + Into<u8>,
 {
-    type Error = Error;
+    type Error = serialize::Error;
 
     /// Constructs a [`ProprietaryKey`] from a [`Key`].
     ///
@@ -173,7 +174,7 @@ where
     /// Returns [`Error::InvalidProprietaryKey`] if `key` does not start with `0xFC` byte.
     fn try_from(key: Key) -> Result<Self, Self::Error> {
         if key.type_value != 0xFC {
-            return Err(Error::InvalidProprietaryKey);
+            return Err(serialize::Error::InvalidProprietaryKey);
         }
 
         Ok(deserialize(&key.key)?)

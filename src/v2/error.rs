@@ -6,8 +6,54 @@ use core::fmt;
 
 use bitcoin::{sighash, FeeRate, Transaction};
 
-use crate::error::write_err;
+use crate::error::{write_err, FundingUtxoError};
+use crate::v2::map::{global, input, output};
 use crate::v2::Psbt;
+
+/// Error while deserializing a PSBT.
+///
+/// This error is returned when deserializing a complete PSBT, not for deserializing parts
+/// of it or individual data types.
+// TODO: This can change to `serialize::Error` if we rename `serialize::Error` to `serialize::Error`.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum DeserializePsbtError {
+    /// Invalid magic bytes, expected the ASCII for "psbt" serialized in most significant byte order.
+    // TODO: Consider adding the invalid bytes.
+    InvalidMagic,
+    /// The separator for a PSBT must be `0xff`.
+    // TODO: Consider adding the invalid separator byte.
+    InvalidSeparator,
+    /// Signals that there are no more key-value pairs in a key-value map.
+    NoMorePairs,
+    /// Error decoding the global map.
+    DecodeGlobal(global::DecodeError),
+    /// Error decoding an input map.
+    DecodeInput(input::DecodeError),
+    /// Error decoding an output map.
+    DecodeOutput(output::DecodeError),
+}
+
+impl fmt::Display for DeserializePsbtError {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DeserializePsbtError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
+}
+
+impl From<global::DecodeError> for DeserializePsbtError {
+    fn from(e: global::DecodeError) -> Self { Self::DecodeGlobal(e) }
+}
+
+impl From<input::DecodeError> for DeserializePsbtError {
+    fn from(e: input::DecodeError) -> Self { Self::DecodeInput(e) }
+}
+
+impl From<output::DecodeError> for DeserializePsbtError {
+    fn from(e: output::DecodeError) -> Self { Self::DecodeOutput(e) }
+}
 
 /// Input index out of bounds (actual index, maximum index allowed).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,87 +100,6 @@ impl std::error::Error for IndexOutOfBoundsError {
             Inputs { .. } | Count { .. } => None,
         }
     }
-}
-
-/// An error getting the funding transaction for this input.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum FundingUtxoError {
-    /// The vout is out of bounds for non-witness transaction.
-    OutOfBounds {
-        /// The vout used as list index.
-        vout: usize,
-        /// The length of the utxo list.
-        len: usize,
-    },
-    /// No funding utxo found.
-    MissingUtxo,
-}
-
-impl fmt::Display for FundingUtxoError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FundingUtxoError::*;
-
-        match *self {
-            OutOfBounds { vout, len } =>
-                write!(f, "vout {} out of bounds for tx list len: {}", vout, len),
-            MissingUtxo => write!(f, "no funding utxo found"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for FundingUtxoError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FundingUtxoError::*;
-
-        match *self {
-            OutOfBounds { .. } | MissingUtxo => None,
-        }
-    }
-}
-
-/// An error while calculating the fee.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum FeeError {
-    /// Funding utxo error for input.
-    FundingUtxo(FundingUtxoError),
-    /// Integer overflow in fee calculation adding input.
-    InputOverflow,
-    /// Integer overflow in fee calculation adding output.
-    OutputOverflow,
-    /// Negative fee.
-    Negative,
-}
-
-impl fmt::Display for FeeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FeeError::*;
-
-        match *self {
-            FundingUtxo(ref e) => write_err!(f, "funding utxo error for input"; e),
-            InputOverflow => f.write_str("integer overflow in fee calculation adding input"),
-            OutputOverflow => f.write_str("integer overflow in fee calculation adding output"),
-            Negative => f.write_str("PSBT has a negative fee which is not allowed"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for FeeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FeeError::*;
-
-        match *self {
-            FundingUtxo(ref e) => Some(e),
-            InputOverflow | OutputOverflow | Negative => None,
-        }
-    }
-}
-
-impl From<FundingUtxoError> for FeeError {
-    fn from(e: FundingUtxoError) -> Self { Self::FundingUtxo(e) }
 }
 
 /// This error is returned when extracting a [`Transaction`] from a PSBT..

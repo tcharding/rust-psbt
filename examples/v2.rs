@@ -166,7 +166,7 @@ impl Alice {
         // The dummy input utxo we are spending and the pubkey/keysource that will be used to sign it.
         input.witness_utxo = Some(self.input_utxo()?);
         let (pk, key_source) = self.bip32_derivation()?;
-        input.bip32_derivation.insert(pk, key_source);
+        input.bip32_derivations.insert(pk, key_source);
         Ok(psbt)
     }
 
@@ -219,7 +219,7 @@ impl Bob {
         // The dummy input utxo we are spending and the pubkey/keysource that will be used to sign it.
         input.witness_utxo = Some(self.input_utxo()?);
         let (pk, key_source) = self.bip32_derivation()?;
-        input.bip32_derivation.insert(pk, key_source);
+        input.bip32_derivations.insert(pk, key_source);
         Ok(psbt)
     }
 

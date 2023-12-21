@@ -40,7 +40,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'
 
     fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
         self.psbt.inputs[self.index]
-            .bip32_derivation
+            .bip32_derivations
             .iter()
             .find(|&(pubkey, _)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
             .map(|(pubkey, _)| bitcoin::PublicKey::new(*pubkey))
