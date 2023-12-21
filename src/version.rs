@@ -6,7 +6,7 @@ use core::fmt;
 use bitcoin::consensus::encode as consensus;
 
 use crate::prelude::Vec;
-use crate::serialize::{Deserialize, Serialize};
+use crate::serialize::{self, Deserialize, Serialize};
 
 /// The PSBT version.
 #[derive(Copy, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
@@ -48,7 +48,7 @@ impl Serialize for Version {
 }
 
 impl Deserialize for Version {
-    fn deserialize(bytes: &[u8]) -> Result<Self, crate::Error> {
+    fn deserialize(bytes: &[u8]) -> Result<Self, serialize::Error> {
         let n: u32 = consensus::deserialize(bytes)?;
         let version = Version::try_from(n)?;
         Ok(version)

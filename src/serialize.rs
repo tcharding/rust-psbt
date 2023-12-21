@@ -7,12 +7,13 @@
 //!
 
 use core::convert::{TryFrom, TryInto};
+use core::fmt;
 
 use bitcoin::bip32::{ChildNumber, Fingerprint, KeySource};
 // TODO: This should be exposed like this in rust-bitcoin.
 use bitcoin::consensus::encode as consensus;
 use bitcoin::consensus::{deserialize_partial, serialize, Decodable, Encodable};
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::hashes::{self, hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::key::PublicKey;
 use bitcoin::secp256k1::{self, XOnlyPublicKey};
 use bitcoin::taproot::{
@@ -23,9 +24,10 @@ use bitcoin::{
     VarInt, Witness,
 };
 
+use crate::error::write_err;
 use crate::prelude::*;
 use crate::sighash_type::PsbtSighashType;
-use crate::{Error};
+use crate::version;
 
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
@@ -366,6 +368,123 @@ impl Deserialize for TapTree {
 
 // Helper function to compute key source len
 fn key_source_len(key_source: &KeySource) -> usize { 4 + 4 * (key_source.1).as_ref().len() }
+
+// TODO: Once all we use `DeserializePsbtError` and `DecodeError` remove all the decoding and PSBT top level variasts (magic, separator, etc.).
+/// Ways that deserializing a PSBT might fail.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum Error {
+    /// Not enough data to deserialize object.
+    NotEnoughData,
+    /// Non-proprietary key type found when proprietary key was expected
+    InvalidProprietaryKey,
+    /// Signals that there are no more key-value pairs in a key-value map.
+    NoMorePairs,
+    /// Unable to parse as a standard sighash type.
+    NonStandardSighashType(u32),
+    /// Invalid hash when parsing slice.
+    InvalidHash(hashes::FromSliceError),
+    /// Serialization error in bitcoin consensus-encoded structures
+    ConsensusEncoding(consensus::Error),
+    /// Parsing error indicating invalid public keys
+    InvalidPublicKey(bitcoin::key::Error),
+    /// Parsing error indicating invalid secp256k1 public keys
+    InvalidSecp256k1PublicKey(secp256k1::Error),
+    /// Parsing error indicating invalid xonly public keys
+    InvalidXOnlyPublicKey,
+    /// Parsing error indicating invalid ECDSA signatures
+    InvalidEcdsaSignature(bitcoin::ecdsa::Error),
+    /// Parsing error indicating invalid taproot signatures
+    InvalidTaprootSignature(bitcoin::taproot::SigFromSliceError),
+    /// Parsing error indicating invalid control block
+    InvalidControlBlock,
+    /// Parsing error indicating invalid leaf version
+    InvalidLeafVersion,
+    /// Parsing error indicating a taproot error
+    Taproot(&'static str),
+    /// Taproot tree deserilaization error
+    TapTree(taproot::IncompleteBuilderError),
+    /// Error related to PSBT version
+    /// PSBT data is not consumed entirely
+    PartialDataConsumption,
+    /// Couldn't converting parsed u32 to a lock time.
+    LockTime(absolute::Error),
+    /// Unsupported PSBT version.
+    UnsupportedVersion(version::UnsupportedVersionError),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Error::*;
+
+        match *self {
+            NotEnoughData => f.write_str("not enough data to deserialize object"),
+            InvalidProprietaryKey =>
+                write!(f, "non-proprietary key type found when proprietary key was expected"),
+            NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
+            NonStandardSighashType(ref sht) => write!(f, "non-standard sighash type: {}", sht),
+            InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),
+            ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
+            InvalidPublicKey(ref e) => write_err!(f, "invalid public key"; e),
+            InvalidSecp256k1PublicKey(ref e) => write_err!(f, "invalid secp256k1 public key"; e),
+            InvalidXOnlyPublicKey => f.write_str("invalid xonly public key"),
+            InvalidEcdsaSignature(ref e) => write_err!(f, "invalid ECDSA signature"; e),
+            InvalidTaprootSignature(ref e) => write_err!(f, "invalid taproot signature"; e),
+            InvalidControlBlock => f.write_str("invalid control block"),
+            InvalidLeafVersion => f.write_str("invalid leaf version"),
+            Taproot(s) => write!(f, "taproot error -  {}", s),
+            TapTree(ref e) => write_err!(f, "taproot tree error"; e),
+            PartialDataConsumption =>
+                f.write_str("data not consumed entirely when explicitly deserializing"),
+            LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
+            UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use Error::*;
+
+        match *self {
+            InvalidHash(ref e) => Some(e),
+            ConsensusEncoding(ref e) => Some(e),
+            LockTime(ref e) => Some(e),
+            UnsupportedVersion(ref e) => Some(e),
+            NotEnoughData
+            | InvalidProprietaryKey
+            | NoMorePairs
+            | NonStandardSighashType(_)
+            | InvalidPublicKey(_)
+            | InvalidSecp256k1PublicKey(_)
+            | InvalidXOnlyPublicKey
+            | InvalidEcdsaSignature(_)
+            | InvalidTaprootSignature(_)
+            | InvalidControlBlock
+            | InvalidLeafVersion
+            | Taproot(_)
+            | TapTree(_)
+            | PartialDataConsumption => None,
+        }
+    }
+}
+
+impl From<hashes::FromSliceError> for Error {
+    fn from(e: hashes::FromSliceError) -> Self { Self::InvalidHash(e) }
+}
+
+impl From<consensus::Error> for Error {
+    fn from(e: consensus::Error) -> Self { Self::ConsensusEncoding(e) }
+}
+
+impl From<absolute::Error> for Error {
+    fn from(e: absolute::Error) -> Self { Self::LockTime(e) }
+}
+
+impl From<version::UnsupportedVersionError> for Error {
+    fn from(e: version::UnsupportedVersionError) -> Self { Self::UnsupportedVersion(e) }
+}
 
 #[cfg(test)]
 mod tests {

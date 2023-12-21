@@ -7,7 +7,6 @@ use core::fmt;
 use bitcoin::{sighash, FeeRate, Transaction};
 
 use crate::error::{write_err, FundingUtxoError};
-use crate::raw;
 use crate::v2::map::{global, input, output};
 use crate::v2::Psbt;
 
@@ -15,6 +14,7 @@ use crate::v2::Psbt;
 ///
 /// This error is returned when deserializing a complete PSBT, not for deserializing parts
 /// of it or individual data types.
+// TODO: This can change to `serialize::Error` if we rename `serialize::Error` to `serialize::Error`.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DeserializePsbtError {
@@ -35,7 +35,7 @@ pub enum DeserializePsbtError {
 }
 
 impl fmt::Display for DeserializePsbtError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
 }
 
 #[cfg(feature = "std")]
@@ -53,57 +53,6 @@ impl From<input::DecodeError> for DeserializePsbtError {
 
 impl From<output::DecodeError> for DeserializePsbtError {
     fn from(e: output::DecodeError) -> Self { Self::DecodeOutput(e) }
-}
-
-/// Error inserting a key-value pair.
-#[derive(Debug)]
-pub enum InsertPairError {
-    /// Known keys must be according to spec.
-    InvalidKey(raw::Key),
-    /// The pre-image must hash to the correponding psbt hash
-    InvalidHashPreimage {
-        /// The hash-type causing this error.
-        hash_type: HashType,
-        /// The hash pre-image.
-        preimage: Box<[u8]>,
-        /// The hash (should equal hash of the preimage).
-        hash: Box<[u8]>,
-    },
-    /// Keys within key-value map should never be duplicated.
-    DuplicateKey(raw::Key),
-    /// Key must be excluded from this version of PSBT (see consts.rs for u8 values).
-    // TODO: Improve debugging, this u8 is obsure.
-    ExcludedKey(u8),
-    /// Error deserializing raw value.
-    // TODO: This should be a more specific error.
-    Deserialize(crate::Error),
-}
-
-/// Enum for marking invalid preimage error.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum HashType {
-    /// The ripemd hash algorithm.
-    Ripemd,
-    /// The sha-256 hash algorithm.
-    Sha256,
-    /// The hash-160 hash algorithm.
-    Hash160,
-    /// The Hash-256 hash algorithm.
-    Hash256,
-}
-
-impl fmt::Display for InsertPairError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for InsertPairError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
-}
-
-impl From<crate::Error> for InsertPairError {
-    fn from(e: crate::Error) -> Self { Self::Deserialize(e) }
 }
 
 /// Input index out of bounds (actual index, maximum index allowed).

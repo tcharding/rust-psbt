@@ -4,8 +4,8 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::bip32::KeySource;
-use bitcoin::consensus::encode as consensus;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash as _};
+use bitcoin::hex::DisplayHex;
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
@@ -28,9 +28,8 @@ use crate::error::{write_err, FundingUtxoError};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
-use crate::v2::error::{HashType, InsertPairError};
 use crate::v2::map::Map;
-use crate::{io, raw, v0};
+use crate::{io, raw, serialize, v0};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
@@ -80,7 +79,7 @@ pub struct Input {
     /// A map from public keys needed to sign this input to their corresponding
     /// master key fingerprints and derivation paths.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
-    pub bip32_derivation: BTreeMap<secp256k1::PublicKey, KeySource>,
+    pub bip32_derivations: BTreeMap<secp256k1::PublicKey, KeySource>,
     /// The finalized, fully-constructed scriptSig with signatures and any other
     /// scripts necessary for this input to pass validation.
     pub final_script_sig: Option<ScriptBuf>,
@@ -117,10 +116,10 @@ pub struct Input {
     pub tap_merkle_root: Option<TapNodeHash>,
     /// Proprietary key-value pairs for this input.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
+    pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown key-value pairs for this input.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub unknown: BTreeMap<raw::Key, Vec<u8>>,
+    pub unknowns: BTreeMap<raw::Key, Vec<u8>>,
 }
 
 impl Input {
@@ -138,7 +137,7 @@ impl Input {
             sighash_type: None,
             redeem_script: None,
             witness_script: None,
-            bip32_derivation: BTreeMap::new(),
+            bip32_derivations: BTreeMap::new(),
             final_script_sig: None,
             final_script_witness: None,
             ripemd160_preimages: BTreeMap::new(),
@@ -151,8 +150,8 @@ impl Input {
             tap_key_origins: BTreeMap::new(),
             tap_internal_key: None,
             tap_merkle_root: None,
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
+            proprietaries: BTreeMap::new(),
+            unknowns: BTreeMap::new(),
         }
     }
 
@@ -165,7 +164,7 @@ impl Input {
             sighash_type: self.sighash_type,
             redeem_script: self.redeem_script,
             witness_script: self.witness_script,
-            bip32_derivation: self.bip32_derivation,
+            bip32_derivations: self.bip32_derivations,
             final_script_sig: self.final_script_sig,
             final_script_witness: self.final_script_witness,
             ripemd160_preimages: self.ripemd160_preimages,
@@ -178,8 +177,8 @@ impl Input {
             tap_key_origins: self.tap_key_origins,
             tap_internal_key: self.tap_internal_key,
             tap_merkle_root: self.tap_merkle_root,
-            proprietary: self.proprietary,
-            unknown: self.unknown,
+            proprietaries: self.proprietaries,
+            unknowns: self.unknowns,
         }
     }
 
@@ -266,102 +265,102 @@ impl Input {
             .unwrap_or(Ok(TapSighashType::Default))
     }
 
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(in crate::v2) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+        // These are placeholder values that never exist in a encode `Input`.
         let invalid = OutPoint { txid: Txid::all_zeros(), vout: u32::MAX };
         let mut rv = Self::new(invalid);
 
         loop {
             match raw::Pair::decode(r) {
                 Ok(pair) => rv.insert_pair(pair)?,
-                Err(crate::Error::NoMorePairs) => {
-                    if rv.previous_txid == Txid::all_zeros() {
-                        return Err(DecodeError::MissingPreviousTxid);
-                    }
-
-                    if rv.spent_output_index == u32::MAX {
-                        return Err(DecodeError::MissingSpentOutputIndex);
-                    }
-                    return Ok(rv);
-                }
-                Err(e) => return Err(DecodeError::Crate(e)),
+                Err(serialize::Error::NoMorePairs) => break,
+                Err(e) => return Err(DecodeError::DeserPair(e)),
             }
         }
+
+        if rv.previous_txid == Txid::all_zeros() {
+            return Err(DecodeError::MissingPreviousTxid);
+        }
+        if rv.spent_output_index == u32::MAX {
+            return Err(DecodeError::MissingSpentOutputIndex);
+        }
+        Ok(rv)
     }
 
-    pub(super) fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), InsertPairError> {
+    fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), InsertPairError> {
         let raw::Pair { key: raw_key, value: raw_value } = pair;
 
         match raw_key.type_value {
-            v if v == PSBT_IN_PREVIOUS_TXID => {
+            PSBT_IN_PREVIOUS_TXID => {
                 if self.previous_txid != Txid::all_zeros() {
                     return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let txid: Txid = Deserialize::deserialize(&raw_value)?;
                 self.previous_txid = txid;
             }
-            v if v == PSBT_IN_OUTPUT_INDEX => {
+            PSBT_IN_OUTPUT_INDEX => {
                 if self.spent_output_index != u32::MAX {
                     return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let vout: u32 = Deserialize::deserialize(&raw_value)?;
                 self.spent_output_index = vout;
             }
-            v if v == PSBT_IN_SEQUENCE => {
+            PSBT_IN_SEQUENCE => {
                 impl_psbt_insert_pair! {
                     self.sequence <= <raw_key: _>|<raw_value: Sequence>
                 }
             }
-            v if v == PSBT_IN_REQUIRED_TIME_LOCKTIME => {
+            PSBT_IN_REQUIRED_TIME_LOCKTIME => {
                 impl_psbt_insert_pair! {
                     self.min_time <= <raw_key: _>|<raw_value: absolute::Time>
                 }
             }
-            v if v == PSBT_IN_REQUIRED_HEIGHT_LOCKTIME => {
+            PSBT_IN_REQUIRED_HEIGHT_LOCKTIME => {
                 impl_psbt_insert_pair! {
                     self.min_height <= <raw_key: _>|<raw_value: absolute::Height>
                 }
             }
-            v if v == PSBT_IN_WITNESS_UTXO => {
+            PSBT_IN_WITNESS_UTXO => {
                 impl_psbt_insert_pair! {
                     self.witness_utxo <= <raw_key: _>|<raw_value: TxOut>
                 }
             }
-            v if v == PSBT_IN_PARTIAL_SIG => {
+            PSBT_IN_PARTIAL_SIG => {
                 impl_psbt_insert_pair! {
                     self.partial_sigs <= <raw_key: PublicKey>|<raw_value: ecdsa::Signature>
                 }
             }
-            v if v == PSBT_IN_SIGHASH_TYPE => {
+            PSBT_IN_SIGHASH_TYPE => {
                 impl_psbt_insert_pair! {
                     self.sighash_type <= <raw_key: _>|<raw_value: PsbtSighashType>
                 }
             }
-            v if v == PSBT_IN_REDEEM_SCRIPT => {
+            PSBT_IN_REDEEM_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.redeem_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            v if v == PSBT_IN_WITNESS_SCRIPT => {
+            PSBT_IN_WITNESS_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.witness_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            v if v == PSBT_IN_BIP32_DERIVATION => {
+            PSBT_IN_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
-                    self.bip32_derivation <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
+                    self.bip32_derivations <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
-            v if v == PSBT_IN_FINAL_SCRIPTSIG => {
+            PSBT_IN_FINAL_SCRIPTSIG => {
                 impl_psbt_insert_pair! {
                     self.final_script_sig <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            v if v == PSBT_IN_FINAL_SCRIPTWITNESS => {
+            PSBT_IN_FINAL_SCRIPTWITNESS => {
                 impl_psbt_insert_pair! {
                     self.final_script_witness <= <raw_key: _>|<raw_value: Witness>
                 }
             }
-            v if v == PSBT_IN_RIPEMD160 => {
+            PSBT_IN_RIPEMD160 => {
                 psbt_insert_hash_pair(
                     &mut self.ripemd160_preimages,
                     raw_key,
@@ -369,7 +368,7 @@ impl Input {
                     HashType::Ripemd,
                 )?;
             }
-            v if v == PSBT_IN_SHA256 => {
+            PSBT_IN_SHA256 => {
                 psbt_insert_hash_pair(
                     &mut self.sha256_preimages,
                     raw_key,
@@ -377,7 +376,7 @@ impl Input {
                     HashType::Sha256,
                 )?;
             }
-            v if v == PSBT_IN_HASH160 => {
+            PSBT_IN_HASH160 => {
                 psbt_insert_hash_pair(
                     &mut self.hash160_preimages,
                     raw_key,
@@ -385,7 +384,7 @@ impl Input {
                     HashType::Hash160,
                 )?;
             }
-            v if v == PSBT_IN_HASH256 => {
+            PSBT_IN_HASH256 => {
                 psbt_insert_hash_pair(
                     &mut self.hash256_preimages,
                     raw_key,
@@ -393,39 +392,39 @@ impl Input {
                     HashType::Hash256,
                 )?;
             }
-            v if v == PSBT_IN_TAP_KEY_SIG => {
+            PSBT_IN_TAP_KEY_SIG => {
                 impl_psbt_insert_pair! {
                     self.tap_key_sig <= <raw_key: _>|<raw_value: taproot::Signature>
                 }
             }
-            v if v == PSBT_IN_TAP_SCRIPT_SIG => {
+            PSBT_IN_TAP_SCRIPT_SIG => {
                 impl_psbt_insert_pair! {
                     self.tap_script_sigs <= <raw_key: (XOnlyPublicKey, TapLeafHash)>|<raw_value: taproot::Signature>
                 }
             }
-            v if v == PSBT_IN_TAP_LEAF_SCRIPT => {
+            PSBT_IN_TAP_LEAF_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.tap_scripts <= <raw_key: ControlBlock>|< raw_value: (ScriptBuf, LeafVersion)>
                 }
             }
-            v if v == PSBT_IN_TAP_BIP32_DERIVATION => {
+            PSBT_IN_TAP_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
-            v if v == PSBT_IN_TAP_INTERNAL_KEY => {
+            PSBT_IN_TAP_INTERNAL_KEY => {
                 impl_psbt_insert_pair! {
                     self.tap_internal_key <= <raw_key: _>|< raw_value: XOnlyPublicKey>
                 }
             }
-            v if v == PSBT_IN_TAP_MERKLE_ROOT => {
+            PSBT_IN_TAP_MERKLE_ROOT => {
                 impl_psbt_insert_pair! {
                     self.tap_merkle_root <= <raw_key: _>|< raw_value: TapNodeHash>
                 }
             }
-            v if v == PSBT_IN_PROPRIETARY => {
+            PSBT_IN_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
-                match self.proprietary.entry(key) {
+                match self.proprietaries.entry(key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(raw_value);
                     }
@@ -433,7 +432,8 @@ impl Input {
                         return Err(InsertPairError::DuplicateKey(raw_key)),
                 }
             }
-            _ => match self.unknown.entry(raw_key) {
+            // Note, PSBT v2 does not exclude any keys from the input map.
+            _ => match self.unknowns.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
                 }
@@ -455,7 +455,7 @@ impl Input {
         }
 
         self.partial_sigs.extend(other.partial_sigs);
-        self.bip32_derivation.extend(other.bip32_derivation);
+        self.bip32_derivations.extend(other.bip32_derivations);
         self.ripemd160_preimages.extend(other.ripemd160_preimages);
         self.sha256_preimages.extend(other.sha256_preimages);
         self.hash160_preimages.extend(other.hash160_preimages);
@@ -463,8 +463,8 @@ impl Input {
         self.tap_script_sigs.extend(other.tap_script_sigs);
         self.tap_scripts.extend(other.tap_scripts);
         self.tap_key_origins.extend(other.tap_key_origins);
-        self.proprietary.extend(other.proprietary);
-        self.unknown.extend(other.unknown);
+        self.proprietaries.extend(other.proprietaries);
+        self.unknowns.extend(other.unknowns);
 
         combine!(redeem_script, self, other);
         combine!(witness_script, self, other);
@@ -525,7 +525,7 @@ impl Map for Input {
         }
 
         impl_psbt_get_pair! {
-            rv.push_map(self.bip32_derivation, PSBT_IN_BIP32_DERIVATION)
+            rv.push_map(self.bip32_derivations, PSBT_IN_BIP32_DERIVATION)
         }
 
         impl_psbt_get_pair! {
@@ -575,11 +575,11 @@ impl Map for Input {
         impl_psbt_get_pair! {
             rv.push(self.tap_merkle_root, PSBT_IN_TAP_MERKLE_ROOT)
         }
-        for (key, value) in self.proprietary.iter() {
+        for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
 
-        for (key, value) in self.unknown.iter() {
+        for (key, value) in self.unknowns.iter() {
             rv.push(raw::Pair { key: key.clone(), value: value.clone() });
         }
 
@@ -587,6 +587,7 @@ impl Map for Input {
     }
 }
 
+// TODO: This is an exact duplicate of that in v0.
 fn psbt_insert_hash_pair<H>(
     map: &mut BTreeMap<H, Vec<u8>>,
     raw_key: raw::Key,
@@ -597,7 +598,7 @@ where
     H: hashes::Hash + Deserialize,
 {
     if raw_key.key.is_empty() {
-        return Err(InsertPairError::InvalidKey(raw_key));
+        return Err(InsertPairError::InvalidKeyDataEmpty(raw_key));
     }
 
     let key_val: H = Deserialize::deserialize(&raw_key.key)?;
@@ -606,11 +607,12 @@ where
             let val: Vec<u8> = Deserialize::deserialize(&raw_value)?;
 
             if <H as hashes::Hash>::hash(&val) != key_val {
-                return Err(InsertPairError::InvalidHashPreimage {
+                return Err(HashPreimageError {
                     preimage: val.into_boxed_slice(),
                     hash: Box::from(key_val.borrow()),
                     hash_type,
-                });
+                }
+                .into());
             }
             empty_key.insert(val);
             Ok(())
@@ -645,22 +647,14 @@ impl InputBuilder {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
-    /// Error consensus deserializing type.
-    Consensus(consensus::Error),
-    /// Known keys must be according to spec.
-    InvalidKey(raw::Key),
-    /// Non-proprietary key type found when proprietary key was expected
-    InvalidProprietaryKey,
-    /// Keys within key-value map should never be duplicated.
-    DuplicateKey(raw::Key),
+    /// Error inserting a key-value pair.
+    InsertPair(InsertPairError),
+    /// Error decoding a pair.
+    DeserPair(serialize::Error),
     /// Input must contain a previous txid.
     MissingPreviousTxid,
     /// Input must contain a spent output index.
     MissingSpentOutputIndex,
-    /// Error inserting a key-value pair.
-    InsertPair(InsertPairError),
-    /// TODO: Remove this variant, its a kludge
-    Crate(crate::error::Error),
 }
 
 impl fmt::Display for DecodeError {
@@ -668,15 +662,10 @@ impl fmt::Display for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
-            InvalidKey(ref key) => write!(f, "invalid key: {}", key),
-            InvalidProprietaryKey =>
-                write!(f, "non-proprietary key type found when proprietary key was expected"),
-            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            InsertPair(ref e) => write_err!(f, "error inserting a key-value pair"; e),
+            DeserPair(ref e) => write_err!(f, "error decoding pair"; e),
             MissingPreviousTxid => write!(f, "input must contain a previous txid"),
             MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
-            InsertPair(ref e) => write_err!(f, "error inserting a key-value pair"; e),
-            Crate(ref e) => write_err!(f, "kludge"; e),
         }
     }
 }
@@ -687,29 +676,111 @@ impl std::error::Error for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Consensus(ref e) => Some(e),
-            Crate(ref e) => Some(e),
             InsertPair(ref e) => Some(e),
-            InvalidKey(_)
-            | InvalidProprietaryKey
-            | DuplicateKey(_)
-            | MissingPreviousTxid
-            | MissingSpentOutputIndex => None,
+            DeserPair(ref e) => Some(e),
+            MissingPreviousTxid | MissingSpentOutputIndex => None,
         }
     }
-}
-
-impl From<consensus::Error> for DecodeError {
-    fn from(e: consensus::Error) -> Self { Self::Consensus(e) }
 }
 
 impl From<InsertPairError> for DecodeError {
     fn from(e: InsertPairError) -> Self { Self::InsertPair(e) }
 }
 
-// TODO: Remove this.
-impl From<crate::error::Error> for DecodeError {
-    fn from(e: crate::error::Error) -> Self { Self::Crate(e) }
+/// Error inserting a key-value pair.
+#[derive(Debug)]
+pub enum InsertPairError {
+    /// Keys within key-value map should never be duplicated.
+    DuplicateKey(raw::Key),
+    /// Error deserializing raw value.
+    Deser(serialize::Error),
+    /// Key should contain data.
+    InvalidKeyDataEmpty(raw::Key),
+    /// Key should not contain data.
+    InvalidKeyDataNotEmpty(raw::Key),
+    /// The pre-image must hash to the correponding psbt hash
+    HashPreimage(HashPreimageError),
+}
+
+impl fmt::Display for InsertPairError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use InsertPairError::*;
+
+        match *self {
+            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
+            InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
+            InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
+            HashPreimage(ref e) => write_err!(f, "invalid hash preimage"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InsertPairError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use InsertPairError::*;
+
+        match *self {
+            Deser(ref e) => Some(e),
+            HashPreimage(ref e) => Some(e),
+            DuplicateKey(_) | InvalidKeyDataEmpty(_) | InvalidKeyDataNotEmpty(_) => None,
+        }
+    }
+}
+
+impl From<serialize::Error> for InsertPairError {
+    fn from(e: serialize::Error) -> Self { Self::Deser(e) }
+}
+
+impl From<HashPreimageError> for InsertPairError {
+    fn from(e: HashPreimageError) -> Self { Self::HashPreimage(e) }
+}
+
+/// An hash and hash preimage do not match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HashPreimageError {
+    /// The hash-type causing this error.
+    hash_type: HashType,
+    /// The hash pre-image.
+    preimage: Box<[u8]>,
+    /// The hash (should equal hash of the preimage).
+    hash: Box<[u8]>,
+}
+
+impl fmt::Display for HashPreimageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid hash preimage {} {:x} {:x}",
+            self.hash_type,
+            self.preimage.as_hex(),
+            self.hash.as_hex()
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for HashPreimageError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+/// Enum for marking invalid preimage error.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum HashType {
+    /// The ripemd hash algorithm.
+    Ripemd,
+    /// The sha-256 hash algorithm.
+    Sha256,
+    /// The hash-160 hash algorithm.
+    Hash160,
+    /// The Hash-256 hash algorithm.
+    Hash256,
+}
+
+impl fmt::Display for HashType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", stringify!(self)) }
 }
 
 #[cfg(test)]

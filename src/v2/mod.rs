@@ -760,7 +760,7 @@ impl Psbt {
         let input = &mut self.inputs[input_index]; // Index checked in call to `sighash_ecdsa`.
         let mut used = vec![]; // List of pubkeys used to sign the input.
 
-        for (pk, key_source) in input.bip32_derivation.iter() {
+        for (pk, key_source) in input.bip32_derivations.iter() {
             let sk = if let Ok(Some(sk)) = k.get_key(KeyRequest::Bip32(key_source.clone()), secp) {
                 sk
             } else if let Ok(Some(sk)) = k.get_key(KeyRequest::Pubkey(PublicKey::new(*pk)), secp) {

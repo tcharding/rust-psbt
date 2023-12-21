@@ -4,7 +4,6 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::bip32::KeySource;
-use bitcoin::consensus::encode as consensus;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{secp256k1, Amount, ScriptBuf, TxOut};
@@ -18,7 +17,7 @@ use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::v2::map::Map;
-use crate::{io, raw, v0, Error};
+use crate::{io, raw, serialize, v0};
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -77,12 +76,12 @@ impl Output {
         v0::Output {
             redeem_script: self.redeem_script,
             witness_script: self.witness_script,
-            bip32_derivation: self.bip32_derivation,
+            bip32_derivations: self.bip32_derivation,
             tap_internal_key: self.tap_internal_key,
             tap_tree: self.tap_tree,
             tap_key_origins: self.tap_key_origins,
-            proprietary: self.proprietary,
-            unknown: self.unknown,
+            proprietaries: self.proprietary,
+            unknowns: self.unknown,
         }
     }
 
@@ -91,91 +90,94 @@ impl Output {
         TxOut { value: self.amount, script_pubkey: self.script_pubkey.clone() }
     }
 
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(in crate::v2) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+        // These are placeholder values that never exist in a encode `Output`.
         let invalid = TxOut { value: Amount::ZERO, script_pubkey: ScriptBuf::default() };
         let mut rv = Self::new(invalid);
 
         loop {
             match raw::Pair::decode(r) {
                 Ok(pair) => rv.insert_pair(pair)?,
-                Err(crate::Error::NoMorePairs) => {
-                    if rv.amount == Amount::ZERO {
-                        return Err(DecodeError::ZeroValue);
-                    }
-
-                    if rv.script_pubkey == ScriptBuf::default() {
-                        return Err(DecodeError::EmptyScriptPubkey);
-                    }
-                    return Ok(rv);
-                }
-                Err(e) => return Err(DecodeError::Crate(e)),
+                Err(serialize::Error::NoMorePairs) => break,
+                Err(e) => return Err(DecodeError::DeserPair(e)),
             }
         }
+
+        if rv.amount == Amount::ZERO {
+            return Err(DecodeError::MissingValue);
+        }
+        if rv.script_pubkey == ScriptBuf::default() {
+            return Err(DecodeError::MissingScriptPubkey);
+        }
+        Ok(rv)
     }
 
-    pub(super) fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), Error> {
+    fn insert_pair(&mut self, pair: raw::Pair) -> Result<(), InsertPairError> {
         let raw::Pair { key: raw_key, value: raw_value } = pair;
 
         match raw_key.type_value {
-            v if v == PSBT_OUT_AMOUNT => {
+            PSBT_OUT_AMOUNT => {
                 if self.amount != Amount::ZERO {
-                    return Err(Error::DuplicateKey(raw_key));
+                    return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let amount: Amount = Deserialize::deserialize(&raw_value)?;
                 self.amount = amount;
             }
-            v if v == PSBT_OUT_SCRIPT => {
+            PSBT_OUT_SCRIPT => {
                 if self.script_pubkey != ScriptBuf::default() {
-                    return Err(Error::DuplicateKey(raw_key));
+                    return Err(InsertPairError::DuplicateKey(raw_key));
                 }
                 let script: ScriptBuf = Deserialize::deserialize(&raw_value)?;
                 self.script_pubkey = script;
             }
 
-            v if v == PSBT_OUT_REDEEM_SCRIPT => {
+            PSBT_OUT_REDEEM_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.redeem_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            v if v == PSBT_OUT_WITNESS_SCRIPT => {
+            PSBT_OUT_WITNESS_SCRIPT => {
                 impl_psbt_insert_pair! {
                     self.witness_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
-            v if v == PSBT_OUT_BIP32_DERIVATION => {
+            PSBT_OUT_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
                     self.bip32_derivation <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
-            v if v == PSBT_OUT_PROPRIETARY => {
+            PSBT_OUT_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
                 match self.proprietary.entry(key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(raw_value);
                     }
-                    btree_map::Entry::Occupied(_) => return Err(Error::DuplicateKey(raw_key)),
+                    btree_map::Entry::Occupied(_) =>
+                        return Err(InsertPairError::DuplicateKey(raw_key)),
                 }
             }
-            v if v == PSBT_OUT_TAP_INTERNAL_KEY => {
+            PSBT_OUT_TAP_INTERNAL_KEY => {
                 impl_psbt_insert_pair! {
                     self.tap_internal_key <= <raw_key: _>|<raw_value: XOnlyPublicKey>
                 }
             }
-            v if v == PSBT_OUT_TAP_TREE => {
+            PSBT_OUT_TAP_TREE => {
                 impl_psbt_insert_pair! {
                     self.tap_tree <= <raw_key: _>|<raw_value: TapTree>
                 }
             }
-            v if v == PSBT_OUT_TAP_BIP32_DERIVATION => {
+            PSBT_OUT_TAP_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
+            // Note, PSBT v2 does not exclude any keys from the input map.
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
                 }
-                btree_map::Entry::Occupied(k) => return Err(Error::DuplicateKey(k.key().clone())),
+                btree_map::Entry::Occupied(k) =>
+                    return Err(InsertPairError::DuplicateKey(k.key().clone())),
             },
         }
 
@@ -261,20 +263,14 @@ impl OutputBuilder {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
-    /// Error consensus deserializing type.
-    Consensus(consensus::Error),
-    /// Known keys must be according to spec.
-    InvalidKey(raw::Key),
-    /// Non-proprietary key type found when proprietary key was expected
-    InvalidProprietaryKey,
-    /// Keys within key-value map should never be duplicated.
-    DuplicateKey(raw::Key),
-    /// Output has zero value.
-    ZeroValue,
-    /// Output has an empty script pubkey.
-    EmptyScriptPubkey,
-    /// TODO: Remove this variant, its a kludge
-    Crate(crate::error::Error),
+    /// Error inserting a key-value pair.
+    InsertPair(InsertPairError),
+    /// Error deserializing a pair.
+    DeserPair(serialize::Error),
+    /// Encoded output is missing a value.
+    MissingValue,
+    /// Encoded output is missing a script pubkey.
+    MissingScriptPubkey,
 }
 
 impl fmt::Display for DecodeError {
@@ -282,14 +278,10 @@ impl fmt::Display for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
-            InvalidKey(ref key) => write!(f, "invalid key: {}", key),
-            InvalidProprietaryKey =>
-                write!(f, "non-proprietary key type found when proprietary key was expected"),
-            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
-            ZeroValue => write!(f, "output has zero value"),
-            EmptyScriptPubkey => write!(f, "output has an empty script pubkey"),
-            Crate(ref e) => write_err!(f, "kludge"; e),
+            InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
+            DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
+            MissingValue => write!(f, "encoded output is missing a value"),
+            MissingScriptPubkey => write!(f, "encoded output is missing a script pubkey"),
         }
     }
 }
@@ -300,24 +292,57 @@ impl std::error::Error for DecodeError {
         use DecodeError::*;
 
         match *self {
-            Consensus(ref e) => Some(e),
-            Crate(ref e) => Some(e),
-            InvalidKey(_)
-            | InvalidProprietaryKey
-            | DuplicateKey(_)
-            | ZeroValue
-            | EmptyScriptPubkey => None,
+            InsertPair(ref e) => Some(e),
+            DeserPair(ref e) => Some(e),
+            MissingValue | MissingScriptPubkey => None,
         }
     }
 }
 
-impl From<consensus::Error> for DecodeError {
-    fn from(e: consensus::Error) -> Self { Self::Consensus(e) }
+impl From<InsertPairError> for DecodeError {
+    fn from(e: InsertPairError) -> Self { Self::InsertPair(e) }
 }
 
-// TODO: Remove this.
-impl From<crate::error::Error> for DecodeError {
-    fn from(e: crate::error::Error) -> Self { Self::Crate(e) }
+/// Error inserting a key-value pair.
+#[derive(Debug)]
+pub enum InsertPairError {
+    /// Keys within key-value map should never be duplicated.
+    DuplicateKey(raw::Key),
+    /// Error deserializing raw value.
+    Deser(serialize::Error),
+    /// Key should contain data.
+    InvalidKeyDataEmpty(raw::Key),
+    /// Key should not contain data.
+    InvalidKeyDataNotEmpty(raw::Key),
+}
+
+impl fmt::Display for InsertPairError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use InsertPairError::*;
+
+        match *self {
+            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
+            InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
+            InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InsertPairError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use InsertPairError::*;
+
+        match *self {
+            Deser(ref e) => Some(e),
+            DuplicateKey(_) | InvalidKeyDataEmpty(_) | InvalidKeyDataNotEmpty(_) => None,
+        }
+    }
+}
+
+impl From<serialize::Error> for InsertPairError {
+    fn from(e: serialize::Error) -> Self { Self::Deser(e) }
 }
 
 #[cfg(test)]
