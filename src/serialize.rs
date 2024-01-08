@@ -4,7 +4,6 @@
 //!
 //! Traits to serialize PSBT values to and from raw bytes
 //! according to the BIP-174 specification.
-//!
 
 use core::convert::{TryFrom, TryInto};
 use core::fmt;

@@ -3,7 +3,6 @@
 //! Bitcoin serde utilities.
 //!
 //! This module is for special serde serializations.
-//!
 
 use crate::serde;
 
