@@ -366,7 +366,6 @@ impl Deserialize for TapTree {
 // Helper function to compute key source len
 fn key_source_len(key_source: &KeySource) -> usize { 4 + 4 * (key_source.1).as_ref().len() }
 
-// TODO: Once all we use `DeserializePsbtError` and `DecodeError` remove all the decoding and PSBT top level variasts (magic, separator, etc.).
 /// Ways that deserializing a PSBT might fail.
 #[derive(Debug)]
 #[non_exhaustive]
