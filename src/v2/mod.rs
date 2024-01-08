@@ -938,7 +938,7 @@ impl Psbt {
 }
 
 /// Data required to call [`GetKey`] to get the private key to sign an input.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum KeyRequest {
     /// Request a private key using the associated public key.
@@ -1086,7 +1086,7 @@ impl From<bip32::Error> for GetKeyError {
 }
 
 /// The various output types supported by the Bitcoin network.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum OutputType {
     /// An output of type: pay-to-pubkey or pay-to-pubkey-hash.
@@ -1118,7 +1118,7 @@ impl OutputType {
 }
 
 /// Signing algorithms supported by the Bitcoin network.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SigningAlgorithm {
     /// The Elliptic Curve Digital Signature Algorithm (see [wikipedia]).
     ///

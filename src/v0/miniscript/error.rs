@@ -209,7 +209,7 @@ impl From<bitcoin::key::Error> for InputError {
 }
 
 /// Return error type for [`Psbt::update_input_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UtxoUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
@@ -258,7 +258,7 @@ impl std::error::Error for UtxoUpdateError {
 }
 
 /// Return error type for [`Psbt::update_output_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OutputUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),

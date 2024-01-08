@@ -33,7 +33,7 @@ use crate::{io, raw, serialize, v0};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Input {

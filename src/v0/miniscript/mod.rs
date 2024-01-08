@@ -1118,7 +1118,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 }
 
 /// Sighash message(signing data) for a given psbt transaction input.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PsbtSighashMsg {
     /// Taproot Signature hash
     TapSighash(sighash::TapSighash),

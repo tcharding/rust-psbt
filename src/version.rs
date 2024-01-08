@@ -9,7 +9,7 @@ use crate::prelude::Vec;
 use crate::serialize::{self, Deserialize, Serialize};
 
 /// The PSBT version.
-#[derive(Copy, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Version(u32);
