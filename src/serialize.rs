@@ -9,9 +9,7 @@ use core::convert::{TryFrom, TryInto};
 use core::fmt;
 
 use bitcoin::bip32::{ChildNumber, Fingerprint, KeySource};
-// TODO: This should be exposed like this in rust-bitcoin.
-use bitcoin::consensus::encode as consensus;
-use bitcoin::consensus::{deserialize_partial, serialize, Decodable, Encodable};
+use bitcoin::consensus::{self, Decodable, Encodable};
 use bitcoin::hashes::{self, hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::key::PublicKey;
 use bitcoin::secp256k1::{self, XOnlyPublicKey};
@@ -127,7 +125,7 @@ impl Serialize for KeySource {
         rv.append(&mut self.0.to_bytes().to_vec());
 
         for cnum in self.1.into_iter() {
-            rv.append(&mut serialize(&u32::from(*cnum)))
+            rv.append(&mut consensus::serialize(&u32::from(*cnum)))
         }
 
         rv
@@ -156,7 +154,7 @@ impl Deserialize for KeySource {
 }
 
 impl Serialize for u32 {
-    fn serialize(&self) -> Vec<u8> { serialize(&self) }
+    fn serialize(&self) -> Vec<u8> { consensus::serialize(&self) }
 }
 
 impl Deserialize for u32 {
@@ -167,7 +165,7 @@ impl Deserialize for u32 {
 }
 
 impl Serialize for Sequence {
-    fn serialize(&self) -> Vec<u8> { serialize(&self) }
+    fn serialize(&self) -> Vec<u8> { consensus::serialize(&self) }
 }
 
 impl Deserialize for Sequence {
@@ -178,7 +176,7 @@ impl Deserialize for Sequence {
 }
 
 impl Serialize for absolute::Height {
-    fn serialize(&self) -> Vec<u8> { serialize(&self.to_consensus_u32()) }
+    fn serialize(&self) -> Vec<u8> { consensus::serialize(&self.to_consensus_u32()) }
 }
 
 impl Deserialize for absolute::Height {
@@ -190,7 +188,7 @@ impl Deserialize for absolute::Height {
 }
 
 impl Serialize for absolute::Time {
-    fn serialize(&self) -> Vec<u8> { serialize(&self.to_consensus_u32()) }
+    fn serialize(&self) -> Vec<u8> { consensus::serialize(&self.to_consensus_u32()) }
 }
 
 impl Deserialize for absolute::Time {
@@ -211,7 +209,7 @@ impl Deserialize for Vec<u8> {
 }
 
 impl Serialize for PsbtSighashType {
-    fn serialize(&self) -> Vec<u8> { serialize(&self.to_u32()) }
+    fn serialize(&self) -> Vec<u8> { consensus::serialize(&self.to_u32()) }
 }
 
 impl Deserialize for PsbtSighashType {
@@ -315,7 +313,7 @@ impl Serialize for (Vec<TapLeafHash>, KeySource) {
 
 impl Deserialize for (Vec<TapLeafHash>, KeySource) {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        let (leafhash_vec, consumed) = deserialize_partial::<Vec<TapLeafHash>>(bytes)?;
+        let (leafhash_vec, consumed) = consensus::deserialize_partial::<Vec<TapLeafHash>>(bytes)?;
         let key_source = KeySource::deserialize(&bytes[consumed..])?;
         Ok((leafhash_vec, key_source))
     }
@@ -351,7 +349,7 @@ impl Deserialize for TapTree {
         let mut bytes_iter = bytes.iter();
         while let Some(depth) = bytes_iter.next() {
             let version = bytes_iter.next().ok_or(Error::Taproot("Invalid Taproot Builder"))?;
-            let (script, consumed) = deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
+            let (script, consumed) = consensus::deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
             if consumed > 0 {
                 bytes_iter.nth(consumed - 1);
             }
@@ -384,7 +382,7 @@ pub enum Error {
     /// Invalid hash when parsing slice.
     InvalidHash(hashes::FromSliceError),
     /// Serialization error in bitcoin consensus-encoded structures
-    ConsensusEncoding(consensus::Error),
+    ConsensusEncoding(consensus::encode::Error),
     /// Parsing error indicating invalid public keys
     InvalidPublicKey(bitcoin::key::Error),
     /// Parsing error indicating invalid secp256k1 public keys
@@ -473,8 +471,8 @@ impl From<hashes::FromSliceError> for Error {
     fn from(e: hashes::FromSliceError) -> Self { Self::InvalidHash(e) }
 }
 
-impl From<consensus::Error> for Error {
-    fn from(e: consensus::Error) -> Self { Self::ConsensusEncoding(e) }
+impl From<consensus::encode::Error> for Error {
+    fn from(e: consensus::encode::Error) -> Self { Self::ConsensusEncoding(e) }
 }
 
 impl From<absolute::Error> for Error {
