@@ -24,7 +24,7 @@ use crate::version::Version;
 use crate::{consts, raw, serialize, V0};
 
 /// The global key-value map.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Global {
