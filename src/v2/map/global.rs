@@ -127,6 +127,8 @@ impl Global {
         self.tx_modifiable_flags & OUTPUTS_MODIFIABLE > 0
     }
 
+    // TODO: Use this function?
+    #[allow(dead_code)]
     pub(crate) fn has_sighash_single(&self) -> bool {
         self.tx_modifiable_flags & SIGHASH_SINGLE > 0
     }
