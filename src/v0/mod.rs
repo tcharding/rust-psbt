@@ -510,12 +510,6 @@ impl Psbt {
     ///
     /// 'Fee' being the amount that will be paid for mining a transaction with the current inputs
     /// and outputs i.e., the difference in value of the total inputs and the total outputs.
-    ///
-    /// ## Errors
-    ///
-    /// - [`Error::MissingUtxo`] when UTXO information for any input is not present or is invalid.
-    /// - [`Error::NegativeFee`] if calculated value is negative.
-    /// - [`Error::FeeOverflow`] if an integer overflow occurs.
     pub fn fee(&self) -> Result<Amount, FeeError> {
         use FeeError::*;
 
