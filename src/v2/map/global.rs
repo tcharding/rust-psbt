@@ -298,8 +298,7 @@ impl Global {
                         return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
                     },
                 v if v == PSBT_GLOBAL_UNSIGNED_TX =>
-
-                   return Err(InsertPairError::ExcludedKey { key_type_value: v }),
+                    return Err(InsertPairError::ExcludedKey { key_type_value: v }),
                 _ => match unknowns.entry(pair.key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(pair.value);

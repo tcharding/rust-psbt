@@ -349,7 +349,8 @@ impl Deserialize for TapTree {
         let mut bytes_iter = bytes.iter();
         while let Some(depth) = bytes_iter.next() {
             let version = bytes_iter.next().ok_or(Error::Taproot("Invalid Taproot Builder"))?;
-            let (script, consumed) = consensus::deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
+            let (script, consumed) =
+                consensus::deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
             if consumed > 0 {
                 bytes_iter.nth(consumed - 1);
             }
