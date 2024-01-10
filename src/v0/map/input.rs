@@ -285,25 +285,25 @@ impl Input {
             self.non_witness_utxo = None; // Clear out any non-witness UTXO when we set a witness one
         }
 
-        self.partial_sigs.extend(other.partial_sigs);
-        self.bip32_derivations.extend(other.bip32_derivations);
-        self.ripemd160_preimages.extend(other.ripemd160_preimages);
-        self.sha256_preimages.extend(other.sha256_preimages);
-        self.hash160_preimages.extend(other.hash160_preimages);
-        self.hash256_preimages.extend(other.hash256_preimages);
-        self.tap_script_sigs.extend(other.tap_script_sigs);
-        self.tap_scripts.extend(other.tap_scripts);
-        self.tap_key_origins.extend(other.tap_key_origins);
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
-
-        combine!(redeem_script, self, other);
-        combine!(witness_script, self, other);
-        combine!(final_script_sig, self, other);
-        combine!(final_script_witness, self, other);
-        combine!(tap_key_sig, self, other);
-        combine!(tap_internal_key, self, other);
-        combine!(tap_merkle_root, self, other);
+        combine_map!(partial_sigs, self, other);
+        // TODO: Why do we not combine sighash_type?
+        combine_option!(redeem_script, self, other);
+        combine_option!(witness_script, self, other);
+        combine_map!(bip32_derivations, self, other);
+        combine_option!(final_script_sig, self, other);
+        combine_option!(final_script_witness, self, other);
+        combine_map!(ripemd160_preimages, self, other);
+        combine_map!(sha256_preimages, self, other);
+        combine_map!(hash160_preimages, self, other);
+        combine_map!(hash256_preimages, self, other);
+        combine_option!(tap_key_sig, self, other);
+        combine_map!(tap_script_sigs, self, other);
+        combine_map!(tap_scripts, self, other);
+        combine_map!(tap_key_origins, self, other);
+        combine_option!(tap_internal_key, self, other);
+        combine_option!(tap_merkle_root, self, other);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
     }
 }
 

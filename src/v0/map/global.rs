@@ -281,8 +281,9 @@ impl Global {
             }
         }
 
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
+
         Ok(())
     }
 }
