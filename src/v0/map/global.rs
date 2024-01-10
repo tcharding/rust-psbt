@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use core::convert::TryFrom;
-use core::{cmp, fmt};
+use core::fmt;
 
 use bitcoin::bip32::{self, ChildNumber, DerivationPath, Fingerprint, KeySource, Xpub};
 // TODO: This should be exposed like this in rust-bitcoin.
@@ -18,7 +18,7 @@ use crate::consts::{
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{self, Cursor, Read};
 use crate::prelude::*;
-use crate::v0::error::{CombineError, UnsignedTxChecksError};
+use crate::v0::error::UnsignedTxChecksError;
 use crate::v0::map::Map;
 use crate::version::Version;
 use crate::{consts, raw, serialize, V0};
@@ -234,17 +234,19 @@ impl Global {
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
     pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
         if self.unsigned_tx != other.unsigned_tx {
-            return Err(CombineError::UnexpectedUnsignedTx {
-                expected: Box::new(self.unsigned_tx.clone()),
-                actual: Box::new(other.unsigned_tx),
+            return Err(CombineError::UnsignedTxMismatch {
+                this: Box::new(self.unsigned_tx.clone()),
+                that: Box::new(other.unsigned_tx),
             });
+        }
+
+        // Combining different versions of PSBT without explicit conversion is out of scope.
+        if self.version != other.version {
+            return Err(CombineError::VersionMismatch { this: self.version, that: other.version });
         }
 
         // BIP 174: The Combiner must remove any duplicate key-value pairs, in accordance with
         //          the specification. It can pick arbitrarily when conflicts occur.
-
-        // Keeping the highest version
-        self.version = cmp::max(self.version, other.version);
 
         // Merging xpubs
         for (xpub, (fingerprint1, derivation1)) in other.xpubs {
@@ -511,4 +513,60 @@ impl From<consensus::Error> for InsertPairError {
 
 impl From<bip32::Error> for InsertPairError {
     fn from(e: bip32::Error) -> Self { Self::Bip32(e) }
+}
+
+/// Error combining two global maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// The unsigned transactions are not the same.
+    UnsignedTxMismatch {
+        /// Attempted to combine a PBST with `this` transaction.
+        this: Box<Transaction>,
+        /// Into a PBST with `that` transaction.
+        that: Box<Transaction>,
+    },
+    ///
+    VersionMismatch {
+        /// Attempted to combine a PBST with `this` version.
+        this: Version,
+        /// Into a PBST with `that` version.
+        that: Version,
+    },
+    /// Xpubs have inconsistent key sources.
+    InconsistentKeySources(InconsistentKeySourcesError),
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            UnsignedTxMismatch { ref this, ref that } => write!(
+                f,
+                "combine two PSBTs with different unsigned transactions: {:?} {:?}",
+                this, that
+            ),
+            VersionMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different versions: {:?} {:?}", this, that),
+            InconsistentKeySources(ref e) =>
+                write_err!(f, "combine with inconsistent key sources"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            InconsistentKeySources(ref e) => Some(e),
+            UnsignedTxMismatch { .. } | VersionMismatch { .. } => None,
+        }
+    }
+}
+
+impl From<InconsistentKeySourcesError> for CombineError {
+    fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
 }

@@ -26,11 +26,11 @@ use bitcoin::{ecdsa, Amount, ScriptBuf};
 
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
-use crate::v0::map::Map;
+use crate::v0::map::{global, Map};
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use self::{
-    error::{IndexOutOfBoundsError, SignerChecksError, SignError, CombineError, UnsignedTxChecksError, DeserializePsbtError},
+    error::{IndexOutOfBoundsError, SignerChecksError, SignError, UnsignedTxChecksError, DeserializePsbtError},
     map::{Input, Output, Global},
 };
 
@@ -170,7 +170,7 @@ impl Psbt {
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP 174.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
+    pub fn combine(&mut self, other: Self) -> Result<(), global::CombineError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {

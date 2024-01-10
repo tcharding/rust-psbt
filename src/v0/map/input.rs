@@ -278,7 +278,7 @@ impl Input {
 
     /// Combines this [`Input`] with `other` `Input` (as described by BIP 174).
     pub fn combine(&mut self, other: Self) {
-        combine!(non_witness_utxo, self, other);
+        combine_option!(non_witness_utxo, self, other);
 
         if let (&None, Some(witness_utxo)) = (&self.witness_utxo, other.witness_utxo) {
             self.witness_utxo = Some(witness_utxo);
