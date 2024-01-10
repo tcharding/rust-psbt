@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: CC0-1.0
 
+/// Combines the given `$thing` field of two types by setting `self.thing` to be
+/// the value in `other.thing` iff `self.thing` is currently empty.
+///
+/// If `self.thing` already contains a value then this macro does nothing.
 #[allow(unused_macros)]
 macro_rules! combine {
     ($thing:ident, $slf:ident, $other:ident) => {
