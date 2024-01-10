@@ -24,7 +24,7 @@ use crate::version::Version;
 use crate::{consts, raw, serialize, V0};
 
 /// The global key-value map.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Global {
@@ -235,8 +235,8 @@ impl Global {
     pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
         if self.unsigned_tx != other.unsigned_tx {
             return Err(CombineError::UnexpectedUnsignedTx {
-                expected: self.unsigned_tx.clone(),
-                actual: other.unsigned_tx,
+                expected: Box::new(self.unsigned_tx.clone()),
+                actual: Box::new(other.unsigned_tx),
             });
         }
 

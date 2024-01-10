@@ -73,7 +73,7 @@ impl Deserialize for Pair {
 ///
 /// We do not carry the `keylen` around, we just create the `VarInt` length when serializing and
 /// deserializing.
-#[derive(Debug, PartialEq, Hash, Eq, Clone, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Key {
@@ -136,7 +136,7 @@ pub type ProprietaryType = u8;
 
 /// Proprietary keys (i.e. keys starting with 0xFC byte) with their internal
 /// structure according to BIP 174.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct ProprietaryKey<Subtype = ProprietaryType>
@@ -171,7 +171,8 @@ where
     /// Constructs a [`ProprietaryKey`] from a [`Key`].
     ///
     /// # Errors
-    /// Returns [`Error::InvalidProprietaryKey`] if `key` does not start with `0xFC` byte.
+    ///
+    /// Returns [`serialize::Error::InvalidProprietaryKey`] if `key` does not start with `0xFC`.
     fn try_from(key: Key) -> Result<Self, Self::Error> {
         if key.type_value != 0xFC {
             return Err(serialize::Error::InvalidProprietaryKey);

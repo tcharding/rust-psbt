@@ -41,7 +41,7 @@ done
 
 cargo run --example v0
 cargo run --example v2
-cargo clippy --example v2-separate-creator-constructor
+cargo run --example v2-separate-creator-constructor
 
 if [ "$DO_NO_STD" = true ]
 then

@@ -55,3 +55,4 @@ required-features = ["std"]
 
 [[example]]
 name = "v2-separate-creator-constructor"
+required-features = ["std"]

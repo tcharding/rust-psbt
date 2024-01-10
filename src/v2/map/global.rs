@@ -32,7 +32,7 @@ const OUTPUTS_MODIFIABLE: u8 = 0x01 << 1;
 const SIGHASH_SINGLE: u8 = 0x01 << 2;
 
 /// The global key-value map.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Global {
@@ -127,6 +127,8 @@ impl Global {
         self.tx_modifiable_flags & OUTPUTS_MODIFIABLE > 0
     }
 
+    // TODO: Use this function?
+    #[allow(dead_code)]
     pub(crate) fn has_sighash_single(&self) -> bool {
         self.tx_modifiable_flags & SIGHASH_SINGLE > 0
     }
@@ -296,7 +298,7 @@ impl Global {
                         return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
                     },
                 v if v == PSBT_GLOBAL_UNSIGNED_TX =>
-                    return Err(InsertPairError::ExcludedKey { key_type_value: v }.into()),
+                    return Err(InsertPairError::ExcludedKey { key_type_value: v }),
                 _ => match unknowns.entry(pair.key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(pair.value);

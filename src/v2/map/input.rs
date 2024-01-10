@@ -33,7 +33,7 @@ use crate::{io, raw, serialize, v0};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Input {
@@ -839,6 +839,7 @@ mod test {
         // assert_eq!(back.taproot_hash_ty(), Err(InvalidSighashTypeError(nonstd)));
     }
 
+    #[cfg(feature = "std")]
     fn out_point() -> OutPoint {
         let txid = Txid::hash(b"some arbitrary bytes");
         let vout = 0xab;
@@ -846,6 +847,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn serialize_roundtrip() {
         let input = Input::new(out_point());
 
