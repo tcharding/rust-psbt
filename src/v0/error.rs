@@ -7,6 +7,7 @@ use core::fmt;
 use bitcoin::{sighash, FeeRate, Transaction};
 
 use crate::error::{write_err, InconsistentKeySourcesError};
+use crate::prelude::Box;
 use crate::v0::map::{global, input, output};
 use crate::v0::Psbt;
 
@@ -309,9 +310,9 @@ pub enum CombineError {
     /// Attempting to combine with a PSBT describing a different unsigned transaction.
     UnexpectedUnsignedTx {
         /// Expected transaction.
-        expected: Transaction,
+        expected: Box<Transaction>,
         /// Actual transaction.
-        actual: Transaction,
+        actual: Box<Transaction>,
     },
     /// Global extended public key has inconsistent key sources.
     InconsistentKeySources(InconsistentKeySourcesError),
