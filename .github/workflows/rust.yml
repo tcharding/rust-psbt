@@ -19,6 +19,8 @@ jobs:
       - name: Checkout Toolchain
         # https://github.com/dtolnay/rust-toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install clippy
+        run: rustup component add clippy
       - name: Running test script
         env:
           DO_LINT: true
