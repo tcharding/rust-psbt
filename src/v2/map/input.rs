@@ -839,6 +839,7 @@ mod test {
         // assert_eq!(back.taproot_hash_ty(), Err(InvalidSighashTypeError(nonstd)));
     }
 
+    #[cfg(feature = "std")]
     fn out_point() -> OutPoint {
         let txid = Txid::hash(b"some arbitrary bytes");
         let vout = 0xab;
@@ -846,6 +847,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn serialize_roundtrip() {
         let input = Input::new(out_point());
 

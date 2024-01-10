@@ -346,6 +346,7 @@ impl From<serialize::Error> for InsertPairError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests {
     use super::*;
 
