@@ -60,6 +60,8 @@ pub use self::display_from_str::PsbtParseError;
 pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputError};
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
+///
+/// This function is commutative `combine(this, that) = combine(that, this)`.
 pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
     this.combine_with(that)
 }
@@ -659,7 +661,11 @@ impl Psbt {
 
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP-174.
     ///
-    /// In accordance with BIP-174 this function is commutative i.e., `A.combine(B) == B.combine(A)`.
+    /// BIP-370 does not include any additional requirements for the Combiner role.
+    ///
+    /// This function is commutative `A.combine_with(B) = B.combine_with(A)`.
+    ///
+    /// See [`combine()`] for a non-consuming version of this function.
     pub fn combine_with(mut self, other: Self) -> Result<Psbt, InconsistentKeySourcesError> {
         self.global.combine(other.global)?;
 

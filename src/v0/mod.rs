@@ -38,6 +38,13 @@ pub use self::{
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
 
+/// Combines these two PSBTs as described by BIP-174.
+///
+/// This function is commutative `combine(this, that) = combine(that, this)`.
+pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, global::CombineError> {
+    this.combine_with(that)
+}
+
 /// A Partially Signed Transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -167,21 +174,23 @@ impl Psbt {
         Ok(psbt)
     }
 
-    /// Combines this [`Psbt`] with `other` PSBT as described by BIP 174.
+    /// Combines this [`Psbt`] with `other` PSBT as described by BIP-174.
     ///
-    /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), global::CombineError> {
+    /// This function is commutative `A.combine_with(B) == B.combine_with(A)`
+    pub fn combine_with(mut self, other: Self) -> Result<Psbt, global::CombineError> {
+        // Errors if this PSBT and other do not contain the same unsigned transaction.
         self.global.combine(other.global)?;
 
+        // Ok to zip because inputs vectors are always equal to the unsigned tx input vector and we
+        // checked already that both PSBTs have the same unsigned tx. Some for outputs below.
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {
             self_input.combine(other_input);
         }
-
         for (self_output, other_output) in self.outputs.iter_mut().zip(other.outputs.into_iter()) {
             self_output.combine(other_output);
         }
 
-        Ok(())
+        Ok(self)
     }
 
     /// Returns `Ok` if PSBT is
@@ -1284,27 +1293,33 @@ mod tests {
 
     // PSBTs taken from BIP 174 test vectors.
     #[test]
-    fn combine_psbts() {
-        let mut psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
+    fn combine_works() {
+        let psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
         let psbt2 = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
-        let psbt_combined = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
+        let want = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
 
-        psbt1.combine(psbt2).expect("psbt combine to succeed");
-        assert_eq!(psbt1, psbt_combined);
+        let got = psbt1.clone().combine_with(psbt2.clone()).expect("failed to combine_with");
+        assert_eq!(got, want);
+
+        // Sanity check, combine works as well.
+        let got = combine(psbt1, psbt2).expect("failed to combine");
+        assert_eq!(got, want);
     }
 
     #[test]
-    fn combine_psbts_commutative() {
-        let mut psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
-        let mut psbt2 = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
+    fn combine_is_commutative() {
+        let psbt1 = hex_psbt(include_str!("../../tests/data/psbt1.hex")).unwrap();
+        let psbt2 = hex_psbt(include_str!("../../tests/data/psbt2.hex")).unwrap();
 
-        let psbt1_clone = psbt1.clone();
-        let psbt2_clone = psbt2.clone();
+        // `combine_with` consumes.
+        let a = psbt1.clone().combine_with(psbt2.clone()).expect("failed to combine 1 with 2");
+        let b = psbt2.clone().combine_with(psbt1.clone()).expect("failed to combine 2 with 1");
+        assert_eq!(a, b);
 
-        psbt1.combine(psbt2_clone).expect("psbt1 combine to succeed");
-        psbt2.combine(psbt1_clone).expect("psbt2 combine to succeed");
-
-        assert_eq!(psbt1, psbt2);
+        // Sanity check, combine works as well.
+        let a = combine(psbt1.clone(), psbt2.clone());
+        let b = combine(psbt2, psbt1);
+        assert_eq!(a, b);
     }
 
     #[cfg(feature = "rand-std")]
