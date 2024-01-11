@@ -185,16 +185,28 @@ impl Output {
     }
 
     /// Combines this [`Output`] with `other` `Output` (as described by BIP 174).
-    pub fn combine(&mut self, other: Self) {
-        self.bip32_derivations.extend(other.bip32_derivations);
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
-        self.tap_key_origins.extend(other.tap_key_origins);
+    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
+        if self.amount != other.amount {
+            return Err(CombineError::AmountMismatch { this: self.amount, that: other.amount });
+        }
 
-        combine!(redeem_script, self, other);
-        combine!(witness_script, self, other);
-        combine!(tap_internal_key, self, other);
-        combine!(tap_tree, self, other);
+        if self.script_pubkey != other.script_pubkey {
+            return Err(CombineError::ScriptPubkeyMismatch {
+                this: self.script_pubkey.clone(),
+                that: other.script_pubkey,
+            });
+        }
+
+        combine_option!(redeem_script, self, other);
+        combine_option!(witness_script, self, other);
+        combine_map!(bip32_derivations, self, other);
+        combine_option!(tap_internal_key, self, other);
+        combine_option!(tap_tree, self, other);
+        combine_map!(tap_key_origins, self, other);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
+
+        Ok(())
     }
 }
 
@@ -343,6 +355,50 @@ impl std::error::Error for InsertPairError {
 
 impl From<serialize::Error> for InsertPairError {
     fn from(e: serialize::Error) -> Self { Self::Deser(e) }
+}
+
+/// Error combining two output maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// The amounts are not the same.
+    AmountMismatch {
+        /// Attempted to combine a PBST with `this` previous txid.
+        this: Amount,
+        /// Into a PBST with `that` previous txid.
+        that: Amount,
+    },
+    /// The script_pubkeys are not the same.
+    ScriptPubkeyMismatch {
+        /// Attempted to combine a PBST with `this` script_pubkey.
+        this: ScriptBuf,
+        /// Into a PBST with `that` script_pubkey.
+        that: ScriptBuf,
+    },
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            AmountMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different amounts: {} {}", this, that),
+            ScriptPubkeyMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different script_pubkeys: {:x} {:x}", this, that),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            AmountMismatch { .. } | ScriptPubkeyMismatch { .. } => None,
+        }
+    }
 }
 
 #[cfg(test)]

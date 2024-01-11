@@ -672,7 +672,7 @@ impl Psbt {
         }
 
         for (self_output, other_output) in self.outputs.iter_mut().zip(other.outputs.into_iter()) {
-            self_output.combine(other_output);
+            self_output.combine(other_output)?;
         }
 
         Ok(self)
@@ -1306,6 +1306,8 @@ pub enum CombineError {
     Global(global::CombineError),
     /// Error while combining the input maps.
     Input(input::CombineError),
+    /// Error while combining the output maps.
+    Output(output::CombineError),
 }
 
 impl fmt::Display for CombineError {
@@ -1315,6 +1317,7 @@ impl fmt::Display for CombineError {
         match *self {
             Global(ref e) => write_err!(f, "error while combining the global maps"; e),
             Input(ref e) => write_err!(f, "error while combining the input maps"; e),
+            Output(ref e) => write_err!(f, "error while combining the output maps"; e),
         }
     }
 }
@@ -1327,6 +1330,7 @@ impl std::error::Error for CombineError {
         match *self {
             Global(ref e) => Some(e),
             Input(ref e) => Some(e),
+            Output(ref e) => Some(e),
         }
     }
 }
@@ -1337,4 +1341,8 @@ impl From<global::CombineError> for CombineError {
 
 impl From<input::CombineError> for CombineError {
     fn from(e: input::CombineError) -> Self { Self::Input(e) }
+}
+
+impl From<output::CombineError> for CombineError {
+    fn from(e: output::CombineError) -> Self { Self::Output(e) }
 }
