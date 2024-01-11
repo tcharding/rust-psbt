@@ -547,34 +547,55 @@ impl Input {
         Ok(())
     }
 
-    /// Combines this [`Input`] with `other` `Input` (as described by BIP 174).
-    pub fn combine(&mut self, other: Self) {
-        combine!(non_witness_utxo, self, other);
+    /// Combines this [`Input`] with `other`.
+    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
+        if self.previous_txid != other.previous_txid {
+            return Err(CombineError::PreviousTxidMismatch {
+                this: self.previous_txid,
+                that: other.previous_txid,
+            });
+        }
 
+        if self.spent_output_index != other.spent_output_index {
+            return Err(CombineError::SpentOutputIndexMismatch {
+                this: self.spent_output_index,
+                that: other.spent_output_index,
+            });
+        }
+
+        // TODO: Should we keep any value other than Sequence::MAX since it is default?
+        combine_option!(sequence, self, other);
+        combine_option!(min_time, self, other);
+        combine_option!(min_height, self, other);
+        combine_option!(non_witness_utxo, self, other);
+
+        // TODO: Copied from v0, confirm this is correct.
         if let (&None, Some(witness_utxo)) = (&self.witness_utxo, other.witness_utxo) {
             self.witness_utxo = Some(witness_utxo);
             self.non_witness_utxo = None; // Clear out any non-witness UTXO when we set a witness one
         }
 
-        self.partial_sigs.extend(other.partial_sigs);
-        self.bip32_derivations.extend(other.bip32_derivations);
-        self.ripemd160_preimages.extend(other.ripemd160_preimages);
-        self.sha256_preimages.extend(other.sha256_preimages);
-        self.hash160_preimages.extend(other.hash160_preimages);
-        self.hash256_preimages.extend(other.hash256_preimages);
-        self.tap_script_sigs.extend(other.tap_script_sigs);
-        self.tap_scripts.extend(other.tap_scripts);
-        self.tap_key_origins.extend(other.tap_key_origins);
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
+        combine_map!(partial_sigs, self, other);
+        // TODO: Why do we not combine sighash_type?
+        combine_option!(redeem_script, self, other);
+        combine_option!(witness_script, self, other);
+        combine_map!(bip32_derivations, self, other);
+        combine_option!(final_script_sig, self, other);
+        combine_option!(final_script_witness, self, other);
+        combine_map!(ripemd160_preimages, self, other);
+        combine_map!(sha256_preimages, self, other);
+        combine_map!(hash160_preimages, self, other);
+        combine_map!(hash256_preimages, self, other);
+        combine_option!(tap_key_sig, self, other);
+        combine_map!(tap_script_sigs, self, other);
+        combine_map!(tap_scripts, self, other);
+        combine_map!(tap_key_origins, self, other);
+        combine_option!(tap_internal_key, self, other);
+        combine_option!(tap_merkle_root, self, other);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
 
-        combine!(redeem_script, self, other);
-        combine!(witness_script, self, other);
-        combine!(final_script_sig, self, other);
-        combine!(final_script_witness, self, other);
-        combine!(tap_key_sig, self, other);
-        combine!(tap_internal_key, self, other);
-        combine!(tap_merkle_root, self, other);
+        Ok(())
     }
 }
 
@@ -926,6 +947,52 @@ impl fmt::Display for FinalizeError {
 #[cfg(all(feature = "std", feature = "miniscript"))]
 impl std::error::Error for FinalizeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+/// Error combining two input maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// The previous txids are not the same.
+    PreviousTxidMismatch {
+        /// Attempted to combine a PBST with `this` previous txid.
+        this: Txid,
+        /// Into a PBST with `that` previous txid.
+        that: Txid,
+    },
+    /// The spent output indecies are not the same.
+    SpentOutputIndexMismatch {
+        /// Attempted to combine a PBST with `this` spent output index.
+        this: u32,
+        /// Into a PBST with `that` spent output index.
+        that: u32,
+    },
+}
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            PreviousTxidMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different previous txids: {:?} {:?}", this, that),
+            SpentOutputIndexMismatch { ref this, ref that } => write!(
+                f,
+                "combine two PSBTs with different spent output indecies: {:?} {:?}",
+                this, that
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            PreviousTxidMismatch { .. } | SpentOutputIndexMismatch { .. } => None,
+        }
+    }
 }
 
 #[cfg(test)]
