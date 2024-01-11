@@ -38,7 +38,7 @@ pub struct Output {
     /// A map from public keys needed to spend this output to their
     /// corresponding master key fingerprints and derivation paths.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
-    pub bip32_derivation: BTreeMap<secp256k1::PublicKey, KeySource>,
+    pub bip32_derivations: BTreeMap<secp256k1::PublicKey, KeySource>,
     /// The internal pubkey.
     pub tap_internal_key: Option<XOnlyPublicKey>,
     /// Taproot Output tree.
@@ -48,10 +48,10 @@ pub struct Output {
     pub tap_key_origins: BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
     /// Proprietary key-value pairs for this output.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
+    pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown key-value pairs for this output.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub unknown: BTreeMap<raw::Key, Vec<u8>>,
+    pub unknowns: BTreeMap<raw::Key, Vec<u8>>,
 }
 
 impl Output {
@@ -62,12 +62,12 @@ impl Output {
             script_pubkey: utxo.script_pubkey,
             redeem_script: None,
             witness_script: None,
-            bip32_derivation: BTreeMap::new(),
+            bip32_derivations: BTreeMap::new(),
             tap_internal_key: None,
             tap_tree: None,
             tap_key_origins: BTreeMap::new(),
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
+            proprietaries: BTreeMap::new(),
+            unknowns: BTreeMap::new(),
         }
     }
 
@@ -76,12 +76,12 @@ impl Output {
         v0::Output {
             redeem_script: self.redeem_script,
             witness_script: self.witness_script,
-            bip32_derivations: self.bip32_derivation,
+            bip32_derivations: self.bip32_derivations,
             tap_internal_key: self.tap_internal_key,
             tap_tree: self.tap_tree,
             tap_key_origins: self.tap_key_origins,
-            proprietaries: self.proprietary,
-            unknowns: self.unknown,
+            proprietaries: self.proprietaries,
+            unknowns: self.unknowns,
         }
     }
 
@@ -143,12 +143,12 @@ impl Output {
             }
             PSBT_OUT_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
-                    self.bip32_derivation <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
+                    self.bip32_derivations <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
             PSBT_OUT_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
-                match self.proprietary.entry(key) {
+                match self.proprietaries.entry(key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(raw_value);
                     }
@@ -172,7 +172,7 @@ impl Output {
                 }
             }
             // Note, PSBT v2 does not exclude any keys from the input map.
-            _ => match self.unknown.entry(raw_key) {
+            _ => match self.unknowns.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
                 }
@@ -186,9 +186,9 @@ impl Output {
 
     /// Combines this [`Output`] with `other` `Output` (as described by BIP 174).
     pub fn combine(&mut self, other: Self) {
-        self.bip32_derivation.extend(other.bip32_derivation);
-        self.proprietary.extend(other.proprietary);
-        self.unknown.extend(other.unknown);
+        self.bip32_derivations.extend(other.bip32_derivations);
+        self.proprietaries.extend(other.proprietaries);
+        self.unknowns.extend(other.unknowns);
         self.tap_key_origins.extend(other.tap_key_origins);
 
         combine!(redeem_script, self, other);
@@ -221,7 +221,7 @@ impl Map for Output {
         }
 
         impl_psbt_get_pair! {
-            rv.push_map(self.bip32_derivation, PSBT_OUT_BIP32_DERIVATION)
+            rv.push_map(self.bip32_derivations, PSBT_OUT_BIP32_DERIVATION)
         }
 
         impl_psbt_get_pair! {
@@ -236,11 +236,11 @@ impl Map for Output {
             rv.push_map(self.tap_key_origins, PSBT_OUT_TAP_BIP32_DERIVATION)
         }
 
-        for (key, value) in self.proprietary.iter() {
+        for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
 
-        for (key, value) in self.unknown.iter() {
+        for (key, value) in self.unknowns.iter() {
             rv.push(raw::Pair { key: key.clone(), value: value.clone() });
         }
 
