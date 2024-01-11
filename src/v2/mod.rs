@@ -42,7 +42,7 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, FeeError, FundingUtxoError, InconsistentKeySourcesError};
+use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::{global, input, output, Map};
@@ -62,7 +62,7 @@ pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputEr
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 ///
 /// This function is commutative `combine(this, that) = combine(that, this)`.
-pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
+pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, global::CombineError> {
     this.combine_with(that)
 }
 // TODO: Consider adding an iterator API that combines a list of PSBTs.
@@ -666,7 +666,7 @@ impl Psbt {
     /// This function is commutative `A.combine_with(B) = B.combine_with(A)`.
     ///
     /// See [`combine()`] for a non-consuming version of this function.
-    pub fn combine_with(mut self, other: Self) -> Result<Psbt, InconsistentKeySourcesError> {
+    pub fn combine_with(mut self, other: Self) -> Result<Psbt, global::CombineError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {

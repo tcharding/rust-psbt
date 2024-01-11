@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use core::convert::TryFrom;
-use core::{cmp, fmt};
+use core::fmt;
 
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, KeySource, Xpub};
 use bitcoin::consensus::encode::MAX_VEC_SIZE;
@@ -350,12 +350,22 @@ impl Global {
     /// Combines [`Global`] with `other`.
     ///
     /// In accordance with BIP 174 this function is commutative i.e., `A.combine(B) == B.combine(A)`
-    pub fn combine(&mut self, other: Self) -> Result<(), InconsistentKeySourcesError> {
+    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
+        // Combining different versions of PSBT without explicit conversion is out of scope.
+        if self.version != other.version {
+            return Err(CombineError::VersionMismatch { this: self.version, that: other.version });
+        }
+
+        // No real reason to support this either.
+        if self.tx_version != other.tx_version {
+            return Err(CombineError::TxVersionMismatch {
+                this: self.tx_version,
+                that: other.tx_version,
+            });
+        }
+
         // BIP 174: The Combiner must remove any duplicate key-value pairs, in accordance with
         //          the specification. It can pick arbitrarily when conflicts occur.
-
-        // Keeping the highest version
-        self.version = cmp::max(self.version, other.version);
 
         // Merging xpubs
         for (xpub, (fingerprint1, derivation1)) in other.xpubs {
@@ -387,13 +397,14 @@ impl Global {
                         entry.insert((fingerprint1, derivation1));
                         continue;
                     }
-                    return Err(InconsistentKeySourcesError(xpub));
+                    return Err(InconsistentKeySourcesError(xpub).into());
                 }
             }
         }
 
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
+
         Ok(())
     }
 }
@@ -624,4 +635,57 @@ impl From<consensus::Error> for InsertPairError {
 
 impl From<bip32::Error> for InsertPairError {
     fn from(e: bip32::Error) -> Self { Self::Bip32(e) }
+}
+
+/// Error combining two global maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// The version numbers are not the same.
+    VersionMismatch {
+        /// Attempted to combine a PBST with `this` version.
+        this: Version,
+        /// Into a PBST with `that` version.
+        that: Version,
+    },
+    /// The transaction version numbers are not the same.
+    TxVersionMismatch {
+        /// Attempted to combine a PBST with `this` tx version.
+        this: transaction::Version,
+        /// Into a PBST with `that` tx version.
+        that: transaction::Version,
+    },
+    /// Xpubs have inconsistent key sources.
+    InconsistentKeySources(InconsistentKeySourcesError),
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            VersionMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different versions: {:?} {:?}", this, that),
+            TxVersionMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different tx versions: {:?} {:?}", this, that),
+            InconsistentKeySources(ref e) =>
+                write_err!(f, "combine with inconsistent key sources"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            InconsistentKeySources(ref e) => Some(e),
+            VersionMismatch { .. } | TxVersionMismatch { .. } => None,
+        }
+    }
+}
+
+impl From<InconsistentKeySourcesError> for CombineError {
+    fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
 }
