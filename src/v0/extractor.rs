@@ -60,8 +60,23 @@ impl Psbt {
     /// [`extract_tx_fee_rate_limit`]: Psbt::extract_tx_fee_rate_limit
     pub fn extract_tx_unchecked_fee_rate(self) -> Transaction { self.internal_extract_tx() }
 
+    // TODO: This is incomplete, it does not do the checks specified in the bip.
     #[inline]
     fn internal_extract_tx(self) -> Transaction {
+        // The Transaction Extractor must only accept a PSBT. It checks whether all inputs have
+        // complete scriptSigs and scriptWitnesses by checking for the presence of 0x07 Finalized
+        // scriptSig and 0x08 Finalized scriptWitness typed records. If they do, the Transaction
+        // Extractor should construct complete scriptSigs and scriptWitnesses and encode them into
+        // network serialized transactions. Otherwise the Extractor must not modify the PSBT. The
+        // Extractor should produce a fully valid, network serialized transaction if all inputs are
+        // complete.
+
+        // The Transaction Extractor does not need to know how to interpret scripts in order to
+        // extract the network serialized transaction. However it may be able to in order to
+        // validate the network serialized transaction at the same time.
+
+        // A single entity is likely to be both a Transaction Extractor and an Input Finalizer.
+
         let mut tx: Transaction = self.global.unsigned_tx;
 
         for (vin, psbtin) in tx.input.iter_mut().zip(self.inputs.into_iter()) {
