@@ -182,6 +182,82 @@ impl Input {
         }
     }
 
+    /// Creates a new finalized input.
+    ///
+    /// Note the `Witness` is not optional because `miniscript` returns an empty `Witness` in the
+    /// case that this is a legacy input.
+    ///
+    /// The `final_script_sig` and `final_script_witness` should come from `miniscript`.
+    #[cfg(feature = "miniscript")]
+    pub(crate) fn finalize(
+        &self,
+        final_script_sig: ScriptBuf,
+        final_script_witness: Witness,
+    ) -> Result<Input, FinalizeError> {
+        debug_assert!(self.has_funding_utxo());
+
+        let mut ret = Input {
+            previous_txid: self.previous_txid,
+            spent_output_index: self.spent_output_index,
+            non_witness_utxo: self.non_witness_utxo.clone(),
+            witness_utxo: self.witness_utxo.clone(),
+
+            // Set below.
+            final_script_sig: None,
+            final_script_witness: None,
+
+            // Clear everything else.
+            sequence: None,
+            min_time: None,
+            min_height: None,
+            partial_sigs: BTreeMap::new(),
+            sighash_type: None,
+            redeem_script: None,
+            witness_script: None,
+            bip32_derivations: BTreeMap::new(),
+            ripemd160_preimages: BTreeMap::new(),
+            sha256_preimages: BTreeMap::new(),
+            hash160_preimages: BTreeMap::new(),
+            hash256_preimages: BTreeMap::new(),
+            tap_key_sig: None,
+            tap_script_sigs: BTreeMap::new(),
+            tap_scripts: BTreeMap::new(),
+            tap_key_origins: BTreeMap::new(),
+            tap_internal_key: None,
+            tap_merkle_root: None,
+            proprietaries: BTreeMap::new(),
+            unknowns: BTreeMap::new(),
+        };
+
+        // TODO: These errors should only trigger if there are bugs in this crate or miniscript.
+        // Is there an infallible way to do this?
+        if self.witness_utxo.is_some() {
+            if final_script_witness.is_empty() {
+                return Err(FinalizeError::EmptyWitness);
+            }
+            ret.final_script_sig = Some(final_script_sig);
+            ret.final_script_witness = Some(final_script_witness);
+        } else {
+            // TODO: Any checks should do here?
+            ret.final_script_sig = Some(final_script_sig);
+        }
+
+        Ok(ret)
+    }
+
+    // TODO: Work out if this is in line with bip-370
+    #[cfg(feature = "miniscript")]
+    pub(crate) fn lock_time(&self) -> absolute::LockTime {
+        match (self.min_height, self.min_time) {
+            // If we have both, bip says use height.
+            (Some(height), Some(_)) => height.into(),
+            (Some(height), None) => height.into(),
+            (None, Some(time)) => time.into(),
+            // TODO: Check this is correct.
+            (None, None) => absolute::LockTime::ZERO,
+        }
+    }
+
     pub(crate) fn has_lock_time(&self) -> bool {
         self.min_time.is_some() || self.min_height.is_some()
     }
@@ -201,18 +277,38 @@ impl Input {
     }
 
     /// Constructs a [`TxIn`] for this input, excluding any signature material.
-    pub(crate) fn tx_in(&self) -> TxIn {
+    pub(crate) fn unsigned_tx_in(&self) -> TxIn {
         TxIn {
             previous_output: self.out_point(),
             script_sig: ScriptBuf::default(),
+            // TODO: Check this ZERO is correct.
             sequence: self.sequence.unwrap_or(Sequence::ZERO),
             witness: Witness::default(),
         }
     }
 
+    /// Constructs a signed [`TxIn`] for this input.
+    ///
+    /// Should only be called on a finalized PSBT.
+    pub(crate) fn signed_tx_in(&self) -> TxIn {
+        debug_assert!(self.is_finalized());
+
+        let script_sig = self.final_script_sig.as_ref().expect("checked by is_finalized");
+        let witness = self.final_script_witness.as_ref().expect("checked by is_finalized");
+
+        TxIn {
+            previous_output: self.out_point(),
+            script_sig: script_sig.clone(),
+            // TODO: Check this MAX is correct.
+            sequence: self.sequence.unwrap_or(Sequence::MAX),
+            witness: witness.clone(),
+        }
+    }
+
+    #[cfg(feature = "miniscript")]
+    pub(crate) fn has_funding_utxo(&self) -> bool { self.funding_utxo().is_ok() }
+
     /// Returns a reference to the funding utxo for this input.
-    // TODO: This should not need an error path, it would be better to maintain an invariant that
-    // there exists a funding utxo.
     pub fn funding_utxo(&self) -> Result<&TxOut, FundingUtxoError> {
         if let Some(ref utxo) = self.witness_utxo {
             Ok(utxo)
@@ -224,11 +320,15 @@ impl Input {
         }
     }
 
-    /// TODO: Use this.
-    #[allow(dead_code)]
-    fn is_finalized(&self) -> bool {
-        // TODO: Confirm this covers taproot sigs?
-        self.final_script_sig.is_some() || self.final_script_witness.is_some()
+    /// Returns true if this input has been finalized.
+    ///
+    /// > It checks whether all inputs have complete scriptSigs and scriptWitnesses by checking for
+    /// the presence of 0x07 Finalized scriptSig and 0x08 Finalized scriptWitness typed records.
+    ///
+    /// Therefore a finalized input must have both `final_script_sig` and `final_script_witness`
+    /// fields set. For legacy transactions the `final_script_witness` will be an empty [`Witness`].
+    pub fn is_finalized(&self) -> bool {
+        self.final_script_sig.is_some() && self.final_script_witness.is_some()
     }
 
     /// TODO: Use this.
@@ -799,6 +899,33 @@ pub enum HashType {
 
 impl fmt::Display for HashType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", stringify!(self)) }
+}
+
+/// Error finalizing an input.
+#[cfg(feature = "miniscript")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FinalizeError {
+    /// Failed to create a final witness.
+    EmptyWitness,
+    /// Unexpected witness data.
+    UnexpectedWitness,
+}
+
+#[cfg(feature = "miniscript")]
+impl fmt::Display for FinalizeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use FinalizeError::*;
+
+        match *self {
+            EmptyWitness => write!(f, "failed to create a final witness"),
+            UnexpectedWitness => write!(f, "unexpected witness data"),
+        }
+    }
+}
+
+#[cfg(all(feature = "std", feature = "miniscript"))]
+impl std::error::Error for FinalizeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
 #[cfg(test)]

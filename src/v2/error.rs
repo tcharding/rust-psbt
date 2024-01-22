@@ -4,11 +4,11 @@
 
 use core::fmt;
 
-use bitcoin::{sighash, FeeRate, Transaction};
+use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
+use bitcoin::PublicKey;
 
 use crate::error::{write_err, FundingUtxoError};
 use crate::v2::map::{global, input, output};
-use crate::v2::Psbt;
 
 /// Error while deserializing a PSBT.
 ///
@@ -98,59 +98,6 @@ impl std::error::Error for IndexOutOfBoundsError {
 
         match *self {
             Inputs { .. } | Count { .. } => None,
-        }
-    }
-}
-
-/// This error is returned when extracting a [`Transaction`] from a PSBT..
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ExtractTxError {
-    /// The [`FeeRate`] is too high
-    AbsurdFeeRate {
-        /// The [`FeeRate`]
-        fee_rate: FeeRate,
-        /// The extracted [`Transaction`] (use this to ignore the error)
-        tx: Transaction,
-    },
-    /// One or more of the inputs lacks value information (witness_utxo or non_witness_utxo)
-    MissingInputValue {
-        /// The extracted [`Transaction`] (use this to ignore the error)
-        tx: Transaction,
-    },
-    /// Input value is less than Output Value, and the [`Transaction`] would be invalid.
-    SendingTooMuch {
-        /// The original `Psbt` is returned untouched.
-        psbt: Psbt,
-    },
-}
-
-impl fmt::Display for ExtractTxError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { fee_rate, .. } =>
-                write!(f, "An absurdly high fee rate of {}", fee_rate),
-            MissingInputValue { .. } => write!(
-                f,
-                "One of the inputs lacked value information (witness_utxo or non_witness_utxo)"
-            ),
-            SendingTooMuch { .. } => write!(
-                f,
-                "Transaction would be invalid due to output value being greater than input value."
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for ExtractTxError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { .. } | MissingInputValue { .. } | SendingTooMuch { .. } => None,
         }
     }
 }
@@ -302,9 +249,7 @@ impl fmt::Display for InputsNotModifiableError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for InputsNotModifiableError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
-}
+impl std::error::Error for InputsNotModifiableError {}
 
 /// Error when passing an PSBT with outputs not modifiable to an output adding `Constructor`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,4 +309,67 @@ impl fmt::Display for DetermineLockTimeError {
 #[cfg(feature = "std")]
 impl std::error::Error for DetermineLockTimeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+// TODO: Consider creating a type that has input_index and E and simplify all these similar error types?
+/// Error checking the partials sigs have correct sighash types.
+#[derive(Debug)]
+pub enum PartialSigsSighashTypeError {
+    /// Non-standard sighash type found in `input.sighash_type` field.
+    NonStandardInputSighashType {
+        /// The input index with the non-standard sighash type.
+        input_index: usize,
+        /// The non-standard sighash type error.
+        error: NonStandardSighashTypeError,
+    },
+    /// Non-standard sighash type found in `input.partial_sigs`.
+    NonStandardPartialSigsSighashType {
+        /// The input index with the non-standard sighash type.
+        input_index: usize,
+        /// The non-standard sighash type error.
+        error: NonStandardSighashTypeError,
+    },
+    /// Wrong sighash flag in partial signature.
+    WrongSighashFlag {
+        /// The input index with the wrong sighash flag.
+        input_index: usize,
+        /// The sighash type we got.
+        got: EcdsaSighashType,
+        /// The sighash type we require.
+        required: EcdsaSighashType,
+        /// The associated pubkey (key into the `input.partial_sigs` map).
+        pubkey: PublicKey,
+    },
+}
+
+impl fmt::Display for PartialSigsSighashTypeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use PartialSigsSighashTypeError::*;
+
+        match *self {
+            NonStandardInputSighashType { input_index, ref error } =>
+                write_err!(f, "non-standard sighash type for input {} in sighash_type field", input_index; error),
+            NonStandardPartialSigsSighashType { input_index, ref error } =>
+                write_err!(f, "non-standard sighash type for input {} in partial_sigs", input_index; error),
+            WrongSighashFlag { input_index, got, required, pubkey } => write!(
+                f,
+                "wrong sighash flag for input {} (got: {}, required: {}) pubkey: {}",
+                input_index, got, required, pubkey
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for PartialSigsSighashTypeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use PartialSigsSighashTypeError::*;
+
+        // TODO: Is this correct for a struct error fields?
+        match *self {
+            NonStandardInputSighashType { input_index: _, ref error } => Some(error),
+            NonStandardPartialSigsSighashType { input_index: _, ref error } => Some(error),
+            WrongSighashFlag { .. } => None,
+        }
+    }
 }

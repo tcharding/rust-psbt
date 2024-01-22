@@ -15,7 +15,8 @@
 //! - The **Constructor**: Use the [`Constructor`] type.
 //! - The **Updater** role: Use the [`Updater`] type and then update additional fields of the [`Psbt`] directly.
 //! - The **Signer** role: Use the [`Signer`] type.
-//! - The **Transaction Extractor** role: TODO
+//! - The **Finalizer** role: Use the `Finalizer` type (requires "miniscript" feature).
+//! - The **Extractor** role: Use the [`Extractor`] type.
 //!
 //! To combine PSBTs use either `psbt.combine_with(other)` or `v2::combine(this, that)`.
 //!
@@ -23,8 +24,10 @@
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
 mod error;
-mod extractor;
+mod extract;
 mod map;
+#[cfg(feature = "miniscript")]
+mod miniscript;
 
 use core::fmt;
 use core::marker::PhantomData;
@@ -45,12 +48,16 @@ use crate::v0;
 use crate::v2::map::{global, input, output, Map};
 
 #[rustfmt::skip]                // Keep public exports separate.
+#[doc(inline)]
 pub use self::{
-    error::{IndexOutOfBoundsError, ExtractTxError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError},
+    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError, PartialSigsSighashTypeError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
+    extract::{ExtractTxError, ExtractTxFeeRateError, Extractor}
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::PsbtParseError;
+#[cfg(feature = "miniscript")]
+pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputError};
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
@@ -490,6 +497,8 @@ pub struct Psbt {
 }
 
 impl Psbt {
+    // TODO: Add inherent methods to get each of the role types.
+
     /// Returns this PSBT's unique identification.
     fn id(&self) -> Result<Txid, DetermineLockTimeError> {
         let mut tx = self.unsigned_tx()?;
@@ -509,7 +518,7 @@ impl Psbt {
         Ok(Transaction {
             version: self.global.tx_version,
             lock_time,
-            input: self.inputs.iter().map(|input| input.tx_in()).collect(),
+            input: self.inputs.iter().map(|input| input.unsigned_tx_in()).collect(),
             output: self.outputs.iter().map(|ouput| ouput.tx_out()).collect(),
         })
     }
@@ -564,6 +573,9 @@ impl Psbt {
 
         Ok(lock)
     }
+
+    /// Returns true if all inputs for this PSBT have been finalized.
+    pub fn is_finalized(&self) -> bool { self.inputs.iter().all(|input| input.is_finalized()) }
 
     /// Serialize a value as bytes in hex.
     pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
@@ -934,6 +946,38 @@ impl Psbt {
         }
 
         input_value.checked_sub(output_value).map(Amount::from_sat).ok_or(Negative)
+    }
+
+    /// Checks the sighash types of input partial sigs (ECDSA).
+    ///
+    /// This can be used at anytime but is primarily used during PSBT finalizing.
+    // TODO: Would pub(crate) be better?
+    // TODO: It would be nice if this was enforced by the typesystem and fields if the `Input`.
+    pub fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
+        use PartialSigsSighashTypeError::*;
+
+        for (input_index, input) in self.inputs.iter().enumerate() {
+            let target_ecdsa_sighash_ty = match input.sighash_type {
+                Some(psbt_hash_ty) => psbt_hash_ty
+                    .ecdsa_hash_ty()
+                    .map_err(|error| NonStandardInputSighashType { input_index, error })?,
+                None => EcdsaSighashType::All,
+            };
+
+            for (key, ecdsa_sig) in &input.partial_sigs {
+                let flag = EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32)
+                    .map_err(|error| NonStandardPartialSigsSighashType { input_index, error })?;
+                if target_ecdsa_sighash_ty != flag {
+                    return Err(WrongSighashFlag {
+                        input_index,
+                        required: target_ecdsa_sighash_ty,
+                        got: flag,
+                        pubkey: *key,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 }
 
