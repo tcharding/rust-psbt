@@ -211,6 +211,8 @@ impl Input {
     }
 
     /// Returns a reference to the funding utxo for this input.
+    // TODO: This should not need an error path, it would be better to maintain an invariant that
+    // there exists a funding utxo.
     pub fn funding_utxo(&self) -> Result<&TxOut, FundingUtxoError> {
         if let Some(ref utxo) = self.witness_utxo {
             Ok(utxo)
@@ -637,6 +639,22 @@ impl InputBuilder {
     /// Sets the [`Input::min_height`] field.
     pub fn minimum_required_height_based_lock_time(mut self, lock: absolute::Height) -> Self {
         self.0.min_height = Some(lock);
+        self
+    }
+
+    /// Funds this input with a segwit UTXO.
+    pub fn segwit_fund(mut self, utxo: TxOut) -> Self {
+        self.0.witness_utxo = Some(utxo);
+        self
+    }
+
+    /// Funds this input with a legacy UTXO.
+    ///
+    /// Caller to guarantee that this `tx` is correct for this input (i.e., has a txid equal to
+    /// `self.previous_txid`).
+    // TODO: Consider adding error checks that tx is correct.
+    pub fn legacy_fund(mut self, tx: Transaction) -> Self {
+        self.0.non_witness_utxo = Some(tx);
         self
     }
 
