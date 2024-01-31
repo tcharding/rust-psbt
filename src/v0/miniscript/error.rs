@@ -4,6 +4,7 @@ use core::fmt;
 
 use crate::bitcoin::{sighash, ScriptBuf};
 use crate::miniscript::{self, descriptor, interpreter};
+use crate::prelude::*;
 #[cfg(doc)]
 use crate::v0::Psbt;
 
