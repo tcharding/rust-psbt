@@ -378,6 +378,11 @@ impl Updater {
         Ok(Self(psbt))
     }
 
+    /// Returns this PSBT's unique identification.
+    pub fn id(&self) -> Txid {
+        self.0.id().expect("Updater guarantees lock time can be determined")
+    }
+
     /// Updater role, update the sequence number for input at `index`.
     pub fn set_sequence(
         mut self,
@@ -387,11 +392,6 @@ impl Updater {
         let input = self.0.checked_input_mut(input_index)?;
         input.sequence = Some(n);
         Ok(self)
-    }
-
-    /// Returns this PSBT's unique identification.
-    pub fn id(&self) -> Txid {
-        self.0.id().expect("Updater guarantees lock time can be determined")
     }
 
     /// Converts the inner PSBT v2 to a PSBT v0.
