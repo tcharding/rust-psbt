@@ -30,7 +30,7 @@ use crate::v0::map::{global, Map};
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 pub use self::{
-    error::{IndexOutOfBoundsError, SignerChecksError, SignError, UnsignedTxChecksError, DeserializePsbtError},
+    error::{IndexOutOfBoundsError, SignerChecksError, SignError, UnsignedTxChecksError, DeserializeError},
     map::{Input, Output, Global},
 };
 
@@ -84,20 +84,19 @@ impl Psbt {
         buf
     }
 
-    // TODO: Change this to use DeserializePsbtError (although that name is shit) same as v2.
     /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializePsbtError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(DeserializePsbtError::InvalidMagic);
+            return Err(DeserializeError::InvalidMagic);
         }
 
         const PSBT_SERPARATOR: u8 = 0xff_u8;
         if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
-            return Err(DeserializePsbtError::InvalidSeparator);
+            return Err(DeserializeError::InvalidSeparator);
         }
 
-        let mut d = bytes.get(5..).ok_or(DeserializePsbtError::NoMorePairs)?;
+        let mut d = bytes.get(5..).ok_or(DeserializeError::NoMorePairs)?;
 
         let global = Global::decode(&mut d)?;
         global.unsigned_tx_checks()?;
@@ -565,7 +564,7 @@ mod display_from_str {
     #[non_exhaustive]
     pub enum PsbtParseError {
         /// Error in internal PSBT data structure.
-        PsbtEncoding(DeserializePsbtError),
+        PsbtEncoding(DeserializeError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }
@@ -808,7 +807,7 @@ mod tests {
     use crate::{io, raw, V0};
 
     #[track_caller]
-    pub fn hex_psbt(s: &str) -> Result<Psbt, DeserializePsbtError> {
+    pub fn hex_psbt(s: &str) -> Result<Psbt, DeserializeError> {
         let r: Result<Vec<u8>, bitcoin::hex::HexToBytesError> = Vec::from_hex(s);
         match r {
             Err(_e) => panic!("unable to parse hex string {}", s),

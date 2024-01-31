@@ -50,7 +50,7 @@ use crate::v2::map::{global, input, output, Map};
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
-    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError, PartialSigsSighashTypeError},
+    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
     extract::{ExtractTxError, ExtractTxFeeRateError, Extractor}
 };
@@ -603,8 +603,8 @@ impl Psbt {
     }
 
     /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializePsbtError> {
-        use DeserializePsbtError::*;
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
+        use DeserializeError::*;
 
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
@@ -1269,7 +1269,7 @@ mod display_from_str {
     #[non_exhaustive]
     pub enum PsbtParseError {
         /// Error in internal PSBT data structure.
-        PsbtEncoding(DeserializePsbtError),
+        PsbtEncoding(DeserializeError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }

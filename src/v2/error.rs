@@ -14,10 +14,9 @@ use crate::v2::map::{global, input, output};
 ///
 /// This error is returned when deserializing a complete PSBT, not for deserializing parts
 /// of it or individual data types.
-// TODO: This can change to `serialize::Error` if we rename `serialize::Error` to `serialize::Error`.
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum DeserializePsbtError {
+pub enum DeserializeError {
     /// Invalid magic bytes, expected the ASCII for "psbt" serialized in most significant byte order.
     // TODO: Consider adding the invalid bytes.
     InvalidMagic,
@@ -34,24 +33,24 @@ pub enum DeserializePsbtError {
     DecodeOutput(output::DecodeError),
 }
 
-impl fmt::Display for DeserializePsbtError {
+impl fmt::Display for DeserializeError {
     fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for DeserializePsbtError {
+impl std::error::Error for DeserializeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
 }
 
-impl From<global::DecodeError> for DeserializePsbtError {
+impl From<global::DecodeError> for DeserializeError {
     fn from(e: global::DecodeError) -> Self { Self::DecodeGlobal(e) }
 }
 
-impl From<input::DecodeError> for DeserializePsbtError {
+impl From<input::DecodeError> for DeserializeError {
     fn from(e: input::DecodeError) -> Self { Self::DecodeInput(e) }
 }
 
-impl From<output::DecodeError> for DeserializePsbtError {
+impl From<output::DecodeError> for DeserializeError {
     fn from(e: output::DecodeError) -> Self { Self::DecodeOutput(e) }
 }
 
