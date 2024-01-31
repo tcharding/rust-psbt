@@ -113,13 +113,15 @@ impl std::error::Error for SighashTypeParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
+// TODO: Remove this error after issue resolves.
+// https://github.com/rust-bitcoin/rust-bitcoin/issues/2423
 /// Integer is not a consensus valid sighash type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InvalidSighashTypeError {
-    /// TODO:
+    /// The real invalid sighash type error.
     Bitcoin(sighash::InvalidSighashTypeError),
-    /// TODO:
+    /// Hack required because of non_exhaustive on the real error.
     Invalid(u32),
 }
 
@@ -148,4 +150,62 @@ impl std::error::Error for InvalidSighashTypeError {
 
 impl From<sighash::InvalidSighashTypeError> for InvalidSighashTypeError {
     fn from(e: sighash::InvalidSighashTypeError) -> Self { Self::Bitcoin(e) }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::str::FromStr;
+
+    use super::*;
+    use crate::sighash_type::InvalidSighashTypeError;
+
+    #[test]
+    fn psbt_sighash_type_ecdsa() {
+        for ecdsa in &[
+            EcdsaSighashType::All,
+            EcdsaSighashType::None,
+            EcdsaSighashType::Single,
+            EcdsaSighashType::AllPlusAnyoneCanPay,
+            EcdsaSighashType::NonePlusAnyoneCanPay,
+            EcdsaSighashType::SinglePlusAnyoneCanPay,
+        ] {
+            let sighash = PsbtSighashType::from(*ecdsa);
+            let s = format!("{}", sighash);
+            let back = PsbtSighashType::from_str(&s).unwrap();
+            assert_eq!(back, sighash);
+            assert_eq!(back.ecdsa_hash_ty().unwrap(), *ecdsa);
+        }
+    }
+
+    #[test]
+    fn psbt_sighash_type_taproot() {
+        for tap in &[
+            TapSighashType::Default,
+            TapSighashType::All,
+            TapSighashType::None,
+            TapSighashType::Single,
+            TapSighashType::AllPlusAnyoneCanPay,
+            TapSighashType::NonePlusAnyoneCanPay,
+            TapSighashType::SinglePlusAnyoneCanPay,
+        ] {
+            let sighash = PsbtSighashType::from(*tap);
+            let s = format!("{}", sighash);
+            let back = PsbtSighashType::from_str(&s).unwrap();
+            assert_eq!(back, sighash);
+            assert_eq!(back.taproot_hash_ty().unwrap(), *tap);
+        }
+    }
+
+    #[test]
+    fn psbt_sighash_type_notstd() {
+        let nonstd = 0xdddddddd;
+        let sighash = PsbtSighashType { inner: nonstd };
+        let s = format!("{}", sighash);
+        let back = PsbtSighashType::from_str(&s).unwrap();
+
+        assert_eq!(back, sighash);
+        // TODO: Add this assertion once we remove InvalidSighashTypeError
+        // assert_eq!(back.ecdsa_hash_ty(), Err(NonStandardSighashTypeError(nonstd)));
+        assert_eq!(back.taproot_hash_ty(), Err(InvalidSighashTypeError::Invalid(nonstd)));
+    }
 }

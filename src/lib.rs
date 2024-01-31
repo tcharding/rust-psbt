@@ -57,7 +57,7 @@ use core2::io;
 #[rustfmt::skip]                // Keep pubic re-exports separate
 #[doc(inline)]
 pub use crate::{
-    sighash_type::PsbtSighashType,
+    sighash_type::{PsbtSighashType, InvalidSighashTypeError},
     version::Version,
 };
 
