@@ -73,7 +73,7 @@ pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, CombineError> { this.comb
 /// - You need to set the fallback lock time.
 /// - You need to set the sighash single flag.
 ///
-/// If not use [`Constructor<T>::default()`] to carry out both roles.
+/// If not use the [`Constructor`]  to carry out both roles e.g., `Constructor<Modifiable>::default()`.
 ///
 /// See `examples/v2-separate-creator-constructor.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
