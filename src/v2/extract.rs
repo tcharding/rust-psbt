@@ -9,7 +9,7 @@
 //!
 //! It is only possible to extract a transaction from a PSBT _after_ it has been finalized. However
 //! the Extractor role may be fulfilled by a separate entity to the Finalizer hence this is a
-//! separate module and does not require `rust-miniscript`.
+//! separate module and does not require the "miniscript" feature be enabled.
 //!
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
