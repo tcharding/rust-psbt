@@ -15,7 +15,7 @@
 
 use core::fmt;
 
-use bitcoin::{FeeRate, Transaction};
+use bitcoin::{FeeRate, Transaction, Txid};
 
 use crate::error::{write_err, FeeError};
 use crate::v2::{DetermineLockTimeError, Psbt};
@@ -30,12 +30,18 @@ impl Extractor {
     /// Creates an `Extractor`.
     ///
     /// An extractor can only accept a PSBT that has been finalized.
-    pub fn new(psbt: Psbt) -> Result<Self, PsbtNotFinalizedError> {
+    pub fn new(psbt: Psbt) -> Result<Self, Error> {
         if psbt.inputs.iter().any(|input| !input.is_finalized()) {
-            return Err(PsbtNotFinalizedError);
+            return Err(Error::PsbtNotFinalized);
         }
+        let _ = psbt.determine_lock_time()?;
 
         Ok(Self(psbt))
+    }
+
+    /// Returns this PSBT's unique identification.
+    pub fn id(&self) -> Txid {
+        self.0.id().expect("Extractor guarantees lock time can be determined")
     }
 }
 
@@ -118,19 +124,42 @@ impl Extractor {
     }
 }
 
-/// Attempted to extract tx from an unfinalized PSBT.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct PsbtNotFinalizedError;
+/// Error constructing a [`Finalizer`].
+#[derive(Debug)]
+pub enum Error {
+    /// Attempted to extract tx from an unfinalized PSBT.
+    PsbtNotFinalized,
+    /// Finalizer must be able to determine the lock time.
+    DetermineLockTime(DetermineLockTimeError),
+}
 
-impl fmt::Display for PsbtNotFinalizedError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "attempted to extract tx from an unfinalized PSBT")
+        use Error::*;
+
+        match *self {
+            PsbtNotFinalized => write!(f, "attempted to extract tx from an unfinalized PSBT"),
+            DetermineLockTime(ref e) =>
+                write_err!(f, "extractor must be able to determine the lock time"; e),
+        }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for PsbtNotFinalizedError {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use Error::*;
+
+        match *self {
+            DetermineLockTime(ref e) => Some(e),
+            PsbtNotFinalized => None,
+        }
+    }
+}
+
+impl From<DetermineLockTimeError> for Error {
+    fn from(e: DetermineLockTimeError) -> Self { Self::DetermineLockTime(e) }
+}
 
 /// Error caused by fee calculation when extracting a [`Transaction`] from a PSBT.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -10,7 +10,7 @@ use core::fmt;
 use bitcoin::hashes::hash160;
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::taproot::LeafVersion;
-use bitcoin::{sighash, Address, Network, Script, ScriptBuf, Witness, XOnlyPublicKey};
+use bitcoin::{sighash, Address, Network, Script, ScriptBuf, Txid, Witness, XOnlyPublicKey};
 use miniscript::{
     interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, Satisfier, Segwitv0, SigType,
     Tap, ToPublicKey,
@@ -21,7 +21,7 @@ use crate::prelude::*;
 use crate::v2::map::input::{self, Input};
 use crate::v2::miniscript::satisfy::InputSatisfier;
 use crate::v2::miniscript::InterpreterCheckError;
-use crate::v2::{PartialSigsSighashTypeError, Psbt};
+use crate::v2::{DetermineLockTimeError, PartialSigsSighashTypeError, Psbt};
 
 /// Implements the BIP-370 Finalized role.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,9 +38,15 @@ impl Finalizer {
         for input in psbt.inputs.iter() {
             let _ = input.funding_utxo()?;
         }
+        let _ = psbt.determine_lock_time()?;
         psbt.check_partial_sigs_sighash_type()?;
 
         Ok(Self(psbt))
+    }
+
+    /// Returns this PSBT's unique identification.
+    pub fn id(&self) -> Txid {
+        self.0.id().expect("Finalizer guarantees lock time can be determined")
     }
 
     /// Finalize the PSBT.
@@ -361,6 +367,8 @@ fn construct_tap_witness(
 pub enum Error {
     /// An input is missing its funding UTXO.
     FundingUtxo(FundingUtxoError),
+    /// Finalizer must be able to determine the lock time.
+    DetermineLockTime(DetermineLockTimeError),
     /// An input has incorrect sighash type for its partial sigs (ECDSA).
     PartialSigsSighashType(PartialSigsSighashTypeError),
 }
@@ -370,7 +378,10 @@ impl fmt::Display for Error {
         use Error::*;
 
         match *self {
+            // TODO: Loads of error messages are capitalized, they should not be.
             FundingUtxo(ref e) => write_err!(f, "Finalizer missing funding UTXO"; e),
+            DetermineLockTime(ref e) =>
+                write_err!(f, "finalizer must be able to determine the lock time"; e),
             PartialSigsSighashType(ref e) => write_err!(f, "Finalizer sighash type error"; e),
         }
     }
@@ -383,6 +394,7 @@ impl std::error::Error for Error {
 
         match *self {
             FundingUtxo(ref e) => Some(e),
+            DetermineLockTime(ref e) => Some(e),
             PartialSigsSighashType(ref e) => Some(e),
         }
     }
@@ -390,6 +402,10 @@ impl std::error::Error for Error {
 
 impl From<FundingUtxoError> for Error {
     fn from(e: FundingUtxoError) -> Self { Self::FundingUtxo(e) }
+}
+
+impl From<DetermineLockTimeError> for Error {
+    fn from(e: DetermineLockTimeError) -> Self { Self::DetermineLockTime(e) }
 }
 
 impl From<PartialSigsSighashTypeError> for Error {
