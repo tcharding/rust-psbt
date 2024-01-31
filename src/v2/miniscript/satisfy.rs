@@ -6,41 +6,28 @@ use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use crate::bitcoin::{absolute, ecdsa, ScriptBuf, Sequence};
 use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey};
 use crate::prelude::*;
-use crate::v2::Psbt;
+use crate::v2::map::input::Input;
 
-// TODO: Make the fields private and enforce invariant that index
-// is within range, thereby removing potential panics.
-
-/// A PSBT [`Satisfier`] for an input at a particular index.
+/// A PSBT [`Satisfier`] for an input.
 ///
 /// Contains reference to the [`Psbt`] because multiple inputs will share the same PSBT. All
 /// operations on this structure will panic if index is more than number of inputs in pbst
 ///
 /// [`Satisfier`]: crate::miniscript::Satisfier
-pub struct PsbtInputSatisfier<'a> {
-    /// Reference to the [`Psbt`].
-    pub psbt: &'a Psbt,
-    /// Index of the input we are satisfying.
-    pub index: usize,
+pub struct InputSatisfier<'a> {
+    pub(crate) input: &'a Input,
 }
 
-impl<'a> PsbtInputSatisfier<'a> {
-    /// Creates a new `PsbtInputSatisfier` from `psbt` and `index`.
-    pub fn new(psbt: &'a Psbt, index: usize) -> Self { Self { psbt, index } }
-}
-
-impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'a> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<taproot::Signature> {
-        self.psbt.inputs[self.index].tap_key_sig
-    }
+impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
+    fn lookup_tap_key_spend_sig(&self) -> Option<taproot::Signature> { self.input.tap_key_sig }
 
     fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<taproot::Signature> {
-        self.psbt.inputs[self.index].tap_script_sigs.get(&(pk.to_x_only_pubkey(), *lh)).copied()
+        self.input.tap_script_sigs.get(&(pk.to_x_only_pubkey(), *lh)).copied()
     }
 
     fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        self.psbt.inputs[self.index]
-            .bip32_derivation
+        self.input
+            .bip32_derivations
             .iter()
             .find(|&(pubkey, _)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
             .map(|(pubkey, _)| bitcoin::PublicKey::new(*pubkey))
@@ -49,14 +36,14 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'
     fn lookup_tap_control_block_map(
         &self,
     ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
-        Some(&self.psbt.inputs[self.index].tap_scripts)
+        Some(&self.input.tap_scripts)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, taproot::Signature)> {
-        self.psbt.inputs[self.index]
+        self.input
             .tap_script_sigs
             .iter()
             .find(|&((pubkey, lh), _sig)| {
@@ -66,50 +53,75 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'
     }
 
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<ecdsa::Signature> {
-        self.psbt.inputs[self.index].partial_sigs.get(&pk.to_public_key()).copied()
+        self.input.partial_sigs.get(&pk.to_public_key()).copied()
     }
 
     fn lookup_raw_pkh_ecdsa_sig(
         &self,
         pkh: &hash160::Hash,
     ) -> Option<(bitcoin::PublicKey, ecdsa::Signature)> {
-        self.psbt.inputs[self.index]
+        self.input
             .partial_sigs
             .iter()
             .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
             .map(|(pk, sig)| (*pk, *sig))
     }
 
-    fn check_after(&self, n: absolute::LockTime) -> bool { todo!() }
+    // TODO: Verify this is correct.
+    fn check_after(&self, n: absolute::LockTime) -> bool {
+        use absolute::LockTime::*;
 
-    fn check_older(&self, n: Sequence) -> bool { todo!() }
+        match n {
+            Blocks(height) =>
+                if let Some(lock_time) = self.input.min_height {
+                    return height <= lock_time;
+                },
+            Seconds(time) =>
+                if let Some(lock_time) = self.input.min_time {
+                    return time <= lock_time;
+                },
+        }
+        true
+    }
+
+    // TODO: Verify this is correct.
+    fn check_older(&self, n: Sequence) -> bool {
+        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
+        // Disable flag set => return true.
+        if !n.is_relative_lock_time() {
+            return true;
+        }
+
+        match self.input.sequence {
+            Some(sequence) => {
+                // TODO: Do we need to check the tx version?
+                if !sequence.is_relative_lock_time() {
+                    return false;
+                }
+                <dyn Satisfier<Pk>>::check_older(&sequence, n)
+            }
+            // TODO: What to check here?
+            None => true,
+        }
+    }
 
     fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
-            .hash160_preimages
-            .get(&Pk::to_hash160(h))
-            .and_then(try_vec_as_preimage32)
+        self.input.hash160_preimages.get(&Pk::to_hash160(h)).and_then(try_vec_as_preimage32)
     }
 
     fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
-            .sha256_preimages
-            .get(&Pk::to_sha256(h))
-            .and_then(try_vec_as_preimage32)
+        self.input.sha256_preimages.get(&Pk::to_sha256(h)).and_then(try_vec_as_preimage32)
     }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
+        self.input
             .hash256_preimages
             .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
             .and_then(try_vec_as_preimage32)
     }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
-            .ripemd160_preimages
-            .get(&Pk::to_ripemd160(h))
-            .and_then(try_vec_as_preimage32)
+        self.input.ripemd160_preimages.get(&Pk::to_ripemd160(h)).and_then(try_vec_as_preimage32)
     }
 }
 

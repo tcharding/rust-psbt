@@ -19,8 +19,7 @@ use psbt::bitcoin::{
     script, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence, TxOut, Txid,
 };
 use psbt::v2::{
-    self, Constructor, Input, InputBuilder, Modifiable, Output, OutputBuilder, Psbt, Signer,
-    Updater,
+    self, Constructor, InputBuilder, Modifiable, Output, OutputBuilder, Psbt, Signer, Updater,
 };
 
 pub const DUMMY_UTXO_AMOUNT: Amount = Amount::from_sat(20_000_000);
@@ -63,7 +62,9 @@ fn main() -> anyhow::Result<()> {
         .build();
 
     // If no lock time is required we can just create the `Input` directly.
-    let input_b = Input::new(previous_output_b);
+    let input_b = InputBuilder::new(previous_output_b)
+        // .segwit_fund(txout); TODO: Add funding utxo.
+        .build();
 
     // Build Alice's change output.
     let change = TxOut { value: change_value_a, script_pubkey: change_address_a.script_pubkey() };
