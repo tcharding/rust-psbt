@@ -955,9 +955,8 @@ impl Psbt {
     /// Checks the sighash types of input partial sigs (ECDSA).
     ///
     /// This can be used at anytime but is primarily used during PSBT finalizing.
-    // TODO: Would pub(crate) be better?
-    // TODO: It would be nice if this was enforced by the typesystem and fields if the `Input`.
-    pub fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
+    #[cfg(feature = "miniscript")]
+    pub(crate) fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
         use PartialSigsSighashTypeError::*;
 
         for (input_index, input) in self.inputs.iter().enumerate() {
