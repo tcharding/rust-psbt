@@ -526,7 +526,6 @@ impl Psbt {
     /// Determines the lock time as specified in [BIP-370] if it is possible to do so.
     ///
     /// [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki#determining-lock-time>
-    // TODO: Does this need to be public?
     pub fn determine_lock_time(&self) -> Result<absolute::LockTime, DetermineLockTimeError> {
         let require_time_based_lock_time =
             self.inputs.iter().any(|input| input.requires_time_based_lock_time());
