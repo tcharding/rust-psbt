@@ -57,6 +57,7 @@ use core2::io;
 #[rustfmt::skip]                // Keep pubic re-exports separate
 #[doc(inline)]
 pub use crate::{
+    error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::Version,
 };
