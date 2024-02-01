@@ -52,7 +52,7 @@ use crate::v2::map::{global, input, output, Map};
 pub use self::{
     error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
-    extract::{ExtractTxError, ExtractTxFeeRateError, Extractor}
+    extract::{ExtractTxError, ExtractTxFeeRateError, Extractor, ExtractError}
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
