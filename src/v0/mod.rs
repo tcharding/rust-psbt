@@ -36,7 +36,7 @@ pub use self::{
 
 #[rustfmt::skip]                // Keep public re-exports separate.
 #[cfg(feature = "base64")]
-pub use self::display_from_str::PsbtParseError;
+pub use self::display_from_str::ParsePsbtError;
 
 /// Combines these two PSBTs as described by BIP-174.
 ///
@@ -551,27 +551,27 @@ mod display_from_str {
     }
 
     impl FromStr for Psbt {
-        type Err = PsbtParseError;
+        type Err = ParsePsbtError;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let data = BASE64_STANDARD.decode(s).map_err(PsbtParseError::Base64Encoding)?;
-            Psbt::deserialize(&data).map_err(PsbtParseError::PsbtEncoding)
+            let data = BASE64_STANDARD.decode(s).map_err(ParsePsbtError::Base64Encoding)?;
+            Psbt::deserialize(&data).map_err(ParsePsbtError::PsbtEncoding)
         }
     }
 
     /// Error encountered during PSBT decoding from Base64 string.
     #[derive(Debug)]
     #[non_exhaustive]
-    pub enum PsbtParseError {
+    pub enum ParsePsbtError {
         /// Error in internal PSBT data structure.
         PsbtEncoding(DeserializeError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }
 
-    impl Display for PsbtParseError {
+    impl Display for ParsePsbtError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            use self::PsbtParseError::*;
+            use self::ParsePsbtError::*;
 
             match *self {
                 PsbtEncoding(ref e) => write_err!(f, "error in internal PSBT data structure"; e),
@@ -581,9 +581,9 @@ mod display_from_str {
     }
 
     #[cfg(feature = "std")]
-    impl std::error::Error for PsbtParseError {
+    impl std::error::Error for ParsePsbtError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-            use self::PsbtParseError::*;
+            use self::ParsePsbtError::*;
 
             match self {
                 PsbtEncoding(e) => Some(e),
