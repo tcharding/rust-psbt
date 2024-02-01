@@ -59,7 +59,7 @@ use core2::io;
 pub use crate::{
     error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
-    version::Version,
+    version::{Version, UnsupportedVersionError},
 };
 
 /// PSBT version 0 - the original PSBT version.
