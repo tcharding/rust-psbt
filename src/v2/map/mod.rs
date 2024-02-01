@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: CC0-1.0
 
-// TODO: These are pubic just so we can write global::DecodeError, is that a good choice?
 pub mod global;
 pub mod input;
 pub mod output;
@@ -8,13 +7,6 @@ pub mod output;
 use crate::prelude::*;
 use crate::raw;
 use crate::serialize::Serialize;
-
-#[rustfmt::skip]                // Keep pubic re-exports separate
-pub use self::{
-    input::{Input, InputBuilder},
-    output::{Output, OutputBuilder},
-    global::Global,
-};
 
 /// A trait that describes a PSBT key-value map.
 pub(crate) trait Map {

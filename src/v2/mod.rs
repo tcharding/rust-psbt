@@ -45,14 +45,20 @@ use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v0;
-use crate::v2::map::{global, input, output, Map};
+use crate::v2::map::Map;
+
+pub use self::error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError};
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
-    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError},
-    map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
-    extract::{ExtractTxError, ExtractTxFeeRateError, Extractor, ExtractError}
+    map::{
+        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
+        global::{self, Global},
+        input::{self, Input, InputBuilder},
+        output::{self, Output, OutputBuilder},
+    },
+    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
