@@ -955,7 +955,9 @@ impl Psbt {
     ///
     /// This can be used at anytime but is primarily used during PSBT finalizing.
     #[cfg(feature = "miniscript")]
-    pub(crate) fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
+    pub(crate) fn check_partial_sigs_sighash_type(
+        &self,
+    ) -> Result<(), PartialSigsSighashTypeError> {
         use PartialSigsSighashTypeError::*;
 
         for (input_index, input) in self.inputs.iter().enumerate() {
