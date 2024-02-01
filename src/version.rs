@@ -16,9 +16,13 @@ pub struct Version(u32);
 
 impl Version {
     /// The original PSBT format [BIP-174].
+    ///
+    /// [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
     pub const ZERO: Self = Self(0);
 
     /// The second PSBT version [BIP-370].
+    ///
+    /// [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
     pub const TWO: Self = Self(2);
 }
 

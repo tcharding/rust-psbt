@@ -31,7 +31,7 @@ use miniscript::miniscript::satisfy::Placeholder;
 use miniscript::{interpreter, Interpreter, MiniscriptKey};
 
 use crate::error::write_err;
-use crate::prelude::Borrow;
+use crate::prelude::*;
 use crate::v2::map::Input;
 use crate::v2::{DetermineLockTimeError, Psbt};
 

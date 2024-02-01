@@ -4,10 +4,10 @@ version = "0.1.0"
 authors = ["Tobin C. Harding <me@tobin.cc>"]
 license = "CC0-1.0"
 repository = "https://github.com/tcharding/rust-psbt/"
-description = "Partially signed Bitcoin Transaction, v0 and v1"
+description = "Partially Signed Bitcoin Transaction, v0 and v2"
 categories = ["cryptography::cryptocurrencies"]
 keywords = [ "crypto", "bitcoin" ]
-readme = "../README.md"
+readme = "README.md"
 edition = "2021"
 rust-version = "1.56.1"
 exclude = ["tests", "contrib"]
@@ -27,11 +27,10 @@ miniscript-std = ["std", "miniscript/std"]
 miniscript-no-std = ["no-std", "miniscript/no-std"]
 
 [dependencies]
-bitcoin = { version = "0.31.0", default-features = false, features = [] }
+bitcoin = { version = "0.31.0", default-features = false }
 
-# Currenty miniscript only works in with "std" enabled.
+# Do not use this feature, use "miniscript-std" or "miniscript-no-std" instead.
 miniscript = { version = "11.0.0", default-features = false, optional = true }
-
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = [ "derive", "alloc" ], optional = true }
 # There is no reason to use this dependency directly, it is activated by the "no-std" feature.

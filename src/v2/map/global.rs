@@ -4,7 +4,6 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, KeySource, Xpub};
-use bitcoin::consensus::encode::MAX_VEC_SIZE;
 use bitcoin::consensus::{encode as consensus, Decodable};
 use bitcoin::locktime::absolute;
 use bitcoin::{bip32, transaction, Transaction, VarInt};
@@ -127,16 +126,15 @@ impl Global {
         self.tx_modifiable_flags & OUTPUTS_MODIFIABLE > 0
     }
 
-    // TODO: Use this function?
+    // TODO: Investigate if we should be using this function?
     #[allow(dead_code)]
     pub(crate) fn has_sighash_single(&self) -> bool {
         self.tx_modifiable_flags & SIGHASH_SINGLE > 0
     }
 
     pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
-        // TODO(tobin): Work out why do we do this take, its not done in input or output modules.
-        let mut r = r.take(MAX_VEC_SIZE as u64);
-
+        // TODO: Consider adding protection against memory exhaustion here by defining a maximum
+        // PBST size and using `take` as we do in rust-bitcoin consensus decoding.
         let mut version: Option<Version> = None;
         let mut tx_version: Option<transaction::Version> = None;
         let mut fallback_lock_time: Option<absolute::LockTime> = None;
@@ -312,7 +310,7 @@ impl Global {
         };
 
         loop {
-            match raw::Pair::decode(&mut r) {
+            match raw::Pair::decode(r) {
                 Ok(pair) => insert_pair(pair)?,
                 Err(serialize::Error::NoMorePairs) => break,
                 Err(e) => return Err(DecodeError::DeserPair(e)),

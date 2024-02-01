@@ -50,7 +50,7 @@ use crate::v2::map::{global, input, output, Map};
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
-    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializePsbtError, PartialSigsSighashTypeError},
+    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError},
     map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
     extract::{ExtractTxError, ExtractTxFeeRateError, Extractor}
 };
@@ -73,7 +73,7 @@ pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, CombineError> { this.comb
 /// - You need to set the fallback lock time.
 /// - You need to set the sighash single flag.
 ///
-/// If not use [`Constructor<T>::default()`] to carry out both roles.
+/// If not use the [`Constructor`]  to carry out both roles e.g., `Constructor<Modifiable>::default()`.
 ///
 /// See `examples/v2-separate-creator-constructor.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -378,6 +378,11 @@ impl Updater {
         Ok(Self(psbt))
     }
 
+    /// Returns this PSBT's unique identification.
+    pub fn id(&self) -> Txid {
+        self.0.id().expect("Updater guarantees lock time can be determined")
+    }
+
     /// Updater role, update the sequence number for input at `index`.
     pub fn set_sequence(
         mut self,
@@ -387,11 +392,6 @@ impl Updater {
         let input = self.0.checked_input_mut(input_index)?;
         input.sequence = Some(n);
         Ok(self)
-    }
-
-    /// Returns this PSBT's unique identification.
-    pub fn id(&self) -> Txid {
-        self.0.id().expect("Updater guarantees lock time can be determined")
     }
 
     /// Converts the inner PSBT v2 to a PSBT v0.
@@ -526,7 +526,6 @@ impl Psbt {
     /// Determines the lock time as specified in [BIP-370] if it is possible to do so.
     ///
     /// [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki#determining-lock-time>
-    // TODO: Does this need to be public?
     pub fn determine_lock_time(&self) -> Result<absolute::LockTime, DetermineLockTimeError> {
         let require_time_based_lock_time =
             self.inputs.iter().any(|input| input.requires_time_based_lock_time());
@@ -603,8 +602,8 @@ impl Psbt {
     }
 
     /// Deserialize a value from raw binary data.
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializePsbtError> {
-        use DeserializePsbtError::*;
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
+        use DeserializeError::*;
 
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
@@ -955,9 +954,8 @@ impl Psbt {
     /// Checks the sighash types of input partial sigs (ECDSA).
     ///
     /// This can be used at anytime but is primarily used during PSBT finalizing.
-    // TODO: Would pub(crate) be better?
-    // TODO: It would be nice if this was enforced by the typesystem and fields if the `Input`.
-    pub fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
+    #[cfg(feature = "miniscript")]
+    pub(crate) fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
         use PartialSigsSighashTypeError::*;
 
         for (input_index, input) in self.inputs.iter().enumerate() {
@@ -1269,7 +1267,7 @@ mod display_from_str {
     #[non_exhaustive]
     pub enum PsbtParseError {
         /// Error in internal PSBT data structure.
-        PsbtEncoding(DeserializePsbtError),
+        PsbtEncoding(DeserializeError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }

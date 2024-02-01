@@ -54,11 +54,11 @@ use std::io;
 #[cfg(not(feature = "std"))]
 use core2::io;
 
-use crate::version::Version;
-
 #[rustfmt::skip]                // Keep pubic re-exports separate
+#[doc(inline)]
 pub use crate::{
-    sighash_type::PsbtSighashType,
+    sighash_type::{PsbtSighashType, InvalidSighashTypeError},
+    version::Version,
 };
 
 /// PSBT version 0 - the original PSBT version.
