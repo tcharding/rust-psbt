@@ -38,7 +38,7 @@ pub struct Output {
     /// A map from public keys needed to spend this output to their
     /// corresponding master key fingerprints and derivation paths.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
-    pub bip32_derivation: BTreeMap<secp256k1::PublicKey, KeySource>,
+    pub bip32_derivations: BTreeMap<secp256k1::PublicKey, KeySource>,
     /// The internal pubkey.
     pub tap_internal_key: Option<XOnlyPublicKey>,
     /// Taproot Output tree.
@@ -48,10 +48,10 @@ pub struct Output {
     pub tap_key_origins: BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
     /// Proprietary key-value pairs for this output.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub proprietary: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
+    pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
     /// Unknown key-value pairs for this output.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub unknown: BTreeMap<raw::Key, Vec<u8>>,
+    pub unknowns: BTreeMap<raw::Key, Vec<u8>>,
 }
 
 impl Output {
@@ -62,12 +62,12 @@ impl Output {
             script_pubkey: utxo.script_pubkey,
             redeem_script: None,
             witness_script: None,
-            bip32_derivation: BTreeMap::new(),
+            bip32_derivations: BTreeMap::new(),
             tap_internal_key: None,
             tap_tree: None,
             tap_key_origins: BTreeMap::new(),
-            proprietary: BTreeMap::new(),
-            unknown: BTreeMap::new(),
+            proprietaries: BTreeMap::new(),
+            unknowns: BTreeMap::new(),
         }
     }
 
@@ -76,12 +76,12 @@ impl Output {
         v0::Output {
             redeem_script: self.redeem_script,
             witness_script: self.witness_script,
-            bip32_derivations: self.bip32_derivation,
+            bip32_derivations: self.bip32_derivations,
             tap_internal_key: self.tap_internal_key,
             tap_tree: self.tap_tree,
             tap_key_origins: self.tap_key_origins,
-            proprietaries: self.proprietary,
-            unknowns: self.unknown,
+            proprietaries: self.proprietaries,
+            unknowns: self.unknowns,
         }
     }
 
@@ -143,12 +143,12 @@ impl Output {
             }
             PSBT_OUT_BIP32_DERIVATION => {
                 impl_psbt_insert_pair! {
-                    self.bip32_derivation <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
+                    self.bip32_derivations <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
             PSBT_OUT_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
-                match self.proprietary.entry(key) {
+                match self.proprietaries.entry(key) {
                     btree_map::Entry::Vacant(empty_key) => {
                         empty_key.insert(raw_value);
                     }
@@ -172,7 +172,7 @@ impl Output {
                 }
             }
             // Note, PSBT v2 does not exclude any keys from the input map.
-            _ => match self.unknown.entry(raw_key) {
+            _ => match self.unknowns.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
                     empty_key.insert(raw_value);
                 }
@@ -185,16 +185,28 @@ impl Output {
     }
 
     /// Combines this [`Output`] with `other` `Output` (as described by BIP 174).
-    pub fn combine(&mut self, other: Self) {
-        self.bip32_derivation.extend(other.bip32_derivation);
-        self.proprietary.extend(other.proprietary);
-        self.unknown.extend(other.unknown);
-        self.tap_key_origins.extend(other.tap_key_origins);
+    pub fn combine(&mut self, other: Self) -> Result<(), CombineError> {
+        if self.amount != other.amount {
+            return Err(CombineError::AmountMismatch { this: self.amount, that: other.amount });
+        }
 
-        combine!(redeem_script, self, other);
-        combine!(witness_script, self, other);
-        combine!(tap_internal_key, self, other);
-        combine!(tap_tree, self, other);
+        if self.script_pubkey != other.script_pubkey {
+            return Err(CombineError::ScriptPubkeyMismatch {
+                this: self.script_pubkey.clone(),
+                that: other.script_pubkey,
+            });
+        }
+
+        combine_option!(redeem_script, self, other);
+        combine_option!(witness_script, self, other);
+        combine_map!(bip32_derivations, self, other);
+        combine_option!(tap_internal_key, self, other);
+        combine_option!(tap_tree, self, other);
+        combine_map!(tap_key_origins, self, other);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
+
+        Ok(())
     }
 }
 
@@ -221,7 +233,7 @@ impl Map for Output {
         }
 
         impl_psbt_get_pair! {
-            rv.push_map(self.bip32_derivation, PSBT_OUT_BIP32_DERIVATION)
+            rv.push_map(self.bip32_derivations, PSBT_OUT_BIP32_DERIVATION)
         }
 
         impl_psbt_get_pair! {
@@ -236,11 +248,11 @@ impl Map for Output {
             rv.push_map(self.tap_key_origins, PSBT_OUT_TAP_BIP32_DERIVATION)
         }
 
-        for (key, value) in self.proprietary.iter() {
+        for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
 
-        for (key, value) in self.unknown.iter() {
+        for (key, value) in self.unknowns.iter() {
             rv.push(raw::Pair { key: key.clone(), value: value.clone() });
         }
 
@@ -343,6 +355,50 @@ impl std::error::Error for InsertPairError {
 
 impl From<serialize::Error> for InsertPairError {
     fn from(e: serialize::Error) -> Self { Self::Deser(e) }
+}
+
+/// Error combining two output maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// The amounts are not the same.
+    AmountMismatch {
+        /// Attempted to combine a PBST with `this` previous txid.
+        this: Amount,
+        /// Into a PBST with `that` previous txid.
+        that: Amount,
+    },
+    /// The script_pubkeys are not the same.
+    ScriptPubkeyMismatch {
+        /// Attempted to combine a PBST with `this` script_pubkey.
+        this: ScriptBuf,
+        /// Into a PBST with `that` script_pubkey.
+        that: ScriptBuf,
+    },
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            AmountMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different amounts: {} {}", this, that),
+            ScriptPubkeyMismatch { ref this, ref that } =>
+                write!(f, "combine two PSBTs with different script_pubkeys: {:x} {:x}", this, that),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            AmountMismatch { .. } | ScriptPubkeyMismatch { .. } => None,
+        }
+    }
 }
 
 #[cfg(test)]

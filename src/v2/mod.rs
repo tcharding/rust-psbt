@@ -42,7 +42,7 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, FeeError, FundingUtxoError, InconsistentKeySourcesError};
+use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::{global, input, output, Map};
@@ -60,9 +60,9 @@ pub use self::display_from_str::PsbtParseError;
 pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputError};
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
-pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, InconsistentKeySourcesError> {
-    this.combine_with(that)
-}
+///
+/// This function is commutative `combine(this, that) = combine(that, this)`.
+pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, CombineError> { this.combine_with(that) }
 // TODO: Consider adding an iterator API that combines a list of PSBTs.
 
 /// Implements the BIP-370 Creator role.
@@ -659,16 +659,20 @@ impl Psbt {
 
     /// Combines this [`Psbt`] with `other` PSBT as described by BIP-174.
     ///
-    /// In accordance with BIP-174 this function is commutative i.e., `A.combine(B) == B.combine(A)`.
-    pub fn combine_with(mut self, other: Self) -> Result<Psbt, InconsistentKeySourcesError> {
+    /// BIP-370 does not include any additional requirements for the Combiner role.
+    ///
+    /// This function is commutative `A.combine_with(B) = B.combine_with(A)`.
+    ///
+    /// See [`combine()`] for a non-consuming version of this function.
+    pub fn combine_with(mut self, other: Self) -> Result<Psbt, CombineError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs.into_iter()) {
-            self_input.combine(other_input);
+            self_input.combine(other_input)?;
         }
 
         for (self_output, other_output) in self.outputs.iter_mut().zip(other.outputs.into_iter()) {
-            self_output.combine(other_output);
+            self_output.combine(other_output)?;
         }
 
         Ok(self)
@@ -1292,4 +1296,53 @@ mod display_from_str {
             }
         }
     }
+}
+
+/// Error combining two input maps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CombineError {
+    /// Error while combining the global maps.
+    Global(global::CombineError),
+    /// Error while combining the input maps.
+    Input(input::CombineError),
+    /// Error while combining the output maps.
+    Output(output::CombineError),
+}
+
+impl fmt::Display for CombineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use CombineError::*;
+
+        match *self {
+            Global(ref e) => write_err!(f, "error while combining the global maps"; e),
+            Input(ref e) => write_err!(f, "error while combining the input maps"; e),
+            Output(ref e) => write_err!(f, "error while combining the output maps"; e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CombineError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use CombineError::*;
+
+        match *self {
+            Global(ref e) => Some(e),
+            Input(ref e) => Some(e),
+            Output(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<global::CombineError> for CombineError {
+    fn from(e: global::CombineError) -> Self { Self::Global(e) }
+}
+
+impl From<input::CombineError> for CombineError {
+    fn from(e: input::CombineError) -> Self { Self::Input(e) }
+}
+
+impl From<output::CombineError> for CombineError {
+    fn from(e: output::CombineError) -> Self { Self::Output(e) }
 }

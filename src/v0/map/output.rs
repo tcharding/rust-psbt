@@ -123,15 +123,14 @@ impl Output {
 
     /// Combines this [`Output`] with `other` `Output` (as described by BIP 174).
     pub fn combine(&mut self, other: Self) {
-        self.bip32_derivations.extend(other.bip32_derivations);
-        self.proprietaries.extend(other.proprietaries);
-        self.unknowns.extend(other.unknowns);
-        self.tap_key_origins.extend(other.tap_key_origins);
-
-        combine!(redeem_script, self, other);
-        combine!(witness_script, self, other);
-        combine!(tap_internal_key, self, other);
-        combine!(tap_tree, self, other);
+        combine_option!(redeem_script, self, other);
+        combine_option!(witness_script, self, other);
+        combine_map!(bip32_derivations, self, other);
+        combine_option!(tap_internal_key, self, other);
+        combine_option!(tap_tree, self, other);
+        combine_map!(tap_key_origins, self, other);
+        combine_map!(proprietaries, self, other);
+        combine_map!(unknowns, self, other);
     }
 }
 

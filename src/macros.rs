@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: CC0-1.0
 
-/// Combines the given `$thing` field of two types by setting `self.thing` to be
-/// the value in `other.thing` iff `self.thing` is currently empty.
+/// Combines two `Option<Foo>` fields.
 ///
+/// Sets `self.thing` to be `Some(other.thing)` iff `self.thing` is `None`.
 /// If `self.thing` already contains a value then this macro does nothing.
-#[allow(unused_macros)]
-macro_rules! combine {
+macro_rules! combine_option {
     ($thing:ident, $slf:ident, $other:ident) => {
         if let (&None, Some($thing)) = (&$slf.$thing, $other.$thing) {
             $slf.$thing = Some($thing);
         }
+    };
+}
+
+/// Combines to `BTreeMap` fields by extending the map in `self.thing`.
+macro_rules! combine_map {
+    ($thing:ident, $slf:ident, $other:ident) => {
+        $slf.$thing.extend($other.$thing)
     };
 }
 
