@@ -47,23 +47,29 @@ use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::Map;
 
-pub use self::error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError};
-
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
+    error::{
+        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
+        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
+        PsbtNotModifiableError, SignError,
+    },
+    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
     map::{
         // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
         global::{self, Global},
         input::{self, Input, InputBuilder},
         output::{self, Output, OutputBuilder},
     },
-    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
 #[cfg(feature = "miniscript")]
-pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputError};
+pub use self::miniscript::{
+    FinalizeError, FinalizeInputError, Finalizer, InputError, InterpreterCheckError,
+    InterpreterCheckInputError,
+};
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 ///

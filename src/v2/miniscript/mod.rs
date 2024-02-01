@@ -36,7 +36,7 @@ use crate::v2::map::input::Input;
 use crate::v2::{DetermineLockTimeError, Psbt};
 
 #[rustfmt::skip]                // Keep public exports separate.
-pub use self::finalize::{Finalizer, InputError, FinalizeError, FinalizeInputError};
+pub use self::finalize::{InputError, Finalizer, FinalizeError, FinalizeInputError};
 
 impl Psbt {
     // TODO: Should this be on a Role? Finalizer/Extractor? Then we can remove the debug_assert
@@ -186,9 +186,19 @@ impl From<InterpreterCheckInputError> for InterpreterCheckError {
 #[derive(Debug)]
 pub enum InterpreterCheckInputError {
     /// Failed to construct a [`miniscript::Interpreter`].
-    Constructor { input_index: usize, error: interpreter::Error },
+    Constructor {
+        /// Index of the input causing this error.
+        input_index: usize,
+        /// The interpreter error returned from `rust-miniscript`.
+        error: interpreter::Error,
+    },
     /// Interpreter satisfaction failed for input.
-    Satisfaction { input_index: usize, error: interpreter::Error },
+    Satisfaction {
+        /// Index of the input causing this error.
+        input_index: usize,
+        /// The interpreter error returned from `rust-miniscript`.
+        error: interpreter::Error,
+    },
 }
 
 impl fmt::Display for InterpreterCheckInputError {

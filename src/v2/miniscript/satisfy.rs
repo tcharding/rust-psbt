@@ -14,7 +14,7 @@ use crate::v2::map::input::Input;
 /// operations on this structure will panic if index is more than number of inputs in pbst
 ///
 /// [`Satisfier`]: crate::miniscript::Satisfier
-pub struct InputSatisfier<'a> {
+pub(crate) struct InputSatisfier<'a> {
     pub(crate) input: &'a Input,
 }
 

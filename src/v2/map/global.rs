@@ -468,6 +468,7 @@ impl Map for Global {
     }
 }
 
+/// An error while decoding.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
@@ -560,7 +561,10 @@ pub enum InsertPairError {
     /// PSBT_GLOBAL_PROPRIETARY: Invalid proprietary key.
     InvalidProprietaryKey,
     /// Key must be excluded from this version of PSBT (see consts.rs for u8 values).
-    ExcludedKey { key_type_value: u8 },
+    ExcludedKey {
+        /// Key type value we found.
+        key_type_value: u8,
+    },
 }
 
 impl fmt::Display for InsertPairError {

@@ -783,6 +783,7 @@ impl InputBuilder {
     pub fn build(self) -> Input { self.0 }
 }
 
+/// An error while decoding.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {

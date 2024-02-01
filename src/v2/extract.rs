@@ -124,7 +124,7 @@ impl Extractor {
     }
 }
 
-/// Error constructing a [`Finalizer`].
+/// Error constructing an `Extractor`.
 #[derive(Debug)]
 pub enum ExtractError {
     /// Attempted to extract tx from an unfinalized PSBT.
