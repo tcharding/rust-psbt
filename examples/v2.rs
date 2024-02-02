@@ -10,15 +10,15 @@
 
 use std::str::FromStr;
 
-use psbt::bitcoin::bip32::{DerivationPath, KeySource, Xpriv, Xpub};
-use psbt::bitcoin::hashes::Hash as _;
-use psbt::bitcoin::locktime::absolute;
-use psbt::bitcoin::opcodes::all::OP_CHECKMULTISIG;
-use psbt::bitcoin::secp256k1::{self, SECP256K1};
-use psbt::bitcoin::{
+use psbt_v2::bitcoin::bip32::{DerivationPath, KeySource, Xpriv, Xpub};
+use psbt_v2::bitcoin::hashes::Hash as _;
+use psbt_v2::bitcoin::locktime::absolute;
+use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
+use psbt_v2::bitcoin::secp256k1::{self, SECP256K1};
+use psbt_v2::bitcoin::{
     script, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence, TxOut, Txid,
 };
-use psbt::v2::{
+use psbt_v2::v2::{
     self, Constructor, InputBuilder, Modifiable, Output, OutputBuilder, Psbt, Signer, Updater,
 };
 

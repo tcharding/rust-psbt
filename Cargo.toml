@@ -1,12 +1,12 @@
 [package]
-name = "psbt"
-version = "0.1.0"
+name = "psbt-v2"
+version = "0.1.0-beta.0"
 authors = ["Tobin C. Harding <me@tobin.cc>"]
 license = "CC0-1.0"
 repository = "https://github.com/tcharding/rust-psbt/"
 description = "Partially Signed Bitcoin Transaction, v0 and v2"
 categories = ["cryptography::cryptocurrencies"]
-keywords = [ "crypto", "bitcoin" ]
+keywords = [ "bitcoin", "psbt", "bip-174", "bip-370" ]
 readme = "README.md"
 edition = "2021"
 rust-version = "1.56.1"

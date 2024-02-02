@@ -12,7 +12,7 @@ mod util;
 
 use std::str::FromStr;
 
-use psbt::v0;
+use psbt_v2::v0;
 
 #[track_caller]
 fn assert_fails_signer_checks_v0(hex: &str, base64: &str) {

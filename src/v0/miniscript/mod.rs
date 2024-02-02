@@ -851,7 +851,7 @@ trait PsbtFields {
     // `tap_tree` only appears in Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<TapTree>> { None }
 
-    // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
+    // `tap_scripts` and `tap_merkle_root` only appear in psbt_v2::Input
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
