@@ -13,13 +13,14 @@ use psbt::bitcoin::blockdata::opcodes::OP_0;
 use psbt::bitcoin::blockdata::{script, transaction};
 use psbt::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt::bitcoin::hex::FromHex;
-use psbt::bitcoin::psbt::{Psbt, PsbtSighashType};
 use psbt::bitcoin::script::PushBytes;
 use psbt::bitcoin::secp256k1::{self, Secp256k1};
 use psbt::bitcoin::{
     absolute, Amount, Denomination, Network, OutPoint, PrivateKey, PublicKey, ScriptBuf, Sequence,
     Transaction, TxIn, TxOut, Witness,
 };
+use psbt::v0::{self, Psbt};
+use psbt::PsbtSighashType;
 
 const NETWORK: Network = Network::Testnet;
 
@@ -245,7 +246,7 @@ fn update_psbt(mut psbt: Psbt, fingerprint: Fingerprint) -> Psbt {
     let tx: Transaction = deserialize(&v).unwrap();
     input_0.non_witness_utxo = Some(tx);
     input_0.redeem_script = Some(hex_script(redeem_script_0));
-    input_0.bip32_derivation = bip32_derivation(fingerprint, &pk_path, vec![0, 1]);
+    input_0.bip32_derivations = bip32_derivation(fingerprint, &pk_path, vec![0, 1]);
 
     let mut input_1 = psbt.inputs[1].clone();
 
@@ -255,15 +256,15 @@ fn update_psbt(mut psbt: Psbt, fingerprint: Fingerprint) -> Psbt {
 
     input_1.redeem_script = Some(hex_script(redeem_script_1));
     input_1.witness_script = Some(hex_script(witness_script));
-    input_1.bip32_derivation = bip32_derivation(fingerprint, &pk_path, vec![2, 3]);
+    input_1.bip32_derivations = bip32_derivation(fingerprint, &pk_path, vec![2, 3]);
 
     psbt.inputs = vec![input_0, input_1];
 
     let mut output_0 = psbt.outputs[0].clone();
-    output_0.bip32_derivation = bip32_derivation(fingerprint, &pk_path, vec![4]);
+    output_0.bip32_derivations = bip32_derivation(fingerprint, &pk_path, vec![4]);
 
     let mut output_1 = psbt.outputs[1].clone();
-    output_1.bip32_derivation = bip32_derivation(fingerprint, &pk_path, vec![5]);
+    output_1.bip32_derivations = bip32_derivation(fingerprint, &pk_path, vec![5]);
 
     psbt.outputs = vec![output_0, output_1];
 
@@ -358,14 +359,14 @@ fn signer_two_sign(psbt: Psbt, key_map: BTreeMap<bitcoin::PublicKey, PrivateKey>
 
 /// Does the combine according to the BIP, returns the combined PSBT. Verifies against BIP 174 test vector.
 #[track_caller]
-fn combine(mut this: Psbt, that: Psbt) -> Psbt {
+fn combine(this: Psbt, that: Psbt) -> Psbt {
     let expected_psbt_hex = include_str!("data/combine_psbt_hex");
     let expected_psbt: Psbt = hex_psbt(expected_psbt_hex);
 
-    this.combine(that).expect("failed to combine PSBTs");
+    let combined = v0::combine(this.clone(), that).expect("failed to combine PSBTs");
 
-    assert_eq!(this, expected_psbt);
-    this
+    assert_eq!(combined, expected_psbt);
+    combined
 }
 
 /// Does the finalize step according to the BIP, returns the combined PSBT. Verifies against BIP 174
@@ -404,14 +405,14 @@ fn combine_lexicographically() {
     let expected_psbt: Psbt = hex_psbt(expected_psbt_hex);
 
     let v = Vec::from_hex(psbt_1_hex).unwrap();
-    let mut psbt_1 = Psbt::deserialize(&v).expect("failed to deserialize psbt 1");
+    let psbt_1 = Psbt::deserialize(&v).expect("failed to deserialize psbt 1");
 
     let v = Vec::from_hex(psbt_2_hex).unwrap();
     let psbt_2 = Psbt::deserialize(&v).expect("failed to deserialize psbt 2");
 
-    psbt_1.combine(psbt_2).expect("failed to combine PSBTs");
+    let got = v0::combine(psbt_1.clone(), psbt_2).expect("failed to combine PSBTs");
 
-    assert_eq!(psbt_1, expected_psbt);
+    assert_eq!(got, expected_psbt);
 }
 
 /// Signs `psbt` with `keys` if required.
@@ -442,7 +443,7 @@ fn finalize_psbt(mut psbt: Psbt) -> Psbt {
     psbt.inputs[0].partial_sigs = BTreeMap::new();
     psbt.inputs[0].sighash_type = None;
     psbt.inputs[0].redeem_script = None;
-    psbt.inputs[0].bip32_derivation = BTreeMap::new();
+    psbt.inputs[0].bip32_derivations = BTreeMap::new();
 
     // Input 1: SegWit UTXO
 
@@ -472,7 +473,7 @@ fn finalize_psbt(mut psbt: Psbt) -> Psbt {
     psbt.inputs[1].sighash_type = None;
     psbt.inputs[1].redeem_script = None;
     psbt.inputs[1].witness_script = None;
-    psbt.inputs[1].bip32_derivation = BTreeMap::new();
+    psbt.inputs[1].bip32_derivations = BTreeMap::new();
 
     psbt
 }

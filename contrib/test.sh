@@ -39,6 +39,9 @@ do
     cargo test --features="$feature"
 done
 
+cargo build --all-features
+cargo test --all-features
+
 cargo run --example v0
 cargo run --example v2
 cargo run --example v2-separate-creator-constructor
