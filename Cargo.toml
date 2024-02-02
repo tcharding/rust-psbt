@@ -1,5 +1,5 @@
 [package]
-name = "psbt"
+name = "psbt-v2"
 version = "0.1.0"
 authors = ["Tobin C. Harding <me@tobin.cc>"]
 license = "CC0-1.0"

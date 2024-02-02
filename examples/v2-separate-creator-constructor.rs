@@ -1,8 +1,8 @@
 //! PSBT v2 - Creator a PSBT and hand it around to various different entities to add inputs and outputs.
 
-use psbt::bitcoin::hashes::Hash as _;
-use psbt::bitcoin::{Amount, OutPoint, ScriptBuf, TxOut, Txid};
-use psbt::v2::{
+use psbt_v2::bitcoin::hashes::Hash as _;
+use psbt_v2::bitcoin::{Amount, OutPoint, ScriptBuf, TxOut, Txid};
+use psbt_v2::v2::{
     Constructor, Creator, InputBuilder, InputsOnlyModifiable, OutputBuilder, OutputsOnlyModifiable,
     Psbt,
 };

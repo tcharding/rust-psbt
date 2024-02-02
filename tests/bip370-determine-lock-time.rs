@@ -6,8 +6,8 @@ mod util;
 
 use core::str::FromStr;
 
-use psbt::bitcoin::locktime::absolute;
-use psbt::v2;
+use psbt_v2::bitcoin::locktime::absolute;
+use psbt_v2::v2;
 
 #[track_caller]
 fn assert_determine_lock_time(hex: &str, base64: &str, want: absolute::LockTime) {

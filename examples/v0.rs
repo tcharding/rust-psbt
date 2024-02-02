@@ -8,15 +8,15 @@
 
 use std::collections::BTreeMap;
 
-use psbt::bitcoin::hashes::Hash as _;
-use psbt::bitcoin::locktime::absolute;
-use psbt::bitcoin::opcodes::all::OP_CHECKMULTISIG;
-use psbt::bitcoin::secp256k1::{self, rand, SECP256K1};
-use psbt::bitcoin::{
+use psbt_v2::bitcoin::hashes::Hash as _;
+use psbt_v2::bitcoin::locktime::absolute;
+use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
+use psbt_v2::bitcoin::secp256k1::{self, rand, SECP256K1};
+use psbt_v2::bitcoin::{
     script, transaction, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence,
     Transaction, TxIn, TxOut, Txid, Witness,
 };
-use psbt::v0::{self, Psbt};
+use psbt_v2::v0::{self, Psbt};
 
 pub const DUMMY_UTXO_AMOUNT: Amount = Amount::from_sat(20_000_000);
 pub const SPEND_AMOUNT: Amount = Amount::from_sat(20_000_000);

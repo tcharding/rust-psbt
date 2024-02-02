@@ -8,19 +8,19 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use psbt::bitcoin::bip32::{Fingerprint, IntoDerivationPath, KeySource, Xpriv, Xpub};
-use psbt::bitcoin::blockdata::opcodes::OP_0;
-use psbt::bitcoin::blockdata::{script, transaction};
-use psbt::bitcoin::consensus::encode::{deserialize, serialize_hex};
-use psbt::bitcoin::hex::FromHex;
-use psbt::bitcoin::script::PushBytes;
-use psbt::bitcoin::secp256k1::{self, Secp256k1};
-use psbt::bitcoin::{
+use psbt_v2::bitcoin::bip32::{Fingerprint, IntoDerivationPath, KeySource, Xpriv, Xpub};
+use psbt_v2::bitcoin::blockdata::opcodes::OP_0;
+use psbt_v2::bitcoin::blockdata::{script, transaction};
+use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
+use psbt_v2::bitcoin::hex::FromHex;
+use psbt_v2::bitcoin::script::PushBytes;
+use psbt_v2::bitcoin::secp256k1::{self, Secp256k1};
+use psbt_v2::bitcoin::{
     absolute, Amount, Denomination, Network, OutPoint, PrivateKey, PublicKey, ScriptBuf, Sequence,
     Transaction, TxIn, TxOut, Witness,
 };
-use psbt::v0::{self, Psbt};
-use psbt::PsbtSighashType;
+use psbt_v2::v0::{self, Psbt};
+use psbt_v2::PsbtSighashType;
 
 const NETWORK: Network = Network::Testnet;
 

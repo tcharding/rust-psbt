@@ -143,7 +143,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt::v2::{Creator, Constructor, Modifiable};
+    /// use psbt_v2::v2::{Creator, Constructor, Modifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()
@@ -170,7 +170,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt::v2::{Creator, Constructor, InputsOnlyModifiable};
+    /// use psbt_v2::v2::{Creator, Constructor, InputsOnlyModifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()
@@ -196,7 +196,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt::v2::{Creator, Constructor, OutputsOnlyModifiable};
+    /// use psbt_v2::v2::{Creator, Constructor, OutputsOnlyModifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()

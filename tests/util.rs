@@ -4,8 +4,8 @@
 
 use core::str::FromStr;
 
-use psbt::bitcoin::hex::{self, FromHex};
-use psbt::{v0, v2};
+use psbt_v2::bitcoin::hex::{self, FromHex};
+use psbt_v2::{v0, v2};
 
 #[track_caller]
 pub fn hex_psbt_v0(s: &str) -> Result<v0::Psbt, v0::DeserializeError> {
