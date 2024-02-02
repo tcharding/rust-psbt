@@ -57,8 +57,9 @@ use core2::io;
 #[rustfmt::skip]                // Keep pubic re-exports separate
 #[doc(inline)]
 pub use crate::{
-    sighash_type::{PsbtSighashType, InvalidSighashTypeError},
-    version::Version,
+    error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
+    sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
+    version::{Version, UnsupportedVersionError},
 };
 
 /// PSBT version 0 - the original PSBT version.

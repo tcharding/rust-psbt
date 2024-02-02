@@ -30,9 +30,9 @@ impl Extractor {
     /// Creates an `Extractor`.
     ///
     /// An extractor can only accept a PSBT that has been finalized.
-    pub fn new(psbt: Psbt) -> Result<Self, Error> {
+    pub fn new(psbt: Psbt) -> Result<Self, ExtractError> {
         if psbt.inputs.iter().any(|input| !input.is_finalized()) {
-            return Err(Error::PsbtNotFinalized);
+            return Err(ExtractError::PsbtNotFinalized);
         }
         let _ = psbt.determine_lock_time()?;
 
@@ -124,18 +124,18 @@ impl Extractor {
     }
 }
 
-/// Error constructing a [`Finalizer`].
+/// Error constructing an `Extractor`.
 #[derive(Debug)]
-pub enum Error {
+pub enum ExtractError {
     /// Attempted to extract tx from an unfinalized PSBT.
     PsbtNotFinalized,
     /// Finalizer must be able to determine the lock time.
     DetermineLockTime(DetermineLockTimeError),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for ExtractError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Error::*;
+        use ExtractError::*;
 
         match *self {
             PsbtNotFinalized => write!(f, "attempted to extract tx from an unfinalized PSBT"),
@@ -146,9 +146,9 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {
+impl std::error::Error for ExtractError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use Error::*;
+        use ExtractError::*;
 
         match *self {
             DetermineLockTime(ref e) => Some(e),
@@ -157,7 +157,7 @@ impl std::error::Error for Error {
     }
 }
 
-impl From<DetermineLockTimeError> for Error {
+impl From<DetermineLockTimeError> for ExtractError {
     fn from(e: DetermineLockTimeError) -> Self { Self::DetermineLockTime(e) }
 }
 

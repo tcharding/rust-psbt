@@ -272,6 +272,7 @@ impl OutputBuilder {
     pub fn build(self) -> Output { self.0 }
 }
 
+/// An error while decoding.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeError {

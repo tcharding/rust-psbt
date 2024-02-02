@@ -45,19 +45,31 @@ use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v0;
-use crate::v2::map::{global, input, output, Map};
+use crate::v2::map::Map;
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
-    error::{IndexOutOfBoundsError, SignError, PsbtNotModifiableError, NotUnsignedError, OutputsNotModifiableError, InputsNotModifiableError, DetermineLockTimeError, DeserializeError, PartialSigsSighashTypeError},
-    map::{Input, InputBuilder, Output, OutputBuilder, Global}, 
-    extract::{ExtractTxError, ExtractTxFeeRateError, Extractor}
+    error::{
+        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
+        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
+        PsbtNotModifiableError, SignError,
+    },
+    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
+    map::{
+        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
+        global::{self, Global},
+        input::{self, Input, InputBuilder},
+        output::{self, Output, OutputBuilder},
+    },
 };
 #[cfg(feature = "base64")]
-pub use self::display_from_str::PsbtParseError;
+pub use self::display_from_str::ParsePsbtError;
 #[cfg(feature = "miniscript")]
-pub use self::miniscript::{FinalizeError, FinalizeInputError, Finalizer, InputError};
+pub use self::miniscript::{
+    FinalizeError, FinalizeInputError, Finalizer, InputError, InterpreterCheckError,
+    InterpreterCheckInputError,
+};
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 ///
@@ -955,7 +967,9 @@ impl Psbt {
     ///
     /// This can be used at anytime but is primarily used during PSBT finalizing.
     #[cfg(feature = "miniscript")]
-    pub(crate) fn check_partial_sigs_sighash_type(&self) -> Result<(), PartialSigsSighashTypeError> {
+    pub(crate) fn check_partial_sigs_sighash_type(
+        &self,
+    ) -> Result<(), PartialSigsSighashTypeError> {
         use PartialSigsSighashTypeError::*;
 
         for (input_index, input) in self.inputs.iter().enumerate() {
@@ -1254,27 +1268,27 @@ mod display_from_str {
     }
 
     impl FromStr for Psbt {
-        type Err = PsbtParseError;
+        type Err = ParsePsbtError;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let data = BASE64_STANDARD.decode(s).map_err(PsbtParseError::Base64Encoding)?;
-            Psbt::deserialize(&data).map_err(PsbtParseError::PsbtEncoding)
+            let data = BASE64_STANDARD.decode(s).map_err(ParsePsbtError::Base64Encoding)?;
+            Psbt::deserialize(&data).map_err(ParsePsbtError::PsbtEncoding)
         }
     }
 
     /// Error encountered during PSBT decoding from Base64 string.
     #[derive(Debug)]
     #[non_exhaustive]
-    pub enum PsbtParseError {
+    pub enum ParsePsbtError {
         /// Error in internal PSBT data structure.
         PsbtEncoding(DeserializeError),
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }
 
-    impl Display for PsbtParseError {
+    impl Display for ParsePsbtError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            use self::PsbtParseError::*;
+            use self::ParsePsbtError::*;
 
             match *self {
                 PsbtEncoding(ref e) => write_err!(f, "error in internal PSBT data structure"; e),
@@ -1284,9 +1298,9 @@ mod display_from_str {
     }
 
     #[cfg(feature = "std")]
-    impl std::error::Error for PsbtParseError {
+    impl std::error::Error for ParsePsbtError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-            use self::PsbtParseError::*;
+            use self::ParsePsbtError::*;
 
             match self {
                 PsbtEncoding(e) => Some(e),

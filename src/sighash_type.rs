@@ -29,7 +29,7 @@ impl fmt::Display for PsbtSighashType {
 }
 
 impl FromStr for PsbtSighashType {
-    type Err = SighashTypeParseError;
+    type Err = ParseSighashTypeError;
 
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -47,7 +47,7 @@ impl FromStr for PsbtSighashType {
             return Ok(PsbtSighashType { inner });
         }
 
-        Err(SighashTypeParseError { unrecognized: s.to_owned() })
+        Err(ParseSighashTypeError { unrecognized: s.to_owned() })
     }
 }
 impl From<EcdsaSighashType> for PsbtSighashType {
@@ -97,19 +97,19 @@ impl PsbtSighashType {
 /// This is currently returned for unrecognized sighash strings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct SighashTypeParseError {
+pub struct ParseSighashTypeError {
     /// The unrecognized string we attempted to parse.
     pub unrecognized: String,
 }
 
-impl fmt::Display for SighashTypeParseError {
+impl fmt::Display for ParseSighashTypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "unrecognized SIGHASH string '{}'", self.unrecognized)
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for SighashTypeParseError {
+impl std::error::Error for ParseSighashTypeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
