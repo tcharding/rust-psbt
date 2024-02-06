@@ -1,0 +1,13 @@
+[package]
+name = "bitcoind-tests"
+version = "0.1.0"
+authors = ["Tobin C. Harding <me@tobin.cc>"]
+license = "CC0-1.0"
+edition = "2021"
+
+# This crate is only used for testing, no features or dependencies.
+
+[dev-dependencies]
+anyhow = "1"
+bitcoind = { version = "0.34.1", features = ["25_1"] }
+psbt-v2 = { path = "..", features = ["std"] }

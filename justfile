@@ -11,7 +11,8 @@ build:
 
 # Cargo test everything.
 test:
-  cargo test --all --all-targets --all-features
+  cargo test --all-targets --all-features
+  cd bitcoind-tests; cargo test
 
 # Lint everything.
 lint:
