@@ -124,7 +124,7 @@ pub struct Input {
 
 impl Input {
     /// Creates a new `Input` that spends the `previous_output`.
-    pub fn new(previous_output: OutPoint) -> Self {
+    pub fn new(previous_output: &OutPoint) -> Self {
         Input {
             previous_txid: previous_output.txid,
             spent_output_index: previous_output.vout,
@@ -370,7 +370,7 @@ impl Input {
     pub(in crate::v2) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Input`.
         let invalid = OutPoint { txid: Txid::all_zeros(), vout: u32::MAX };
-        let mut rv = Self::new(invalid);
+        let mut rv = Self::new(&invalid);
 
         loop {
             match raw::Pair::decode(r) {
@@ -749,7 +749,7 @@ pub struct InputBuilder(Input);
 
 impl InputBuilder {
     /// Creates a new builder that can be used to build an [`Input`] that spends `previous_output`.
-    pub fn new(previous_output: OutPoint) -> Self { Self(Input::new(previous_output)) }
+    pub fn new(previous_output: &OutPoint) -> Self { Self(Input::new(previous_output)) }
 
     /// Sets the [`Input::min_time`] field.
     pub fn minimum_required_time_based_lock_time(mut self, lock: absolute::Time) -> Self {
@@ -1010,7 +1010,7 @@ mod test {
     #[test]
     #[cfg(feature = "std")]
     fn serialize_roundtrip() {
-        let input = Input::new(out_point());
+        let input = Input::new(&out_point());
 
         let ser = input.serialize_map();
         let mut d = std::io::Cursor::new(ser);

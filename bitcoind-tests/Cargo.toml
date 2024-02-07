@@ -5,9 +5,12 @@ authors = ["Tobin C. Harding <me@tobin.cc>"]
 license = "CC0-1.0"
 edition = "2021"
 
-# This crate is only used for testing, no features or dependencies.
+[dependencies]
+anyhow = "1"
+bitcoin = { version = "0.31.0", features = ["rand-std"] }
+bitcoind = { version = "0.34.1", features = ["25_1"] }
+secp256k1 = { version = "0.28.2", features = ["global-context", "rand-std"] }
+psbt-v2 = { path = "..", features = ["std", "miniscript-std"] }
 
 [dev-dependencies]
-anyhow = "1"
-bitcoind = { version = "0.34.1", features = ["25_1"] }
-psbt-v2 = { path = "..", features = ["std"] }
+

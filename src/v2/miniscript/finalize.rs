@@ -81,8 +81,6 @@ impl Finalizer {
     }
 
     /// Returns the final script_sig and final witness for this input.
-    ///
-    /// Note if this is a legacy input the returned `Witness` will be empty.
     // TODO: Think harder about this.
     //
     // Input finalizer should only set script sig and witness iff one is required
@@ -129,6 +127,8 @@ impl Finalizer {
         };
 
         let witness = Witness::from_slice(&witness);
+        println!("{:#?}", script_sig);
+        println!("{:#?}", witness);
         Ok((script_sig, witness))
     }
 

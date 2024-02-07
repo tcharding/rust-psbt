@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     let psbt = Psbt::deserialize(&ser)?;
     let in_0 = dummy_out_point();
     let ser = Constructor::<InputsOnlyModifiable>::new(psbt)?
-        .input(InputBuilder::new(in_0).build())
+        .input(InputBuilder::new(&in_0).build())
         .psbt()
         .expect("valid lock time combination")
         .serialize();
@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     let psbt = Psbt::deserialize(&ser)?;
     let in_1 = dummy_out_point();
     let ser = Constructor::<InputsOnlyModifiable>::new(psbt)?
-        .input(InputBuilder::new(in_1).build())
+        .input(InputBuilder::new(&in_1).build())
         .no_more_inputs()
         .psbt()
         .expect("valid lock time combination")

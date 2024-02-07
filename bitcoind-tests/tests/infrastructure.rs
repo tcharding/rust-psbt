@@ -1,40 +1,36 @@
 //! Test the bitcoind infrastructure.
 
-mod client;
-
-use client::Client;
-use psbt_v2::bitcoin::Amount;
-
-#[track_caller]
-fn client() -> Client {
-    let client = Client::new().expect("failed to create client");
-    // Sanity check.
-    assert_eq!(0, client.get_blockchain_info().unwrap().blocks);
-
-    client.fund().expect("failed to fund client");
-    client
-}
+// Depend directly on `bitcoin` (and `bitcoind_tests`) because we are explicitly
+// testing the `bitcoind_tests` crate.
+use bitcoin::Amount;
+use bitcoind_tests::client::Client;
 
 #[test]
 fn bitcoind_get_core_wallet_controlled_address() {
-    let client = client();
+    let client = Client::new().expect("failed to create client");
     let address = client.core_wallet_controlled_address().expect("get_new_address failed");
     println!("address: {}", address);
 }
 
 #[test]
-fn bitcoind_fund_core_controlled_wallet() {
-    let client = client();
-    assert!(client.fund().is_ok())
-}
-
-#[test]
 fn bitcoind_send() {
-    let client = client();
+    let mut client = Client::new().expect("failed to create client");
+    assert_eq!(client.tracked_balance(), Amount::ZERO);
+
+    // Mine a block to release initial funds (coinbase reward).
+    client.mine_a_block().expect("initial mine_a_block failed");
+    // Sanity check, we should have 50 BTC.
+    assert_eq!(client.tracked_balance(), Amount::from_btc(50.0).unwrap());
+    client.assert_balance_is_as_expected().expect("incorrect balance");
 
     let address = client.core_wallet_controlled_address().expect("get_new_address failed");
     let amount = Amount::ONE_BTC;
 
     let txid = client.send(amount, &address).expect("send failed");
+    client.balance.send_to_self();
+
+    client.mine_a_block().expect("mine_a_block failed");
+
+    client.assert_balance_is_as_expected().expect("incorrect balance");
     println!("txid: {}", txid);
 }
