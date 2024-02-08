@@ -1,3 +1,7 @@
+# 0.1.1 - 2024-02-08
+
+Add various combinations of the three bips as keywords.
+
 # 0.1.0 - 2024-02-08
 
 The initial non-beta release!
