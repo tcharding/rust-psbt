@@ -1,4 +1,6 @@
-ignore = []
+# rust-miniscript uses a different rustfmt configuration and we want
+# to preserve the code to make rebasing easier for now.
+ignore = ["src/v0/miniscript"]
 hard_tabs = false
 tab_spaces = 4
 newline_style = "Auto"

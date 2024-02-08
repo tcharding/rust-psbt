@@ -29,7 +29,7 @@ use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 use crate::v2::map::Map;
-use crate::{io, raw, serialize, v0};
+use crate::{io, raw, serialize};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
@@ -155,32 +155,32 @@ impl Input {
         }
     }
 
-    /// Converts this `Input` to a `v0::Input`.
-    pub(crate) fn into_v0(self) -> v0::Input {
-        v0::Input {
-            non_witness_utxo: self.non_witness_utxo,
-            witness_utxo: self.witness_utxo,
-            partial_sigs: self.partial_sigs,
-            sighash_type: self.sighash_type,
-            redeem_script: self.redeem_script,
-            witness_script: self.witness_script,
-            bip32_derivations: self.bip32_derivations,
-            final_script_sig: self.final_script_sig,
-            final_script_witness: self.final_script_witness,
-            ripemd160_preimages: self.ripemd160_preimages,
-            sha256_preimages: self.sha256_preimages,
-            hash160_preimages: self.hash160_preimages,
-            hash256_preimages: self.hash256_preimages,
-            tap_key_sig: self.tap_key_sig,
-            tap_script_sigs: self.tap_script_sigs,
-            tap_scripts: self.tap_scripts,
-            tap_key_origins: self.tap_key_origins,
-            tap_internal_key: self.tap_internal_key,
-            tap_merkle_root: self.tap_merkle_root,
-            proprietaries: self.proprietaries,
-            unknowns: self.unknowns,
-        }
-    }
+    // /// Converts this `Input` to a `v0::Input`.
+    // pub(crate) fn into_v0(self) -> v0::Input {
+    //     v0::Input {
+    //         non_witness_utxo: self.non_witness_utxo,
+    //         witness_utxo: self.witness_utxo,
+    //         partial_sigs: self.partial_sigs,
+    //         sighash_type: self.sighash_type,
+    //         redeem_script: self.redeem_script,
+    //         witness_script: self.witness_script,
+    //         bip32_derivation: self.bip32_derivations,
+    //         final_script_sig: self.final_script_sig,
+    //         final_script_witness: self.final_script_witness,
+    //         ripemd160_preimages: self.ripemd160_preimages,
+    //         sha256_preimages: self.sha256_preimages,
+    //         hash160_preimages: self.hash160_preimages,
+    //         hash256_preimages: self.hash256_preimages,
+    //         tap_key_sig: self.tap_key_sig,
+    //         tap_script_sigs: self.tap_script_sigs,
+    //         tap_scripts: self.tap_scripts,
+    //         tap_key_origins: self.tap_key_origins,
+    //         tap_internal_key: self.tap_internal_key,
+    //         tap_merkle_root: self.tap_merkle_root,
+    //         proprietary: self.proprietaries,
+    //         unknown: self.unknowns,
+    //     }
+    // }
 
     /// Creates a new finalized input.
     ///
@@ -408,57 +408,57 @@ impl Input {
                 self.spent_output_index = vout;
             }
             PSBT_IN_SEQUENCE => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.sequence <= <raw_key: _>|<raw_value: Sequence>
                 }
             }
             PSBT_IN_REQUIRED_TIME_LOCKTIME => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.min_time <= <raw_key: _>|<raw_value: absolute::Time>
                 }
             }
             PSBT_IN_REQUIRED_HEIGHT_LOCKTIME => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.min_height <= <raw_key: _>|<raw_value: absolute::Height>
                 }
             }
             PSBT_IN_WITNESS_UTXO => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.witness_utxo <= <raw_key: _>|<raw_value: TxOut>
                 }
             }
             PSBT_IN_PARTIAL_SIG => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.partial_sigs <= <raw_key: PublicKey>|<raw_value: ecdsa::Signature>
                 }
             }
             PSBT_IN_SIGHASH_TYPE => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.sighash_type <= <raw_key: _>|<raw_value: PsbtSighashType>
                 }
             }
             PSBT_IN_REDEEM_SCRIPT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.redeem_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
             PSBT_IN_WITNESS_SCRIPT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.witness_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
             PSBT_IN_BIP32_DERIVATION => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.bip32_derivations <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
             PSBT_IN_FINAL_SCRIPTSIG => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.final_script_sig <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
             PSBT_IN_FINAL_SCRIPTWITNESS => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.final_script_witness <= <raw_key: _>|<raw_value: Witness>
                 }
             }
@@ -495,32 +495,32 @@ impl Input {
                 )?;
             }
             PSBT_IN_TAP_KEY_SIG => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_key_sig <= <raw_key: _>|<raw_value: taproot::Signature>
                 }
             }
             PSBT_IN_TAP_SCRIPT_SIG => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_script_sigs <= <raw_key: (XOnlyPublicKey, TapLeafHash)>|<raw_value: taproot::Signature>
                 }
             }
             PSBT_IN_TAP_LEAF_SCRIPT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_scripts <= <raw_key: ControlBlock>|< raw_value: (ScriptBuf, LeafVersion)>
                 }
             }
             PSBT_IN_TAP_BIP32_DERIVATION => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
             PSBT_IN_TAP_INTERNAL_KEY => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_internal_key <= <raw_key: _>|< raw_value: XOnlyPublicKey>
                 }
             }
             PSBT_IN_TAP_MERKLE_ROOT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_merkle_root <= <raw_key: _>|< raw_value: TapNodeHash>
                 }
             }
@@ -564,10 +564,10 @@ impl Input {
         }
 
         // TODO: Should we keep any value other than Sequence::MAX since it is default?
-        combine_option!(sequence, self, other);
-        combine_option!(min_time, self, other);
-        combine_option!(min_height, self, other);
-        combine_option!(non_witness_utxo, self, other);
+        v2_combine_option!(sequence, self, other);
+        v2_combine_option!(min_time, self, other);
+        v2_combine_option!(min_height, self, other);
+        v2_combine_option!(non_witness_utxo, self, other);
 
         // TODO: Copied from v0, confirm this is correct.
         if let (&None, Some(witness_utxo)) = (&self.witness_utxo, other.witness_utxo) {
@@ -575,25 +575,25 @@ impl Input {
             self.non_witness_utxo = None; // Clear out any non-witness UTXO when we set a witness one
         }
 
-        combine_map!(partial_sigs, self, other);
+        v2_combine_map!(partial_sigs, self, other);
         // TODO: Why do we not combine sighash_type?
-        combine_option!(redeem_script, self, other);
-        combine_option!(witness_script, self, other);
-        combine_map!(bip32_derivations, self, other);
-        combine_option!(final_script_sig, self, other);
-        combine_option!(final_script_witness, self, other);
-        combine_map!(ripemd160_preimages, self, other);
-        combine_map!(sha256_preimages, self, other);
-        combine_map!(hash160_preimages, self, other);
-        combine_map!(hash256_preimages, self, other);
-        combine_option!(tap_key_sig, self, other);
-        combine_map!(tap_script_sigs, self, other);
-        combine_map!(tap_scripts, self, other);
-        combine_map!(tap_key_origins, self, other);
-        combine_option!(tap_internal_key, self, other);
-        combine_option!(tap_merkle_root, self, other);
-        combine_map!(proprietaries, self, other);
-        combine_map!(unknowns, self, other);
+        v2_combine_option!(redeem_script, self, other);
+        v2_combine_option!(witness_script, self, other);
+        v2_combine_map!(bip32_derivations, self, other);
+        v2_combine_option!(final_script_sig, self, other);
+        v2_combine_option!(final_script_witness, self, other);
+        v2_combine_map!(ripemd160_preimages, self, other);
+        v2_combine_map!(sha256_preimages, self, other);
+        v2_combine_map!(hash160_preimages, self, other);
+        v2_combine_map!(hash256_preimages, self, other);
+        v2_combine_option!(tap_key_sig, self, other);
+        v2_combine_map!(tap_script_sigs, self, other);
+        v2_combine_map!(tap_scripts, self, other);
+        v2_combine_map!(tap_key_origins, self, other);
+        v2_combine_option!(tap_internal_key, self, other);
+        v2_combine_option!(tap_merkle_root, self, other);
+        v2_combine_map!(proprietaries, self, other);
+        v2_combine_map!(unknowns, self, other);
 
         Ok(())
     }
@@ -613,89 +613,89 @@ impl Map for Input {
             value: self.spent_output_index.serialize(),
         });
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.sequence, PSBT_IN_SEQUENCE)
         }
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.min_time, PSBT_IN_REQUIRED_TIME_LOCKTIME)
         }
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.min_height, PSBT_IN_REQUIRED_HEIGHT_LOCKTIME)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.non_witness_utxo, PSBT_IN_NON_WITNESS_UTXO)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.witness_utxo, PSBT_IN_WITNESS_UTXO)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.partial_sigs, PSBT_IN_PARTIAL_SIG)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.sighash_type, PSBT_IN_SIGHASH_TYPE)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.redeem_script, PSBT_IN_REDEEM_SCRIPT)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.witness_script, PSBT_IN_WITNESS_SCRIPT)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.bip32_derivations, PSBT_IN_BIP32_DERIVATION)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.final_script_sig, PSBT_IN_FINAL_SCRIPTSIG)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.final_script_witness, PSBT_IN_FINAL_SCRIPTWITNESS)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.ripemd160_preimages, PSBT_IN_RIPEMD160)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.sha256_preimages, PSBT_IN_SHA256)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.hash160_preimages, PSBT_IN_HASH160)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.hash256_preimages, PSBT_IN_HASH256)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.tap_key_sig, PSBT_IN_TAP_KEY_SIG)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.tap_script_sigs, PSBT_IN_TAP_SCRIPT_SIG)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.tap_scripts, PSBT_IN_TAP_LEAF_SCRIPT)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.tap_key_origins, PSBT_IN_TAP_BIP32_DERIVATION)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.tap_internal_key, PSBT_IN_TAP_INTERNAL_KEY)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.tap_merkle_root, PSBT_IN_TAP_MERKLE_ROOT)
         }
         for (key, value) in self.proprietaries.iter() {

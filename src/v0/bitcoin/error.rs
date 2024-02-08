@@ -2,14 +2,15 @@
 
 use core::fmt;
 
-use crate::error::write_err;
+use bitcoin::bip32::Xpub;
+use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::consensus::encode;
+use bitcoin::{hashes, secp256k1};
 
-use miniscript::bip32::Xpub;
-use miniscript::blockdata::transaction::Transaction;
-use miniscript::consensus::encode;
-use miniscript::prelude::*;
-use miniscript::psbt::raw;
-use miniscript::{hashes, io};
+use crate::error::write_err;
+use crate::io;
+use crate::prelude::*;
+use crate::v0::bitcoin::raw;
 
 /// Enum for marking psbt hash error.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -77,15 +78,15 @@ pub enum Error {
     /// Integer overflow in fee calculation
     FeeOverflow,
     /// Parsing error indicating invalid public keys
-    InvalidPublicKey(crate::crypto::key::Error),
+    InvalidPublicKey(bitcoin::key::Error),
     /// Parsing error indicating invalid secp256k1 public keys
     InvalidSecp256k1PublicKey(secp256k1::Error),
     /// Parsing error indicating invalid xonly public keys
     InvalidXOnlyPublicKey,
     /// Parsing error indicating invalid ECDSA signatures
-    InvalidEcdsaSignature(crate::crypto::ecdsa::Error),
+    InvalidEcdsaSignature(bitcoin::ecdsa::Error),
     /// Parsing error indicating invalid taproot signatures
-    InvalidTaprootSignature(crate::crypto::taproot::SigFromSliceError),
+    InvalidTaprootSignature(bitcoin::taproot::SigFromSliceError),
     /// Parsing error indicating invalid control block
     InvalidControlBlock,
     /// Parsing error indicating invalid leaf version
@@ -93,7 +94,7 @@ pub enum Error {
     /// Parsing error indicating a taproot error
     Taproot(&'static str),
     /// Taproot tree deserilaization error
-    TapTree(crate::taproot::IncompleteBuilderError),
+    TapTree(bitcoin::taproot::IncompleteBuilderError),
     /// Error related to an xpub key
     XPubKey(&'static str),
     /// Error related to PSBT version
@@ -102,6 +103,11 @@ pub enum Error {
     PartialDataConsumption,
     /// I/O error.
     Io(io::Error),
+    /// Key must be excluded from this version of PSBT (see consts.rs for u8 values).
+    ExcludedKey {
+        /// The disallowed valued.
+        key_type_value: u8,
+    },
 }
 
 impl fmt::Display for Error {
@@ -156,6 +162,11 @@ impl fmt::Display for Error {
             PartialDataConsumption =>
                 f.write_str("data not consumed entirely when explicitly deserializing"),
             Io(ref e) => write_err!(f, "I/O error"; e),
+            ExcludedKey { key_type_value } => write!(
+                f,
+                "found a keypair type that is explicitly excluded: {}",
+                crate::consts::psbt_in_key_type_value_to_str(key_type_value)
+            ),
         }
     }
 }
@@ -197,7 +208,8 @@ impl std::error::Error for Error {
             | TapTree(_)
             | XPubKey(_)
             | Version(_)
-            | PartialDataConsumption => None,
+            | PartialDataConsumption
+            | ExcludedKey { .. } => None,
         }
     }
 }

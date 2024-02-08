@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: CC0-1.0
 
-pub mod global;
-pub mod input;
-pub mod output;
+use miniscript::prelude::*;
+use miniscript::psbt::raw;
 
-use crate::prelude::*;
-use crate::raw;
-use crate::serialize::Serialize;
+mod global;
+mod input;
+mod output;
 
-#[rustfmt::skip]                // Keep pubic re-exports separate
-pub use self::{
-    input::Input,
-    output::Output,
-    global::Global,
-};
+pub use self::input::{Input, PsbtSighashType};
+pub use self::output::Output;
+use super::serialize::Serialize;
 
 /// A trait that describes a PSBT key-value map.
 pub(super) trait Map {

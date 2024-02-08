@@ -4,7 +4,7 @@
 ///
 /// Sets `self.thing` to be `Some(other.thing)` iff `self.thing` is `None`.
 /// If `self.thing` already contains a value then this macro does nothing.
-macro_rules! combine_option {
+macro_rules! v2_combine_option {
     ($thing:ident, $slf:ident, $other:ident) => {
         if let (&None, Some($thing)) = (&$slf.$thing, $other.$thing) {
             $slf.$thing = Some($thing);
@@ -13,21 +13,21 @@ macro_rules! combine_option {
 }
 
 /// Combines to `BTreeMap` fields by extending the map in `self.thing`.
-macro_rules! combine_map {
+macro_rules! v2_combine_map {
     ($thing:ident, $slf:ident, $other:ident) => {
         $slf.$thing.extend($other.$thing)
     };
 }
 
 // Implements our Serialize/Deserialize traits using bitcoin consensus serialization.
-macro_rules! impl_psbt_de_serialize {
+macro_rules! v2_impl_psbt_de_serialize {
     ($thing:ty) => {
-        impl_psbt_serialize!($thing);
-        impl_psbt_deserialize!($thing);
+        v2_impl_psbt_serialize!($thing);
+        v2_impl_psbt_deserialize!($thing);
     };
 }
 
-macro_rules! impl_psbt_deserialize {
+macro_rules! v2_impl_psbt_deserialize {
     ($thing:ty) => {
         impl $crate::serialize::Deserialize for $thing {
             fn deserialize(bytes: &[u8]) -> Result<Self, $crate::serialize::Error> {
@@ -38,7 +38,7 @@ macro_rules! impl_psbt_deserialize {
     };
 }
 
-macro_rules! impl_psbt_serialize {
+macro_rules! v2_impl_psbt_serialize {
     ($thing:ty) => {
         impl $crate::serialize::Serialize for $thing {
             fn serialize(&self) -> $crate::prelude::Vec<u8> { bitcoin::consensus::serialize(self) }
@@ -48,7 +48,7 @@ macro_rules! impl_psbt_serialize {
 
 // Note we purposefully do not use the fully qualified path for `InsertPairError`.
 #[rustfmt::skip]
-macro_rules! impl_psbt_insert_pair {
+macro_rules! v2_impl_psbt_insert_pair {
     ($slf:ident.$unkeyed_name:ident <= <$raw_key:ident: _>|<$raw_value:ident: $unkeyed_value_type:ty>) => {
         if $raw_key.key.is_empty() {
             if $slf.$unkeyed_name.is_none() {
@@ -78,7 +78,7 @@ macro_rules! impl_psbt_insert_pair {
 }
 
 #[rustfmt::skip]
-macro_rules! impl_psbt_get_pair {
+macro_rules! v2_impl_psbt_get_pair {
     ($rv:ident.push($slf:ident.$unkeyed_name:ident, $unkeyed_typeval:ident)) => {
         if let Some(ref $unkeyed_name) = $slf.$unkeyed_name {
             $rv.push($crate::raw::Pair {
@@ -104,14 +104,14 @@ macro_rules! impl_psbt_get_pair {
 }
 
 // macros for serde of hashes
-macro_rules! impl_psbt_hash_de_serialize {
+macro_rules! v2_impl_psbt_hash_de_serialize {
     ($hash_type:ty) => {
-        impl_psbt_hash_serialize!($hash_type);
-        impl_psbt_hash_deserialize!($hash_type);
+        v2_impl_psbt_hash_serialize!($hash_type);
+        v2_impl_psbt_hash_deserialize!($hash_type);
     };
 }
 
-macro_rules! impl_psbt_hash_deserialize {
+macro_rules! v2_impl_psbt_hash_deserialize {
     ($hash_type:ty) => {
         impl $crate::serialize::Deserialize for $hash_type {
             fn deserialize(bytes: &[u8]) -> Result<Self, $crate::serialize::Error> {
@@ -121,7 +121,7 @@ macro_rules! impl_psbt_hash_deserialize {
     };
 }
 
-macro_rules! impl_psbt_hash_serialize {
+macro_rules! v2_impl_psbt_hash_serialize {
     ($hash_type:ty) => {
         impl $crate::serialize::Serialize for $hash_type {
             fn serialize(&self) -> $crate::prelude::Vec<u8> { self.as_byte_array().to_vec() }
