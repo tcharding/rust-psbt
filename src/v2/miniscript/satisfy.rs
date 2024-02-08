@@ -125,6 +125,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
     }
 }
 
+#[allow(clippy::ptr_arg)]       // We don't control the function signature this is used in.
 fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];
