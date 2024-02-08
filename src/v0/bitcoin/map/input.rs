@@ -41,6 +41,16 @@ const PSBT_IN_FINAL_SCRIPTWITNESS: u8 = 0x08;
 const PSBT_IN_RIPEMD160: u8 = 0x0a;
 /// Type: SHA256 preimage PSBT_IN_SHA256 = 0x0b
 const PSBT_IN_SHA256: u8 = 0x0b;
+/// Type: Previous TXID PSBT_IN_PREVIOUS_TXID = 0x0e
+const PSBT_IN_PREVIOUS_TXID: u8 = 0x0e;
+/// Type: Spent Output Index PSBT_IN_OUTPUT_INDEX = 0x0f
+const PSBT_IN_OUTPUT_INDEX: u8 = 0x0f;
+/// Type: Sequence Number PSBT_IN_SEQUENCE = 0x10
+const PSBT_IN_SEQUENCE: u8 = 0x10;
+/// Type: Required Time-based Locktime PSBT_IN_REQUIRED_TIME_LOCKTIME = 0x11
+const PSBT_IN_REQUIRED_TIME_LOCKTIME: u8 = 0x11;
+/// Type: Required Height-based Locktime PSBT_IN_REQUIRED_HEIGHT_LOCKTIME = 0x12
+const PSBT_IN_REQUIRED_HEIGHT_LOCKTIME: u8 = 0x12;
 /// Type: HASH160 preimage PSBT_IN_HASH160 = 0x0c
 const PSBT_IN_HASH160: u8 = 0x0c;
 /// Type: HASH256 preimage PSBT_IN_HASH256 = 0x0d
@@ -276,6 +286,14 @@ impl Input {
                     }
                     btree_map::Entry::Occupied(_) => return Err(Error::DuplicateKey(raw_key)),
                 }
+            }
+            v if v == PSBT_IN_PREVIOUS_TXID
+                || v == PSBT_IN_OUTPUT_INDEX
+                || v == PSBT_IN_SEQUENCE
+                || v == PSBT_IN_REQUIRED_TIME_LOCKTIME
+                || v == PSBT_IN_REQUIRED_HEIGHT_LOCKTIME =>
+            {
+                return Err(Error::ExcludedKey { key_type_value: v });
             }
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {

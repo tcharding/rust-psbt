@@ -23,6 +23,10 @@ const PSBT_OUT_TAP_INTERNAL_KEY: u8 = 0x05;
 const PSBT_OUT_TAP_TREE: u8 = 0x06;
 /// Type: Taproot Key BIP 32 Derivation Path PSBT_OUT_TAP_BIP32_DERIVATION = 0x07
 const PSBT_OUT_TAP_BIP32_DERIVATION: u8 = 0x07;
+/// Type: Output Amount PSBT_OUT_AMOUNT = 0x03
+const PSBT_OUT_AMOUNT: u8 = 0x03;
+/// Type: Output Script PSBT_OUT_SCRIPT = 0x04
+const PSBT_OUT_SCRIPT: u8 = 0x04;
 /// Type: Proprietary Use Type PSBT_IN_PROPRIETARY = 0xFC
 const PSBT_OUT_PROPRIETARY: u8 = 0xFC;
 
@@ -98,6 +102,9 @@ impl Output {
                 impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
+            }
+            v if v == PSBT_OUT_AMOUNT || v == PSBT_OUT_SCRIPT => {
+                return Err(Error::ExcludedKey { key_type_value: v });
             }
             _ => match self.unknown.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
