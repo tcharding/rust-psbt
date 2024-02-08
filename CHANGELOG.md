@@ -1,3 +1,9 @@
+# 0.1.0 - 2024-02-08
+
+The initial non-beta release!
+
+Includes some fixes required to enable porting `bdk` to use the `v0` module.
+
 # 0.1.0-beta.1 - 2024-02-08
 
 - Re-import all the PSBT v0 code from `rust-bitcoin` and `rust-miniscript`[#23](https://github.com/tcharding/rust-psbt/pull/23)
