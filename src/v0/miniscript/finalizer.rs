@@ -453,7 +453,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
 
     use super::*;
-    use miniscript::psbt::PsbtExt;
+    use crate::v0::miniscript::PsbtExt;
 
     #[test]
     fn tests_from_bip174() {
