@@ -6,7 +6,7 @@ use core::fmt;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, KeySource, Xpub};
 use bitcoin::consensus::{encode as consensus, Decodable};
 use bitcoin::locktime::absolute;
-use bitcoin::{bip32, transaction, Transaction, VarInt};
+use bitcoin::{bip32, transaction, VarInt};
 
 use crate::consts::{
     PSBT_GLOBAL_FALLBACK_LOCKTIME, PSBT_GLOBAL_INPUT_COUNT, PSBT_GLOBAL_OUTPUT_COUNT,
@@ -19,7 +19,7 @@ use crate::prelude::*;
 use crate::serialize::Serialize;
 use crate::v2::map::Map;
 use crate::version::Version;
-use crate::{consts, raw, serialize, v0, V0, V2};
+use crate::{consts, raw, serialize, V2};
 
 /// The Inputs Modifiable Flag, set to 1 to indicate whether inputs can be added or removed.
 const INPUTS_MODIFIABLE: u8 = 0x01 << 0;
@@ -78,17 +78,6 @@ impl Global {
             xpubs: Default::default(),
             proprietaries: Default::default(),
             unknowns: Default::default(),
-        }
-    }
-
-    /// Converts this `Global` to a `v0::Global`.
-    pub(crate) fn into_v0(self, unsigned_tx: Transaction) -> v0::Global {
-        v0::Global {
-            unsigned_tx,
-            version: V0,
-            xpubs: self.xpubs,
-            proprietaries: self.proprietaries,
-            unknowns: self.unknowns,
         }
     }
 
@@ -400,8 +389,8 @@ impl Global {
             }
         }
 
-        combine_map!(proprietaries, self, other);
-        combine_map!(unknowns, self, other);
+        v2_combine_map!(proprietaries, self, other);
+        v2_combine_map!(unknowns, self, other);
 
         Ok(())
     }
@@ -425,7 +414,7 @@ impl Map for Global {
             value: self.tx_version.serialize(),
         });
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.fallback_lock_time, PSBT_GLOBAL_FALLBACK_LOCKTIME)
         }
 

@@ -44,7 +44,6 @@ use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
-use crate::v0;
 use crate::v2::map::Map;
 
 #[rustfmt::skip]                // Keep public exports separate.
@@ -406,18 +405,18 @@ impl Updater {
         Ok(self)
     }
 
-    /// Converts the inner PSBT v2 to a PSBT v0.
-    pub fn into_psbt_v0(self) -> v0::Psbt {
-        let unsigned_tx =
-            self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
-        let psbt = self.psbt();
+    // /// Converts the inner PSBT v2 to a PSBT v0.
+    // pub fn into_psbt_v0(self) -> v0::Psbt {
+    //     let unsigned_tx =
+    //         self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
+    //     let psbt = self.psbt();
 
-        let global = psbt.global.into_v0(unsigned_tx);
-        let inputs = psbt.inputs.into_iter().map(|input| input.into_v0()).collect();
-        let outputs = psbt.outputs.into_iter().map(|output| output.into_v0()).collect();
+    //     let global = psbt.global.into_v0(unsigned_tx);
+    //     let inputs = psbt.inputs.into_iter().map(|input| input.into_v0()).collect();
+    //     let outputs = psbt.outputs.into_iter().map(|output| output.into_v0()).collect();
 
-        v0::Psbt { global, inputs, outputs }
-    }
+    //     v0::Psbt { global, inputs, outputs }
+    // }
 
     /// Returns the inner [`Psbt`].
     pub fn psbt(self) -> Psbt { self.0 }

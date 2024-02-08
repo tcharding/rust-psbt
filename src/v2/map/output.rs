@@ -17,7 +17,7 @@ use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::v2::map::Map;
-use crate::{io, raw, serialize, v0};
+use crate::{io, raw, serialize};
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -71,19 +71,19 @@ impl Output {
         }
     }
 
-    /// Converts this `Output` to a `v0::Output`.
-    pub(crate) fn into_v0(self) -> v0::Output {
-        v0::Output {
-            redeem_script: self.redeem_script,
-            witness_script: self.witness_script,
-            bip32_derivations: self.bip32_derivations,
-            tap_internal_key: self.tap_internal_key,
-            tap_tree: self.tap_tree,
-            tap_key_origins: self.tap_key_origins,
-            proprietaries: self.proprietaries,
-            unknowns: self.unknowns,
-        }
-    }
+    // /// Converts this `Output` to a `v0::Output`.
+    // pub(crate) fn into_v0(self) -> v0::Output {
+    //     v0::Output {
+    //         redeem_script: self.redeem_script,
+    //         witness_script: self.witness_script,
+    //         bip32_derivation: self.bip32_derivations,
+    //         tap_internal_key: self.tap_internal_key,
+    //         tap_tree: self.tap_tree,
+    //         tap_key_origins: self.tap_key_origins,
+    //         proprietary: self.proprietaries,
+    //         unknown: self.unknowns,
+    //     }
+    // }
 
     /// Creates the [`TxOut`] associated with this `Output`.
     pub(crate) fn tx_out(&self) -> TxOut {
@@ -132,17 +132,17 @@ impl Output {
             }
 
             PSBT_OUT_REDEEM_SCRIPT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.redeem_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
             PSBT_OUT_WITNESS_SCRIPT => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.witness_script <= <raw_key: _>|<raw_value: ScriptBuf>
                 }
             }
             PSBT_OUT_BIP32_DERIVATION => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.bip32_derivations <= <raw_key: secp256k1::PublicKey>|<raw_value: KeySource>
                 }
             }
@@ -157,17 +157,17 @@ impl Output {
                 }
             }
             PSBT_OUT_TAP_INTERNAL_KEY => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_internal_key <= <raw_key: _>|<raw_value: XOnlyPublicKey>
                 }
             }
             PSBT_OUT_TAP_TREE => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_tree <= <raw_key: _>|<raw_value: TapTree>
                 }
             }
             PSBT_OUT_TAP_BIP32_DERIVATION => {
-                impl_psbt_insert_pair! {
+                v2_impl_psbt_insert_pair! {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
@@ -197,14 +197,14 @@ impl Output {
             });
         }
 
-        combine_option!(redeem_script, self, other);
-        combine_option!(witness_script, self, other);
-        combine_map!(bip32_derivations, self, other);
-        combine_option!(tap_internal_key, self, other);
-        combine_option!(tap_tree, self, other);
-        combine_map!(tap_key_origins, self, other);
-        combine_map!(proprietaries, self, other);
-        combine_map!(unknowns, self, other);
+        v2_combine_option!(redeem_script, self, other);
+        v2_combine_option!(witness_script, self, other);
+        v2_combine_map!(bip32_derivations, self, other);
+        v2_combine_option!(tap_internal_key, self, other);
+        v2_combine_option!(tap_tree, self, other);
+        v2_combine_map!(tap_key_origins, self, other);
+        v2_combine_map!(proprietaries, self, other);
+        v2_combine_map!(unknowns, self, other);
 
         Ok(())
     }
@@ -224,27 +224,27 @@ impl Map for Output {
             value: self.script_pubkey.serialize(),
         });
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.redeem_script, PSBT_OUT_REDEEM_SCRIPT)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.witness_script, PSBT_OUT_WITNESS_SCRIPT)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.bip32_derivations, PSBT_OUT_BIP32_DERIVATION)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.tap_internal_key, PSBT_OUT_TAP_INTERNAL_KEY)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push(self.tap_tree, PSBT_OUT_TAP_TREE)
         }
 
-        impl_psbt_get_pair! {
+        v2_impl_psbt_get_pair! {
             rv.push_map(self.tap_key_origins, PSBT_OUT_TAP_BIP32_DERIVATION)
         }
 

@@ -8,7 +8,7 @@ use psbt_v2::bitcoin::hex::{self, FromHex};
 use psbt_v2::{v0, v2};
 
 #[track_caller]
-pub fn hex_psbt_v0(s: &str) -> Result<v0::Psbt, v0::DeserializeError> {
+pub fn hex_psbt_v0(s: &str) -> Result<v0::Psbt, v0::bitcoin::Error> {
     let r: Result<Vec<u8>, hex::HexToBytesError> = Vec::from_hex(s);
     match r {
         Err(_e) => panic!("unable to parse PSBT v0 from hex string {}", s),

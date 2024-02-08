@@ -5,6 +5,8 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
+#![allow(dead_code)]
+
 /// Type: Unsigned Transaction PSBT_GLOBAL_UNSIGNED_TX = 0x00
 pub(crate) const PSBT_GLOBAL_UNSIGNED_TX: u8 = 0x00;
 /// Type: Extended Public Key PSBT_GLOBAL_XPUB = 0x01
@@ -113,6 +115,7 @@ pub(crate) fn psbt_global_key_type_value_to_str(v: u8) -> &'static str {
     }
 }
 
+/// Converts an input key type value consts to a string, useful for debugging.
 pub(crate) fn psbt_in_key_type_value_to_str(v: u8) -> &'static str {
     match v {
         PSBT_IN_NON_WITNESS_UTXO => "PSBT_IN_NON_WITNESS_UTXO",
@@ -145,6 +148,7 @@ pub(crate) fn psbt_in_key_type_value_to_str(v: u8) -> &'static str {
     }
 }
 
+/// Converts an output key type value consts to a string, useful for debugging.
 pub(crate) fn psbt_out_key_type_value_to_str(v: u8) -> &'static str {
     match v {
         PSBT_OUT_REDEEM_SCRIPT => "PSBT_OUT_REDEEM_SCRIPT",
