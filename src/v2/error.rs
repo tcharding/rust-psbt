@@ -5,7 +5,7 @@
 use core::fmt;
 
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
-use bitcoin::PublicKey;
+use bitcoin::{transaction, PublicKey};
 
 use crate::error::{write_err, FundingUtxoError};
 use crate::v2::map::{global, input, output};
@@ -123,8 +123,12 @@ pub enum SignError {
     NotEcdsa,
     /// The `scriptPubkey` is not a P2WPKH script.
     NotWpkh,
-    /// Sighash computation error.
-    SighashComputation(sighash::Error),
+    /// Sighash computation error (segwit v0 input).
+    SegwitV0Sighash(transaction::InputsIndexError),
+    /// Sighash computation error (p2wpkh input).
+    P2wpkhSighash(sighash::P2wpkhError),
+    /// Sighash computation error (taproot input).
+    TaprootError(sighash::TaprootError),
     /// Unable to determine the output type.
     UnknownOutputType,
     /// Unable to find key.
@@ -149,7 +153,9 @@ impl fmt::Display for SignError {
             MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
             NotEcdsa => write!(f, "attempted to ECDSA sign an non-ECDSA input"),
             NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
-            SighashComputation(ref e) => write!(f, "sighash: {}", e),
+            SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
+            P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
+            TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
             UnknownOutputType => write!(f, "unable to determine the output type"),
             KeyNotFound => write!(f, "unable to find key"),
             WrongSigningAlgorithm =>
@@ -165,7 +171,9 @@ impl std::error::Error for SignError {
         use SignError::*;
 
         match *self {
-            SighashComputation(ref e) => Some(e),
+            SegwitV0Sighash(ref e) => Some(e),
+            P2wpkhSighash(ref e) => Some(e),
+            TaprootError(ref e) => Some(e),
             IndexOutOfBounds(ref e) => Some(e),
             FundingUtxo(ref e) => Some(e),
             InvalidSighashType
@@ -183,12 +191,16 @@ impl std::error::Error for SignError {
     }
 }
 
-impl From<sighash::Error> for SignError {
-    fn from(e: sighash::Error) -> Self { Self::SighashComputation(e) }
+impl From<sighash::P2wpkhError> for SignError {
+    fn from(e: sighash::P2wpkhError) -> Self { Self::P2wpkhSighash(e) }
 }
 
 impl From<IndexOutOfBoundsError> for SignError {
     fn from(e: IndexOutOfBoundsError) -> Self { Self::IndexOutOfBounds(e) }
+}
+
+impl From<sighash::TaprootError> for SignError {
+    fn from(e: sighash::TaprootError) -> Self { SignError::TaprootError(e) }
 }
 
 impl From<FundingUtxoError> for SignError {

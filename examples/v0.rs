@@ -13,8 +13,8 @@ use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
 use psbt_v2::bitcoin::secp256k1::{self, rand, SECP256K1};
 use psbt_v2::bitcoin::{
-    script, transaction, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence,
-    Transaction, TxIn, TxOut, Txid, Witness,
+    script, transaction, Address, Amount, CompressedPublicKey, Network, OutPoint, PublicKey,
+    ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
 };
 use psbt_v2::v0::{self, Psbt};
 
@@ -126,8 +126,9 @@ impl Alice {
         let out = OutPoint { txid: Txid::all_zeros(), vout: 0 };
 
         // The usual caveat about reusing addresses applies here, this is just an example.
-        let address =
-            Address::p2wpkh(&self.public_key(), Network::Bitcoin).expect("uncompressed key");
+        let compressed =
+            CompressedPublicKey::try_from(self.public_key()).expect("uncompressed key");
+        let address = Address::p2wpkh(&compressed, Network::Bitcoin);
 
         // This is a made up value, it is supposed to represent the outpoints value minus the value
         // contributed to the multisig.

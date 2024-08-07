@@ -66,7 +66,7 @@ impl Psbt {
             }
 
             if let Some(ref tx) = input.non_witness_utxo {
-                if tx.txid() != unsigned_tx.input[i].previous_output.txid {
+                if tx.compute_txid() != unsigned_tx.input[i].previous_output.txid {
                     return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
                 }
             }

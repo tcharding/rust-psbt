@@ -18,6 +18,10 @@ test:
 lint:
   cargo clippy --all --all-targets --all-features -- --deny warnings
 
+# Run the formatter
+fmt:
+  cargo +nightly fmt --all
+
 # Check the formatting
 format:
   cargo +nightly fmt --all --check

@@ -19,7 +19,7 @@ macro_rules! impl_psbt_de_serialize {
 macro_rules! impl_psbt_deserialize {
     ($thing:ty) => {
         impl $crate::v0::bitcoin::serialize::Deserialize for $thing {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::v0::bitcoin::Error> {
+            fn deserialize(bytes: &[u8]) -> core::result::Result<Self, $crate::v0::bitcoin::Error> {
                 $crate::bitcoin::consensus::deserialize(&bytes[..])
                     .map_err(|e| $crate::v0::bitcoin::Error::from(e))
             }
@@ -48,7 +48,7 @@ macro_rules! impl_psbtmap_serialize {
 macro_rules! impl_psbtmap_deserialize {
     ($thing:ty) => {
         impl $crate::v0::bitcoin::serialize::Deserialize for $thing {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::v0::bitcoin::Error> {
+            fn deserialize(bytes: &[u8]) -> core::result::Result<Self, $crate::v0::bitcoin::Error> {
                 let mut decoder = bytes;
                 Self::decode(&mut decoder)
             }
@@ -59,9 +59,9 @@ macro_rules! impl_psbtmap_deserialize {
 macro_rules! impl_psbtmap_decoding {
     ($thing:ty) => {
         impl $thing {
-            pub(crate) fn decode<R: $crate::io::Read + ?Sized>(
+            pub(crate) fn decode<R: $crate::io::BufRead + ?Sized>(
                 r: &mut R,
-            ) -> Result<Self, $crate::v0::bitcoin::Error> {
+            ) -> core::result::Result<Self, $crate::v0::bitcoin::Error> {
                 let mut rv: Self = core::default::Default::default();
 
                 loop {
@@ -151,7 +151,7 @@ macro_rules! impl_psbt_hash_de_serialize {
 macro_rules! impl_psbt_hash_deserialize {
     ($hash_type:ty) => {
         impl $crate::v0::bitcoin::serialize::Deserialize for $hash_type {
-            fn deserialize(bytes: &[u8]) -> Result<Self, $crate::v0::bitcoin::Error> {
+            fn deserialize(bytes: &[u8]) -> core::result::Result<Self, $crate::v0::bitcoin::Error> {
                 <$hash_type>::from_slice(&bytes[..])
                     .map_err(|e| $crate::v0::bitcoin::Error::from(e))
             }

@@ -78,7 +78,7 @@ pub enum Error {
     /// Integer overflow in fee calculation
     FeeOverflow,
     /// Parsing error indicating invalid public keys
-    InvalidPublicKey(bitcoin::key::Error),
+    InvalidPublicKey(bitcoin::key::FromSliceError),
     /// Parsing error indicating invalid secp256k1 public keys
     InvalidSecp256k1PublicKey(secp256k1::Error),
     /// Parsing error indicating invalid xonly public keys
@@ -133,8 +133,8 @@ impl fmt::Display for Error {
             UnexpectedUnsignedTx { expected: ref e, actual: ref a } => write!(
                 f,
                 "different unsigned transaction: expected {}, actual {}",
-                e.txid(),
-                a.txid()
+                e.compute_txid(),
+                a.compute_txid()
             ),
             NonStandardSighashType(ref sht) => write!(f, "non-standard sighash type: {}", sht),
             InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),

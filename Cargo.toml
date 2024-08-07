@@ -18,24 +18,22 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["std"]
-std = ["bitcoin/std"]
-no-std = ["bitcoin/no-std", "core2"]
+std = ["bitcoin/std", "bitcoin-internals/std"]
+rand = ["bitcoin/rand"]
 rand-std = ["bitcoin/rand-std"]
-serde = ["actual-serde", "bitcoin/serde"]
+serde = ["actual-serde", "bitcoin/serde", "bitcoin-internals/serde"]
 base64 = ["bitcoin/base64"]
-
 miniscript-std = ["std", "miniscript/std"]
-miniscript-no-std = ["no-std", "miniscript/no-std"]
+miniscript-no-std = ["miniscript/no-std"]
 
 [dependencies]
-bitcoin = { version = "0.31.0", default-features = false }
+bitcoin = { version = "0.32.2", default-features = false }
+bitcoin-internals = { version = "0.3.0", features = ["alloc"] }
 
-# Do not use this feature, use "miniscript-std" or "miniscript-no-std" instead.
-miniscript = { version = "11.0.0", default-features = false, optional = true }
+# Do NOT use this feature! Use one of the `miniscript-` features instead.
+miniscript = { version = "12.2.0", default-features = false, optional = true }
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = [ "derive", "alloc" ], optional = true }
-# There is no reason to use this dependency directly, it is activated by the "no-std" feature.
-core2 = { version = "0.3.2", default-features = false, features = ["alloc"], optional = true }
 
 [dev-dependencies]
 anyhow = "1"
@@ -43,7 +41,7 @@ serde_json = "1.0.0"
 serde_test = "1.0.19"
 serde_derive = "1.0.103"
 bincode = "1.3.1"
-secp256k1 = { version = "0.28", features = ["rand-std", "global-context"] }
+secp256k1 = { version = "0.29", features = ["rand-std", "global-context"] }
 
 [[example]]
 name = "v0"

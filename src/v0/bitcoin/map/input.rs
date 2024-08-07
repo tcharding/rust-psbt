@@ -104,7 +104,6 @@ pub struct Input {
     /// The finalized, fully-constructed scriptWitness with signatures and any
     /// other scripts necessary for this input to pass validation.
     pub final_script_witness: Option<Witness>,
-    /// TODO: Proof of reserves commitment
     /// RIPEMD160 hash to preimage map.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_byte_values"))]
     pub ripemd160_preimages: BTreeMap<ripemd160::Hash, Vec<u8>>,
@@ -159,9 +158,7 @@ impl Input {
     /// # Errors
     ///
     /// If the `sighash_type` field is set to a invalid Taproot sighash value.
-    pub fn taproot_hash_ty(
-        &self,
-    ) -> Result<TapSighashType, crate::sighash_type::InvalidSighashTypeError> {
+    pub fn taproot_hash_ty(&self) -> Result<TapSighashType, InvalidSighashTypeError> {
         self.sighash_type
             .map(|sighash_type| sighash_type.taproot_hash_ty())
             .unwrap_or(Ok(TapSighashType::Default))
