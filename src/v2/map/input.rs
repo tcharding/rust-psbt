@@ -998,12 +998,10 @@ impl std::error::Error for CombineError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod test {
-    use bitcoin::io::Cursor;
-
     use super::*;
 
-    #[cfg(feature = "std")]
     fn out_point() -> OutPoint {
         let txid = Txid::hash(b"some arbitrary bytes");
         let vout = 0xab;
@@ -1011,8 +1009,9 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "std")]
     fn serialize_roundtrip() {
+        use bitcoin::io::Cursor;
+
         let input = Input::new(&out_point());
 
         let ser = input.serialize_map();
