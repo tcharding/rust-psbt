@@ -1,3 +1,10 @@
+# 0.2.0 - 2024-08-22
+
+- Bump MSRV to Rust `v1.63.0` [#27](https://github.com/tcharding/rust-psbt/pull/27)
+- Upgrade dependencies [#26](https://github.com/tcharding/rust-psbt/pull/26)
+   - `bitcoin v0.32.0`
+   - `miniscript 12.2.0`
+
 # 0.1.1 - 2024-02-08
 
 Add various combinations of the three bips as keywords.
