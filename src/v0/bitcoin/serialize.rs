@@ -181,7 +181,7 @@ impl Deserialize for ecdsa::Signature {
             ecdsa::Error::SighashType(err) => Error::NonStandardSighashType(err.0),
             ecdsa::Error::Secp256k1(..) => Error::InvalidEcdsaSignature(e),
             ecdsa::Error::Hex(..) => unreachable!("Decoding from slice, not hex"),
-            _ => unreachable!("in rust-bitcoin v0.31.1"),
+            _ => unreachable!("in rust-bitcoin v0.32.2"),
         })
     }
 }
@@ -264,7 +264,7 @@ impl Deserialize for taproot::Signature {
             SighashType(err) => Error::NonStandardSighashType(err.0),
             InvalidSignatureSize(_) => Error::InvalidTaprootSignature(e),
             Secp256k1(..) => Error::InvalidTaprootSignature(e),
-            _ => unreachable!("in rust-bitcoin v0.31.1"),
+            _ => unreachable!("in rust-bitcoin v0.32.2"),
         })
     }
 }
@@ -327,7 +327,6 @@ impl Serialize for (Vec<TapLeafHash>, KeySource) {
     fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(32 * self.0.len() + key_source_len(&self.1));
         self.0.consensus_encode(&mut buf).expect("Vecs don't error allocation");
-        // TODO: Add support for writing into a writer for key-source
         buf.extend(self.1.serialize());
         buf
     }

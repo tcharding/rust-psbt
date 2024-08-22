@@ -7,7 +7,7 @@ use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::consensus::encode::MAX_VEC_SIZE;
 use bitcoin::consensus::{encode, Decodable};
 
-use crate::io::{self, Cursor, Read};
+use crate::io::{BufRead, Cursor, Read};
 use crate::prelude::*;
 use crate::v0::bitcoin::map::Map;
 use crate::v0::bitcoin::{raw, Error, Psbt};
@@ -83,7 +83,7 @@ impl Map for Psbt {
 }
 
 impl Psbt {
-    pub(crate) fn decode_global<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    pub(crate) fn decode_global<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, Error> {
         let mut r = r.take(MAX_VEC_SIZE as u64);
         let mut tx: Option<Transaction> = None;
         let mut version: Option<u32> = None;

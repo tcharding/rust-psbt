@@ -14,14 +14,8 @@
 // Coding conventions
 #![warn(missing_docs)]
 
-#[cfg(not(any(feature = "std", feature = "no-std")))]
-compile_error!("at least one of the `std` or `no-std` features must be enabled");
-
 #[macro_use]
 extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-extern crate core2;
 
 #[cfg(feature = "serde")]
 #[macro_use]
@@ -48,11 +42,7 @@ pub mod v0;
 pub mod v2;
 mod version;
 
-#[cfg(feature = "std")]
-use std::io;
-
-#[cfg(not(feature = "std"))]
-use core2::io;
+use bitcoin::io;
 
 #[rustfmt::skip]                // Keep pubic re-exports separate
 #[doc(inline)]

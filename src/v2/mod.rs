@@ -35,7 +35,6 @@ use core::marker::PhantomData;
 use std::collections::{HashMap, HashSet};
 
 use bitcoin::bip32::{self, KeySource, Xpriv};
-use bitcoin::hashes::Hash;
 use bitcoin::key::{PrivateKey, PublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
@@ -516,7 +515,7 @@ impl Psbt {
         // Updaters may change the sequence so to calculate ID we set it to zero.
         tx.input.iter_mut().for_each(|input| input.sequence = Sequence::ZERO);
 
-        Ok(tx.txid())
+        Ok(tx.compute_txid())
     }
 
     /// Creates an unsigned transaction from the inner [`Psbt`].
@@ -801,8 +800,10 @@ impl Psbt {
                 Ok((msg, sighash_ty)) => (msg, sighash_ty),
             };
 
-            let sig =
-                ecdsa::Signature { sig: secp.sign_ecdsa(&msg, &sk.inner), hash_ty: sighash_ty };
+            let sig = ecdsa::Signature {
+                signature: secp.sign_ecdsa(&msg, &sk.inner),
+                sighash_type: sighash_ty,
+            };
 
             let pk = sk.public_key(secp);
 
@@ -840,32 +841,36 @@ impl Psbt {
 
         match self.output_type(input_index)? {
             Bare => {
-                let sighash = cache.legacy_signature_hash(input_index, spk, hash_ty.to_u32())?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .legacy_signature_hash(input_index, spk, hash_ty.to_u32())
+                    .expect("input checked above");
+                Ok((Message::from(sighash), hash_ty))
             }
             Sh => {
                 let script_code =
                     input.redeem_script.as_ref().ok_or(SignError::MissingRedeemScript)?;
-                let sighash =
-                    cache.legacy_signature_hash(input_index, script_code, hash_ty.to_u32())?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .legacy_signature_hash(input_index, script_code, hash_ty.to_u32())
+                    .expect("input checked above");
+                Ok((Message::from(sighash), hash_ty))
             }
             Wpkh => {
                 let sighash = cache.p2wpkh_signature_hash(input_index, spk, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                Ok((Message::from(sighash), hash_ty))
             }
             ShWpkh => {
                 let redeem_script = input.redeem_script.as_ref().expect("checked above");
                 let sighash =
                     cache.p2wpkh_signature_hash(input_index, redeem_script, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                Ok((Message::from(sighash), hash_ty))
             }
             Wsh | ShWsh => {
                 let witness_script =
                     input.witness_script.as_ref().ok_or(SignError::MissingWitnessScript)?;
-                let sighash =
-                    cache.p2wsh_signature_hash(input_index, witness_script, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .p2wsh_signature_hash(input_index, witness_script, utxo.value, hash_ty)
+                    .map_err(SignError::SegwitV0Sighash)?;
+                Ok((Message::from(sighash), hash_ty))
             }
             Tr => {
                 // This PSBT signing API is WIP, taproot to come shortly.
@@ -980,7 +985,7 @@ impl Psbt {
             };
 
             for (key, ecdsa_sig) in &input.partial_sigs {
-                let flag = EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32)
+                let flag = EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32)
                     .map_err(|error| NonStandardPartialSigsSighashType { input_index, error })?;
                 if target_ecdsa_sighash_ty != flag {
                     return Err(WrongSighashFlag {

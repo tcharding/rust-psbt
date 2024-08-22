@@ -49,21 +49,18 @@ cargo run --example v2-separate-creator-constructor
 if [ "$DO_NO_STD" = true ]
 then
     # Build no_std, to make sure that cfg(test) doesn't hide any issues
-    cargo build --no-default-features --features="no-std"
-
-    # Build std + no_std, to make sure they are not incompatible
-    cargo build --features="no-std"
+    cargo build --no-default-features
 
     # Test no_std
-    cargo test --no-default-features --features="no-std"
+    cargo test --no-default-features
 
     # Build all features
-    cargo build --no-default-features --features="no-std $FEATURES"
+    cargo build --no-default-features --features="$FEATURES"
 
     # Build specific features
     for feature in ${FEATURES}
     do
-        cargo build --no-default-features --features="no-std $feature"
+        cargo build --no-default-features --features="$feature"
     done
 fi
 

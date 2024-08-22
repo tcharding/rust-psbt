@@ -3,7 +3,7 @@
 use crate::bitcoin::hashes::{hash160, sha256d, Hash};
 use crate::bitcoin::key::XOnlyPublicKey;
 use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use crate::bitcoin::{absolute, ecdsa, ScriptBuf, Sequence};
+use crate::bitcoin::{absolute, ecdsa, relative, ScriptBuf};
 use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey};
 use crate::prelude::*;
 use crate::v2::map::input::Input;
@@ -81,27 +81,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
                     return time <= lock_time;
                 },
         }
-        true
+        false
     }
 
     // TODO: Verify this is correct.
-    fn check_older(&self, n: Sequence) -> bool {
-        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
-        // Disable flag set => return true.
-        if !n.is_relative_lock_time() {
-            return true;
-        }
-
+    fn check_older(&self, n: relative::LockTime) -> bool {
         match self.input.sequence {
-            Some(sequence) => {
-                // TODO: Do we need to check the tx version?
-                if !sequence.is_relative_lock_time() {
-                    return false;
+            Some(seq) => {
+                match relative::LockTime::from_sequence(seq) {
+                    Err(_) => false,
+                    Ok(lock_time) => n.is_implied_by(lock_time),
                 }
-                <dyn Satisfier<Pk>>::check_older(&sequence, n)
-            }
-            // TODO: What to check here?
-            None => true,
+            },
+            None => false
         }
     }
 
@@ -125,7 +117,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
     }
 }
 
-#[allow(clippy::ptr_arg)]       // We don't control the function signature this is used in.
+#[allow(clippy::ptr_arg)] // We don't control the function signature this is used in.
 fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];

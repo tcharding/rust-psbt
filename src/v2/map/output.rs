@@ -4,6 +4,7 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::bip32::KeySource;
+use bitcoin::io::BufRead;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{secp256k1, Amount, ScriptBuf, TxOut};
@@ -17,7 +18,7 @@ use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::v2::map::Map;
-use crate::{io, raw, serialize};
+use crate::{raw, serialize};
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -90,7 +91,7 @@ impl Output {
         TxOut { value: self.amount, script_pubkey: self.script_pubkey.clone() }
     }
 
-    pub(in crate::v2) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(in crate::v2) fn decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Output`.
         let invalid = TxOut { value: Amount::ZERO, script_pubkey: ScriptBuf::default() };
         let mut rv = Self::new(invalid);
@@ -405,6 +406,8 @@ impl std::error::Error for CombineError {
 #[cfg(test)]
 #[cfg(feature = "std")]
 mod tests {
+    use bitcoin::io::Cursor;
+
     use super::*;
 
     fn tx_out() -> TxOut {
@@ -420,7 +423,7 @@ mod tests {
         let output = Output::new(tx_out());
 
         let ser = output.serialize_map();
-        let mut d = std::io::Cursor::new(ser);
+        let mut d = Cursor::new(ser);
 
         let decoded = Output::decode(&mut d).expect("failed to decode");
 

@@ -172,7 +172,7 @@ impl Finalizer {
                 // Partial sigs loses the compressed flag that is necessary
                 // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
                 // The type checker will fail again after we update to 0.28 and this can be removed
-                let addr = Address::p2pkh(&pk, Network::Bitcoin);
+                let addr = Address::p2pkh(pk, Network::Bitcoin);
                 *script_pubkey == addr.script_pubkey()
             });
             match partial_sig_contains_pk {
@@ -182,11 +182,15 @@ impl Finalizer {
         } else if script_pubkey.is_p2wpkh() {
             // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
             let partial_sig_contains_pk = input.partial_sigs.iter().find(|&(&pk, _sig)| {
-                // Indirect way to check the equivalence of pubkey-hashes.
-                // Create a pubkey hash and check if they are the same.
-                let addr = Address::p2wpkh(&pk, Network::Bitcoin)
-                    .expect("Address corresponding to valid pubkey");
-                *script_pubkey == addr.script_pubkey()
+                match bitcoin::key::CompressedPublicKey::try_from(pk) {
+                    Ok(compressed) => {
+                        // Indirect way to check the equivalence of pubkey-hashes.
+                        // Create a pubkey hash and check if they are the same.
+                        let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
+                        *script_pubkey == addr.script_pubkey()
+                    }
+                    Err(_) => false,
+                }
             });
             match partial_sig_contains_pk {
                 Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
@@ -243,9 +247,16 @@ impl Finalizer {
                         // 6. `ShWpkh` case
                         let partial_sig_contains_pk =
                             input.partial_sigs.iter().find(|&(&pk, _sig)| {
-                                let addr = Address::p2wpkh(&pk, Network::Bitcoin)
-                                    .expect("Address corresponding to valid pubkey");
-                                *redeem_script == addr.script_pubkey()
+                                match bitcoin::key::CompressedPublicKey::try_from(pk) {
+                                    Ok(compressed) => {
+                                        let addr = bitcoin::Address::p2wpkh(
+                                            &compressed,
+                                            bitcoin::Network::Bitcoin,
+                                        );
+                                        *redeem_script == addr.script_pubkey()
+                                    }
+                                    Err(_) => false,
+                                }
                             });
                         match partial_sig_contains_pk {
                             Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),
@@ -500,7 +511,7 @@ pub enum InputError {
     /// Get the secp Errors directly
     SecpErr(bitcoin::secp256k1::Error),
     /// Key errors
-    KeyErr(bitcoin::key::Error),
+    KeyErr(bitcoin::key::FromSliceError),
     /// Could not satisfy taproot descriptor
     /// This error is returned when both script path and key paths could not be
     /// satisfied. We cannot return a detailed error because we try all miniscripts
@@ -643,6 +654,6 @@ impl From<bitcoin::secp256k1::Error> for InputError {
     fn from(e: bitcoin::secp256k1::Error) -> Self { Self::SecpErr(e) }
 }
 
-impl From<bitcoin::key::Error> for InputError {
-    fn from(e: bitcoin::key::Error) -> Self { Self::KeyErr(e) }
+impl From<bitcoin::key::FromSliceError> for InputError {
+    fn from(e: bitcoin::key::FromSliceError) -> Self { Self::KeyErr(e) }
 }

@@ -16,7 +16,8 @@ use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
 use psbt_v2::bitcoin::secp256k1::{self, SECP256K1};
 use psbt_v2::bitcoin::{
-    script, Address, Amount, Network, OutPoint, PublicKey, ScriptBuf, Sequence, TxOut, Txid,
+    script, Address, Amount, CompressedPublicKey, Network, OutPoint, PublicKey, ScriptBuf,
+    Sequence, TxOut, Txid,
 };
 use psbt_v2::v2::{
     self, Constructor, InputBuilder, Modifiable, Output, OutputBuilder, Psbt, Signer, Updater,
@@ -147,8 +148,9 @@ impl Alice {
         let out = OutPoint { txid: Txid::all_zeros(), vout: 0 };
 
         // The usual caveat about reusing addresses applies here, this is just an example.
-        let address = Address::p2wpkh(&self.multisig_public_key()?, Network::Bitcoin)
-            .expect("uncompressed key");
+        let compressed =
+            CompressedPublicKey::try_from(self.multisig_public_key()?).expect("uncompressed key");
+        let address = Address::p2wpkh(&compressed, Network::Bitcoin);
 
         // This is a made up value, it is supposed to represent the outpoints value minus the value
         // contributed to the multisig.
@@ -250,7 +252,7 @@ impl Entity {
         let path = DerivationPath::from_str(derivation_path)?;
         let xpriv = self.master.derive_priv(SECP256K1, &path)?;
         let pk = Xpub::from_priv(SECP256K1, &xpriv);
-        Ok(pk.to_pub())
+        Ok(pk.to_pub().into())
     }
 
     /// Returns a dummy utxo that we can spend.

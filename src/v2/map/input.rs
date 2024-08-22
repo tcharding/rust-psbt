@@ -6,6 +6,7 @@ use core::fmt;
 use bitcoin::bip32::KeySource;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash as _};
 use bitcoin::hex::DisplayHex;
+use bitcoin::io::BufRead;
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
@@ -29,7 +30,7 @@ use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 use crate::v2::map::Map;
-use crate::{io, raw, serialize};
+use crate::{raw, serialize};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
@@ -367,7 +368,7 @@ impl Input {
             .unwrap_or(Ok(TapSighashType::Default))
     }
 
-    pub(in crate::v2) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(in crate::v2) fn decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Input`.
         let invalid = OutPoint { txid: Txid::all_zeros(), vout: u32::MAX };
         let mut rv = Self::new(&invalid);
@@ -998,6 +999,8 @@ impl std::error::Error for CombineError {
 
 #[cfg(test)]
 mod test {
+    use bitcoin::io::Cursor;
+
     use super::*;
 
     #[cfg(feature = "std")]
@@ -1013,7 +1016,7 @@ mod test {
         let input = Input::new(&out_point());
 
         let ser = input.serialize_map();
-        let mut d = std::io::Cursor::new(ser);
+        let mut d = Cursor::new(ser);
 
         let decoded = Input::decode(&mut d).expect("failed to decode");
 

@@ -18,9 +18,10 @@ use bitcoin::consensus::encode::{
 };
 use bitcoin::hex::DisplayHex;
 
+use crate::io::{self, BufRead, Write};
 use crate::prelude::*;
+use crate::serialize;
 use crate::serialize::{Deserialize, Serialize};
-use crate::{io, serialize};
 
 /// A PSBT key-value pair in its raw byte form.
 ///
@@ -39,7 +40,7 @@ pub struct Pair {
 }
 
 impl Pair {
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
+    pub(crate) fn decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
         Ok(Pair { key: Key::decode(r)?, value: Decodable::consensus_decode(r)? })
     }
 }
@@ -80,13 +81,12 @@ pub struct Key {
     /// The `keytype` of this PSBT map key (`keytype`).
     pub type_value: u8,
     /// The `keydata` itself in raw byte form.
-    // TODO: Consider renaming to `data`.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
     pub key: Vec<u8>,
 }
 
 impl Key {
-    pub(crate) fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
+    pub(crate) fn decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, serialize::Error> {
         let VarInt(byte_size): VarInt = Decodable::consensus_decode(r)?;
 
         if byte_size == 0 {
@@ -186,7 +186,7 @@ impl<Subtype> Encodable for ProprietaryKey<Subtype>
 where
     Subtype: Copy + From<u8> + Into<u8>,
 {
-    fn consensus_encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
+    fn consensus_encode<W: Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
         let mut len = self.prefix.consensus_encode(w)? + 1;
         w.emit_u8(self.subtype.into())?;
         w.write_all(&self.key)?;
@@ -199,26 +199,15 @@ impl<Subtype> Decodable for ProprietaryKey<Subtype>
 where
     Subtype: Copy + From<u8> + Into<u8>,
 {
-    fn consensus_decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, consensus::Error> {
+    fn consensus_decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, consensus::Error> {
         let prefix = Vec::<u8>::consensus_decode(r)?;
         let subtype = Subtype::from(r.read_u8()?);
-        let key = read_to_end(r)?;
+
+        // The limit is a DOS protection mechanism the exact value is not
+        // important, 1024 bytes is bigger than any key should be.
+        let mut key = vec![];
+        let _ = r.read_to_limit(&mut key, 1024)?;
 
         Ok(ProprietaryKey { prefix, subtype, key })
     }
-}
-
-// core2 doesn't have read_to_end
-pub(crate) fn read_to_end<D: io::Read>(mut d: D) -> Result<Vec<u8>, io::Error> {
-    let mut result = vec![];
-    let mut buf = [0u8; 64];
-    loop {
-        match d.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => result.extend_from_slice(&buf[0..n]),
-            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
-            Err(e) => return Err(e),
-        };
-    }
-    Ok(result)
 }

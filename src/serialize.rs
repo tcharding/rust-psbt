@@ -389,7 +389,7 @@ pub enum Error {
     /// Serialization error in bitcoin consensus-encoded structures
     ConsensusEncoding(consensus::encode::Error),
     /// Parsing error indicating invalid public keys
-    InvalidPublicKey(bitcoin::key::Error),
+    InvalidPublicKey(bitcoin::key::FromSliceError),
     /// Parsing error indicating invalid secp256k1 public keys
     InvalidSecp256k1PublicKey(secp256k1::Error),
     /// Parsing error indicating invalid xonly public keys
@@ -410,7 +410,7 @@ pub enum Error {
     /// PSBT data is not consumed entirely
     PartialDataConsumption,
     /// Couldn't converting parsed u32 to a lock time.
-    LockTime(absolute::Error),
+    LockTime(absolute::ConversionError),
     /// Unsupported PSBT version.
     UnsupportedVersion(version::UnsupportedVersionError),
 }
@@ -480,8 +480,8 @@ impl From<consensus::encode::Error> for Error {
     fn from(e: consensus::encode::Error) -> Self { Self::ConsensusEncoding(e) }
 }
 
-impl From<absolute::Error> for Error {
-    fn from(e: absolute::Error) -> Self { Self::LockTime(e) }
+impl From<absolute::ConversionError> for Error {
+    fn from(e: absolute::ConversionError) -> Self { Self::LockTime(e) }
 }
 
 impl From<version::UnsupportedVersionError> for Error {

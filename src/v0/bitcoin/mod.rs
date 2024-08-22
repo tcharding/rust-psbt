@@ -7,34 +7,35 @@
 //! except we define PSBTs containing non-standard sighash types as invalid.
 //!
 
+#[macro_use]
+mod macros;
+mod error;
+mod map;
+pub mod raw;
+pub mod serialize;
+
 use core::{cmp, fmt};
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};
 
 use bitcoin::bip32::{self, KeySource, Xpriv, Xpub};
-use bitcoin::blockdata::transaction::{Transaction, TxOut};
-use bitcoin::hashes::Hash;
-use bitcoin::key::{PrivateKey, PublicKey};
-use bitcoin::secp256k1::{Message, Secp256k1, Signing};
-use bitcoin::sighash::{self, EcdsaSighashType, SighashCache};
-use bitcoin::{ecdsa, Amount, FeeRate};
+use bitcoin::blockdata::transaction::{self, Transaction, TxOut};
+use bitcoin::key::{Keypair, PrivateKey, PublicKey, TapTweak, XOnlyPublicKey};
+use bitcoin::secp256k1::{Message, Secp256k1, Signing, Verification};
+use bitcoin::sighash::{self, EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
+use bitcoin::taproot::TapLeafHash;
+use bitcoin::{ecdsa, taproot, Amount, FeeRate};
 
 use crate::error::write_err;
 use crate::prelude::*;
+use crate::PsbtSighashType;
 
-#[macro_use]
-mod macros;
-pub mod raw;
-pub mod serialize;
-
-mod error;
-pub use self::error::Error;
-
-mod map;
-
-#[rustfmt::skip]                // Keep public exports separate.
+#[rustfmt::skip]                // Keep public re-exports separate.
 #[doc(inline)]
-pub use self::map::{Input, Output};
+pub use self::{
+    map::{Input, Output},
+    error::Error,
+};
 
 /// A Partially Signed Transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -282,17 +283,12 @@ impl Psbt {
 
     /// Attempts to create _all_ the required signatures for this PSBT using `k`.
     ///
-    /// **NOTE**: Taproot inputs are, as yet, not supported by this function. We currently only
-    /// attempt to sign ECDSA inputs.
-    ///
-    /// If you just want to sign an input with one specific key consider using `sighash_ecdsa`. This
-    /// function does not support scripts that contain `OP_CODESEPARATOR`.
+    /// If you just want to sign an input with one specific key consider using `sighash_ecdsa` or
+    /// `sighash_taproot`. This function does not support scripts that contain `OP_CODESEPARATOR`.
     ///
     /// # Returns
     ///
-    /// Either Ok(SigningKeys) or Err((SigningKeys, SigningErrors)), where
-    /// - SigningKeys: A map of input index -> pubkey associated with secret key used to sign.
-    /// - SigningKeys: A map of input index -> the error encountered while attempting to sign.
+    /// A map of input index -> keys used to sign, for Taproot specifics please see [`SigningKeys`].
     ///
     /// If an error is returned some signatures may already have been added to the PSBT. Since
     /// `partial_sigs` is a [`BTreeMap`] it is safe to retry, previous sigs will be overwritten.
@@ -300,9 +296,9 @@ impl Psbt {
         &mut self,
         k: &K,
         secp: &Secp256k1<C>,
-    ) -> Result<SigningKeys, (SigningKeys, SigningErrors)>
+    ) -> Result<SigningKeysMap, (SigningKeysMap, SigningErrors)>
     where
-        C: Signing,
+        C: Signing + Verification,
         K: GetKey,
     {
         let tx = self.unsigned_tx.clone(); // clone because we need to mutably borrow when signing.
@@ -312,16 +308,30 @@ impl Psbt {
         let mut errors = BTreeMap::new();
 
         for i in 0..self.inputs.len() {
-            if let Ok(SigningAlgorithm::Ecdsa) = self.signing_algorithm(i) {
-                match self.bip32_sign_ecdsa(k, i, &mut cache, secp) {
-                    Ok(v) => {
-                        used.insert(i, v);
-                    }
-                    Err(e) => {
-                        errors.insert(i, e);
+            match self.signing_algorithm(i) {
+                Ok(SigningAlgorithm::Ecdsa) =>
+                    match self.bip32_sign_ecdsa(k, i, &mut cache, secp) {
+                        Ok(v) => {
+                            used.insert(i, SigningKeys::Ecdsa(v));
+                        }
+                        Err(e) => {
+                            errors.insert(i, e);
+                        }
+                    },
+                Ok(SigningAlgorithm::Schnorr) => {
+                    match self.bip32_sign_schnorr(k, i, &mut cache, secp) {
+                        Ok(v) => {
+                            used.insert(i, SigningKeys::Schnorr(v));
+                        }
+                        Err(e) => {
+                            errors.insert(i, e);
+                        }
                     }
                 }
-            };
+                Err(e) => {
+                    errors.insert(i, e);
+                }
+            }
         }
         if errors.is_empty() {
             Ok(used)
@@ -370,14 +380,112 @@ impl Psbt {
                 Ok((msg, sighash_ty)) => (msg, sighash_ty),
             };
 
-            let sig =
-                ecdsa::Signature { sig: secp.sign_ecdsa(&msg, &sk.inner), hash_ty: sighash_ty };
+            let sig = ecdsa::Signature {
+                signature: secp.sign_ecdsa(&msg, &sk.inner),
+                sighash_type: sighash_ty,
+            };
 
             let pk = sk.public_key(secp);
 
             input.partial_sigs.insert(pk, sig);
             used.push(pk);
         }
+
+        Ok(used)
+    }
+
+    /// Attempts to create all signatures required by this PSBT's `tap_key_origins` field, adding
+    /// them to `tap_key_sig` or `tap_script_sigs`.
+    ///
+    /// # Returns
+    ///
+    /// - Ok: A list of the xonly public keys used in signing. When signing a key path spend we
+    ///   return the internal key.
+    /// - Err: Error encountered trying to calculate the sighash AND we had the signing key.
+    fn bip32_sign_schnorr<C, K, T>(
+        &mut self,
+        k: &K,
+        input_index: usize,
+        cache: &mut SighashCache<T>,
+        secp: &Secp256k1<C>,
+    ) -> Result<Vec<XOnlyPublicKey>, SignError>
+    where
+        C: Signing + Verification,
+        T: Borrow<Transaction>,
+        K: GetKey,
+    {
+        let mut input = self.checked_input(input_index)?.clone();
+
+        let mut used = vec![]; // List of pubkeys used to sign the input.
+
+        for (&xonly, (leaf_hashes, key_source)) in input.tap_key_origins.iter() {
+            let sk = if let Ok(Some(secret_key)) =
+                k.get_key(KeyRequest::Bip32(key_source.clone()), secp)
+            {
+                secret_key
+            } else {
+                continue;
+            };
+
+            // Considering the responsibility of the PSBT's finalizer to extract valid signatures,
+            // the goal of this algorithm is to provide signatures to the best of our ability:
+            // 1) If the conditions for key path spend are met, proceed to provide the signature for key path spend
+            // 2) If the conditions for script path spend are met, proceed to provide the signature for script path spend
+
+            // key path spend
+            if let Some(internal_key) = input.tap_internal_key {
+                // BIP 371: The internal key does not have leaf hashes, so can be indicated with a hashes len of 0.
+
+                // Based on input.tap_internal_key.is_some() alone, it is not sufficient to determine whether it is a key path spend.
+                // According to BIP 371, we also need to consider the condition leaf_hashes.is_empty() for a more accurate determination.
+                if internal_key == xonly && leaf_hashes.is_empty() && input.tap_key_sig.is_none() {
+                    let (msg, sighash_type) = self.sighash_taproot(input_index, cache, None)?;
+                    let key_pair = Keypair::from_secret_key(secp, &sk.inner)
+                        .tap_tweak(secp, input.tap_merkle_root)
+                        .to_inner();
+
+                    #[cfg(feature = "rand")]
+                    let signature = secp.sign_schnorr(&msg, &key_pair);
+                    #[cfg(not(feature = "rand"))]
+                    let signature = secp.sign_schnorr_no_aux_rand(&msg, &key_pair);
+
+                    let signature = taproot::Signature { signature, sighash_type };
+                    input.tap_key_sig = Some(signature);
+
+                    used.push(internal_key);
+                }
+            }
+
+            // script path spend
+            if let Some((leaf_hashes, _)) = input.tap_key_origins.get(&xonly) {
+                let leaf_hashes = leaf_hashes
+                    .iter()
+                    .filter(|lh| !input.tap_script_sigs.contains_key(&(xonly, **lh)))
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                if !leaf_hashes.is_empty() {
+                    let key_pair = Keypair::from_secret_key(secp, &sk.inner);
+
+                    for lh in leaf_hashes {
+                        let (msg, sighash_type) =
+                            self.sighash_taproot(input_index, cache, Some(lh))?;
+
+                        #[cfg(feature = "rand")]
+                        let signature = secp.sign_schnorr(&msg, &key_pair);
+                        #[cfg(not(feature = "rand"))]
+                        let signature = secp.sign_schnorr_no_aux_rand(&msg, &key_pair);
+
+                        let signature = taproot::Signature { signature, sighash_type };
+                        input.tap_script_sigs.insert((xonly, lh), signature);
+                    }
+
+                    used.push(sk.public_key(secp).into());
+                }
+            }
+        }
+
+        self.inputs[input_index] = input; // input_index is checked above.
 
         Ok(used)
     }
@@ -406,37 +514,101 @@ impl Psbt {
 
         match self.output_type(input_index)? {
             Bare => {
-                let sighash = cache.legacy_signature_hash(input_index, spk, hash_ty.to_u32())?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .legacy_signature_hash(input_index, spk, hash_ty.to_u32())
+                    .expect("input checked above");
+                Ok((Message::from(sighash), hash_ty))
             }
             Sh => {
                 let script_code =
                     input.redeem_script.as_ref().ok_or(SignError::MissingRedeemScript)?;
-                let sighash =
-                    cache.legacy_signature_hash(input_index, script_code, hash_ty.to_u32())?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .legacy_signature_hash(input_index, script_code, hash_ty.to_u32())
+                    .expect("input checked above");
+                Ok((Message::from(sighash), hash_ty))
             }
             Wpkh => {
                 let sighash = cache.p2wpkh_signature_hash(input_index, spk, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                Ok((Message::from(sighash), hash_ty))
             }
             ShWpkh => {
                 let redeem_script = input.redeem_script.as_ref().expect("checked above");
                 let sighash =
                     cache.p2wpkh_signature_hash(input_index, redeem_script, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                Ok((Message::from(sighash), hash_ty))
             }
             Wsh | ShWsh => {
                 let witness_script =
                     input.witness_script.as_ref().ok_or(SignError::MissingWitnessScript)?;
-                let sighash =
-                    cache.p2wsh_signature_hash(input_index, witness_script, utxo.value, hash_ty)?;
-                Ok((Message::from_digest(sighash.to_byte_array()), hash_ty))
+                let sighash = cache
+                    .p2wsh_signature_hash(input_index, witness_script, utxo.value, hash_ty)
+                    .map_err(SignError::SegwitV0Sighash)?;
+                Ok((Message::from(sighash), hash_ty))
             }
             Tr => {
                 // This PSBT signing API is WIP, taproot to come shortly.
                 Err(SignError::Unsupported)
             }
+        }
+    }
+
+    /// Returns the sighash message to sign an SCHNORR input along with the sighash type.
+    ///
+    /// Uses the [`TapSighashType`] from this input if one is specified. If no sighash type is
+    /// specified uses [`TapSighashType::Default`].
+    fn sighash_taproot<T: Borrow<Transaction>>(
+        &self,
+        input_index: usize,
+        cache: &mut SighashCache<T>,
+        leaf_hash: Option<TapLeafHash>,
+    ) -> Result<(Message, TapSighashType), SignError> {
+        use OutputType::*;
+
+        if self.signing_algorithm(input_index)? != SigningAlgorithm::Schnorr {
+            return Err(SignError::WrongSigningAlgorithm);
+        }
+
+        let input = self.checked_input(input_index)?;
+
+        match self.output_type(input_index)? {
+            Tr => {
+                let hash_ty = input
+                    .sighash_type
+                    .unwrap_or_else(|| TapSighashType::Default.into())
+                    .taproot_hash_ty()
+                    .map_err(|_| SignError::InvalidSighashType)?;
+
+                let spend_utxos =
+                    (0..self.inputs.len()).map(|i| self.spend_utxo(i).ok()).collect::<Vec<_>>();
+                let all_spend_utxos;
+
+                let is_anyone_can_pay = PsbtSighashType::from(hash_ty).to_u32() & 0x80 != 0;
+
+                let prev_outs = if is_anyone_can_pay {
+                    Prevouts::One(
+                        input_index,
+                        spend_utxos[input_index].ok_or(SignError::MissingSpendUtxo)?,
+                    )
+                } else if spend_utxos.iter().all(Option::is_some) {
+                    all_spend_utxos = spend_utxos.iter().filter_map(|x| *x).collect::<Vec<_>>();
+                    Prevouts::All(&all_spend_utxos)
+                } else {
+                    return Err(SignError::MissingSpendUtxo);
+                };
+
+                let sighash = if let Some(leaf_hash) = leaf_hash {
+                    cache.taproot_script_spend_signature_hash(
+                        input_index,
+                        &prev_outs,
+                        leaf_hash,
+                        hash_ty,
+                    )?
+                } else {
+                    cache.taproot_key_spend_signature_hash(input_index, &prev_outs, hash_ty)?
+                };
+                Ok((Message::from(sighash), hash_ty))
+            }
+            _ => Err(SignError::Unsupported),
         }
     }
 
@@ -601,8 +773,20 @@ impl GetKey for Xpriv {
     }
 }
 
-/// Map of input index -> pubkey associated with secret key used to create signature for that input.
-pub type SigningKeys = BTreeMap<usize, Vec<PublicKey>>;
+/// Map of input index -> signing key for that input (see [`SigningKeys`]).
+pub type SigningKeysMap = BTreeMap<usize, SigningKeys>;
+
+/// A list of keys used to sign an input.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SigningKeys {
+    /// Keys used to sign an ECDSA input.
+    Ecdsa(Vec<PublicKey>),
+    /// Keys used to sign a Taproot input.
+    ///
+    /// - Key path spend: This is the internal key.
+    /// - Script path spend: This is the pubkey associated with the secret key that signed.
+    Schnorr(Vec<XOnlyPublicKey>),
+}
 
 /// Map of input index -> the error encountered while attempting to sign that input.
 pub type SigningErrors = BTreeMap<usize, SignError>;
@@ -668,6 +852,8 @@ pub enum GetKeyError {
     /// The GetKey operation is not supported for this key request.
     NotSupported,
 }
+
+bitcoin_internals::impl_from_infallible!(GetKeyError);
 
 impl fmt::Display for GetKeyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -764,8 +950,12 @@ pub enum SignError {
     NotEcdsa,
     /// The `scriptPubkey` is not a P2WPKH script.
     NotWpkh,
-    /// Sighash computation error.
-    SighashComputation(sighash::Error),
+    /// Sighash computation error (segwit v0 input).
+    SegwitV0Sighash(transaction::InputsIndexError),
+    /// Sighash computation error (p2wpkh input).
+    P2wpkhSighash(sighash::P2wpkhError),
+    /// Sighash computation error (taproot input).
+    TaprootError(sighash::TaprootError),
     /// Unable to determine the output type.
     UnknownOutputType,
     /// Unable to find key.
@@ -775,6 +965,8 @@ pub enum SignError {
     /// Signing request currently unsupported.
     Unsupported,
 }
+
+bitcoin_internals::impl_from_infallible!(SignError);
 
 impl fmt::Display for SignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -790,7 +982,9 @@ impl fmt::Display for SignError {
             MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
             NotEcdsa => write!(f, "attempted to ECDSA sign an non-ECDSA input"),
             NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
-            SighashComputation(ref e) => write!(f, "sighash: {}", e),
+            SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
+            P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
+            TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
             UnknownOutputType => write!(f, "unable to determine the output type"),
             KeyNotFound => write!(f, "unable to find key"),
             WrongSigningAlgorithm =>
@@ -806,7 +1000,9 @@ impl std::error::Error for SignError {
         use SignError::*;
 
         match *self {
-            SighashComputation(ref e) => Some(e),
+            SegwitV0Sighash(ref e) => Some(e),
+            P2wpkhSighash(ref e) => Some(e),
+            TaprootError(ref e) => Some(e),
             IndexOutOfBounds(ref e) => Some(e),
             InvalidSighashType
             | MissingInputUtxo
@@ -824,12 +1020,16 @@ impl std::error::Error for SignError {
     }
 }
 
-impl From<sighash::Error> for SignError {
-    fn from(e: sighash::Error) -> Self { SignError::SighashComputation(e) }
+impl From<sighash::P2wpkhError> for SignError {
+    fn from(e: sighash::P2wpkhError) -> Self { Self::P2wpkhSighash(e) }
 }
 
 impl From<IndexOutOfBoundsError> for SignError {
     fn from(e: IndexOutOfBoundsError) -> Self { SignError::IndexOutOfBounds(e) }
+}
+
+impl From<sighash::TaprootError> for SignError {
+    fn from(e: sighash::TaprootError) -> Self { SignError::TaprootError(e) }
 }
 
 /// This error is returned when extracting a [`Transaction`] from a [`Psbt`].
@@ -854,6 +1054,8 @@ pub enum ExtractTxError {
         psbt: Psbt,
     },
 }
+
+bitcoin_internals::impl_from_infallible!(ExtractTxError);
 
 impl fmt::Display for ExtractTxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -905,6 +1107,8 @@ pub enum IndexOutOfBoundsError {
     },
 }
 
+bitcoin_internals::impl_from_infallible!(IndexOutOfBoundsError);
+
 impl fmt::Display for IndexOutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use IndexOutOfBoundsError::*;
@@ -955,6 +1159,8 @@ mod display_from_str {
         /// Error in PSBT Base64 encoding.
         Base64Encoding(bitcoin::base64::DecodeError),
     }
+
+    bitcoin_internals::impl_from_infallible!(PsbtParseError);
 
     impl Display for PsbtParseError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -1008,13 +1214,12 @@ mod tests {
     use bitcoin::blockdata::witness::Witness;
     use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
     use bitcoin::hex::{test_hex_unwrap as hex, FromHex};
-    use bitcoin::network::Network::Bitcoin;
     use bitcoin::secp256k1::{self, Secp256k1};
     #[cfg(feature = "rand-std")]
     use bitcoin::secp256k1::{All, SecretKey};
+    use bitcoin::NetworkKind;
 
     use super::*;
-    use crate::sighash_type::PsbtSighashType;
     use crate::v0::bitcoin::map::{Input, Output};
     use crate::v0::bitcoin::raw;
     use crate::v0::bitcoin::serialize::{Deserialize, Serialize};
@@ -1151,7 +1356,7 @@ mod tests {
 
         let mut hd_keypaths: BTreeMap<secp256k1::PublicKey, KeySource> = Default::default();
 
-        let mut sk: Xpriv = Xpriv::new_master(Bitcoin, &seed).unwrap();
+        let mut sk: Xpriv = Xpriv::new_master(NetworkKind::Main, &seed).unwrap();
 
         let fprint = sk.fingerprint(secp);
 
@@ -1291,7 +1496,7 @@ mod tests {
             vec![(raw::Key { type_value: 1, key: vec![0, 1] }, vec![3, 4, 5])]
                 .into_iter()
                 .collect();
-        let key_source = ("deadbeef".parse().unwrap(), "m/0'/1".parse().unwrap());
+        let key_source = ("deadbeef".parse().unwrap(), "0'/1".parse().unwrap());
         let keypaths: BTreeMap<secp256k1::PublicKey, KeySource> = vec![(
             "0339880dc92394b7355e3d0439fa283c31de7590812ea011c4245c0674a685e883".parse().unwrap(),
             key_source.clone(),
@@ -1585,7 +1790,7 @@ mod tests {
             let tx_input = &psbt.unsigned_tx.input[0];
             let psbt_non_witness_utxo = psbt.inputs[0].non_witness_utxo.as_ref().unwrap();
 
-            assert_eq!(tx_input.previous_output.txid, psbt_non_witness_utxo.txid());
+            assert_eq!(tx_input.previous_output.txid, psbt_non_witness_utxo.compute_txid());
             assert!(psbt_non_witness_utxo.output[tx_input.previous_output.vout as usize]
                 .script_pubkey
                 .is_p2pkh());
@@ -1655,7 +1860,7 @@ mod tests {
 
             // let tx = &psbt.unsigned_tx;
             // assert_eq!(
-            //     tx.txid(),
+            //     tx.compute_txid(),
             //     "75c5c9665a570569ad77dd1279e6fd4628a093c4dcbf8d41532614044c14c115".parse().unwrap(),
             // );
 
@@ -1930,7 +2135,7 @@ mod tests {
         let secp = Secp256k1::new();
 
         let sk = SecretKey::new(&mut thread_rng());
-        let priv_key = PrivateKey::new(sk, bitcoin::Network::Regtest);
+        let priv_key = PrivateKey::new(sk, NetworkKind::Test);
         let pk = PublicKey::from_private_key(&secp, &priv_key);
 
         (priv_key, pk, secp)
@@ -2091,16 +2296,16 @@ mod tests {
         psbt.inputs[0].bip32_derivation = map;
 
         // Second input is unspendable by us e.g., from another wallet that supports future upgrades.
-        let unknown_prog = WitnessProgram::new(WitnessVersion::V4, vec![0xaa; 34]).unwrap();
+        let unknown_prog = WitnessProgram::new(WitnessVersion::V4, &[0xaa; 34]).unwrap();
         let txout_unknown_future = TxOut {
             value: Amount::from_sat(10),
             script_pubkey: ScriptBuf::new_witness_program(&unknown_prog),
         };
         psbt.inputs[1].witness_utxo = Some(txout_unknown_future);
 
-        let sigs = psbt.sign(&key_map, &secp).unwrap();
+        let (signing_keys, _) = psbt.sign(&key_map, &secp).unwrap_err();
 
-        assert!(sigs.len() == 1);
-        assert!(sigs[&0] == vec![pk]);
+        assert_eq!(signing_keys.len(), 1);
+        assert_eq!(signing_keys[&0], SigningKeys::Ecdsa(vec![pk]));
     }
 }
