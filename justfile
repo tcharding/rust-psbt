@@ -16,12 +16,16 @@ test:
 
 # Lint everything.
 lint:
-  cargo clippy --all --all-targets --all-features -- --deny warnings
+  cargo +$(cat ./nightly-version) clippy --all-targets --all-features -- --deny warnings
 
-# Run the formatter
+# Run cargo fmt
 fmt:
-  cargo +nightly fmt --all
+  cargo +$(cat ./nightly-version) fmt --all
 
-# Check the formatting
-format:
-  cargo +nightly fmt --all --check
+# Generate documentation.
+docsrs *flags:
+  RUSTDOCFLAGS="--cfg docsrs -D warnings -D rustdoc::broken-intra-doc-links" cargo +$(cat ./nightly-version) doc --all-features {{flags}}
+
+# Update the recent and minimal lock files.
+update-lock-files:
+  contrib/update-lock-files.sh
