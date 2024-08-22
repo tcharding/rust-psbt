@@ -9,7 +9,7 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = [ "psbt", "bip-174", "bip174", "bip-370", "bip370"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.56.1"
+rust-version = "1.63.0"
 exclude = ["tests", "contrib"]
 
 [package.metadata.docs.rs]
@@ -56,6 +56,3 @@ required-features = ["std"]
 [[example]]
 name = "v2-separate-creator-constructor"
 required-features = ["std"]
-
-[lints.rust]
-unexpected_cfgs = { level = "deny", check-cfg = ['cfg(rust_v_1_60)'] }
