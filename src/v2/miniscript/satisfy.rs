@@ -87,13 +87,11 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
     // TODO: Verify this is correct.
     fn check_older(&self, n: relative::LockTime) -> bool {
         match self.input.sequence {
-            Some(seq) => {
-                match relative::LockTime::from_sequence(seq) {
-                    Err(_) => false,
-                    Ok(lock_time) => n.is_implied_by(lock_time),
-                }
+            Some(seq) => match relative::LockTime::from_sequence(seq) {
+                Err(_) => false,
+                Ok(lock_time) => n.is_implied_by(lock_time),
             },
-            None => false
+            None => false,
         }
     }
 
