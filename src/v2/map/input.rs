@@ -323,7 +323,7 @@ impl Input {
     /// Returns true if this input has been finalized.
     ///
     /// > It checks whether all inputs have complete scriptSigs and scriptWitnesses by checking for
-    /// the presence of 0x07 Finalized scriptSig and 0x08 Finalized scriptWitness typed records.
+    /// > the presence of 0x07 Finalized scriptSig and 0x08 Finalized scriptWitness typed records.
     ///
     /// Therefore a finalized input must have both `final_script_sig` and `final_script_witness`
     /// fields set. For legacy transactions the `final_script_witness` will be an empty [`Witness`].

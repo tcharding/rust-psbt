@@ -9,7 +9,7 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = [ "psbt", "bip-174", "bip174", "bip-370", "bip370"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.56.1"
+rust-version = "1.63.0"
 exclude = ["tests", "contrib"]
 
 [package.metadata.docs.rs]
@@ -20,6 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = ["std"]
 std = ["bitcoin/std"]
 no-std = ["bitcoin/no-std", "core2"]
+rand-std = ["bitcoin/rand-std"]
 serde = ["actual-serde", "bitcoin/serde"]
 base64 = ["bitcoin/base64"]
 

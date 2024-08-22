@@ -10,7 +10,7 @@ For now we more or less just follow the contribution guidelines of
 
 ### Minimum Supported Rust Version (MSRV)
 
-This library should always compile with any combination of features on **Rust 1.56.1**.
+This library should always compile with any combination of features on **Rust 1.63.0**.
 
 To build with the MSRV you will likely need to pin a bunch of dependencies, see `./contrib/test.sh`
 for the current list.
