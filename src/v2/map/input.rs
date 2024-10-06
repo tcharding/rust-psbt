@@ -158,13 +158,8 @@ impl Input {
 
     /// Converts this `Input` to a `v0::Input`.
     pub(crate) fn into_v0(self) -> v0::Input {
-        let proprietary = self
-            .proprietaries
-            .into_iter()
-            .map(|(k, v)| (v0::bitcoin::raw::ProprietaryKey::from(k), v))
-            .collect();
-        let unknown =
-            self.unknowns.into_iter().map(|(k, v)| (v0::bitcoin::raw::Key::from(k), v)).collect();
+        let proprietary = self.proprietaries.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+        let unknown = self.unknowns.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
 
         v0::Input {
             non_witness_utxo: self.non_witness_utxo,

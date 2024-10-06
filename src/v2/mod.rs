@@ -411,20 +411,9 @@ impl Updater {
             self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
         let inputs = self.0.inputs.into_iter().map(|input| input.into_v0()).collect();
         let outputs = self.0.outputs.into_iter().map(|output| output.into_v0()).collect();
-        let proprietary = self
-            .0
-            .global
-            .proprietaries
-            .into_iter()
-            .map(|(k, v)| (v0::bitcoin::raw::ProprietaryKey::from(k), v))
-            .collect();
-        let unknown = self
-            .0
-            .global
-            .unknowns
-            .into_iter()
-            .map(|(k, v)| (v0::bitcoin::raw::Key::from(k), v))
-            .collect();
+        let proprietary =
+            self.0.global.proprietaries.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+        let unknown = self.0.global.unknowns.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
 
         v0::Psbt {
             unsigned_tx,

@@ -74,13 +74,8 @@ impl Output {
 
     /// Converts this `Output` to a `v0::Output`.
     pub(crate) fn into_v0(self) -> v0::Output {
-        let proprietary = self
-            .proprietaries
-            .into_iter()
-            .map(|(k, v)| (v0::bitcoin::raw::ProprietaryKey::from(k), v))
-            .collect();
-        let unknown =
-            self.unknowns.into_iter().map(|(k, v)| (v0::bitcoin::raw::Key::from(k), v)).collect();
+        let proprietary = self.proprietaries.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+        let unknown = self.unknowns.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
 
         v0::Output {
             redeem_script: self.redeem_script,
