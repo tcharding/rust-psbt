@@ -406,6 +406,11 @@ impl Updater {
     }
 
     /// Converts the inner PSBT v2 to a PSBT v0.
+    ///
+    /// Conversion is lossy because PSBT v2 introduced global types not present in v0.
+    /// See [BIP-370] for a list of differences.
+    ///
+    /// [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki#specification>
     pub fn into_psbt_v0(self) -> v0::Psbt {
         let unsigned_tx =
             self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
