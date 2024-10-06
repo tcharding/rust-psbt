@@ -18,7 +18,7 @@ use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::v2::map::Map;
-use crate::{raw, serialize};
+use crate::{raw, serialize, v0};
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -72,19 +72,27 @@ impl Output {
         }
     }
 
-    // /// Converts this `Output` to a `v0::Output`.
-    // pub(crate) fn into_v0(self) -> v0::Output {
-    //     v0::Output {
-    //         redeem_script: self.redeem_script,
-    //         witness_script: self.witness_script,
-    //         bip32_derivation: self.bip32_derivations,
-    //         tap_internal_key: self.tap_internal_key,
-    //         tap_tree: self.tap_tree,
-    //         tap_key_origins: self.tap_key_origins,
-    //         proprietary: self.proprietaries,
-    //         unknown: self.unknowns,
-    //     }
-    // }
+    /// Converts this `Output` to a `v0::Output`.
+    pub(crate) fn into_v0(self) -> v0::Output {
+        let proprietary = self
+            .proprietaries
+            .into_iter()
+            .map(|(k, v)| (v0::bitcoin::raw::ProprietaryKey::from(k), v))
+            .collect();
+        let unknown =
+            self.unknowns.into_iter().map(|(k, v)| (v0::bitcoin::raw::Key::from(k), v)).collect();
+
+        v0::Output {
+            redeem_script: self.redeem_script,
+            witness_script: self.witness_script,
+            bip32_derivation: self.bip32_derivations,
+            tap_internal_key: self.tap_internal_key,
+            tap_tree: self.tap_tree,
+            tap_key_origins: self.tap_key_origins,
+            proprietary,
+            unknown,
+        }
+    }
 
     /// Creates the [`TxOut`] associated with this `Output`.
     pub(crate) fn tx_out(&self) -> TxOut {

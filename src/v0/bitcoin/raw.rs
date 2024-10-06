@@ -16,6 +16,7 @@ use bitcoin::consensus::encode::{
 use super::serialize::{Deserialize, Serialize};
 use crate::io::{self, BufRead, Write};
 use crate::prelude::*;
+use crate::raw;
 use crate::v0::bitcoin::Error;
 
 /// A PSBT key in its raw byte form.
@@ -101,6 +102,10 @@ impl Key {
 
         Ok(Key { type_value, key })
     }
+}
+
+impl From<raw::Key> for Key {
+    fn from(key: raw::Key) -> Self { Key { type_value: key.type_value, key: key.key } }
 }
 
 impl Serialize for Key {
@@ -197,5 +202,14 @@ where
         }
 
         Ok(deserialize(&key.key)?)
+    }
+}
+
+impl<SubType> From<raw::ProprietaryKey<SubType>> for ProprietaryKey<SubType>
+where
+    SubType: Copy + From<u8> + Into<u8>,
+{
+    fn from(key: raw::ProprietaryKey<SubType>) -> Self {
+        ProprietaryKey::<SubType> { prefix: key.prefix, subtype: key.subtype, key: key.key }
     }
 }
