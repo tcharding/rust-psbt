@@ -7,6 +7,7 @@
 //! taken as NOT PROVEN CORRECT.
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::locktime::absolute;
@@ -17,6 +18,7 @@ use psbt_v2::bitcoin::{
     ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
 };
 use psbt_v2::v0::{self, Psbt};
+use psbt_v2::bitcoin::bip32::{ DerivationPath, Fingerprint};
 
 pub const DUMMY_UTXO_AMOUNT: Amount = Amount::from_sat(20_000_000);
 pub const SPEND_AMOUNT: Amount = Amount::from_sat(20_000_000);
