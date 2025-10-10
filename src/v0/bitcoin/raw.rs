@@ -14,7 +14,7 @@ use bitcoin::consensus::encode::{
 };
 
 use super::serialize::{Deserialize, Serialize};
-use crate::io::{self, BufRead, Write};
+use crate::io::{self, BufRead, Read, Write};
 use crate::prelude::*;
 use crate::v0::bitcoin::Error;
 
@@ -160,7 +160,7 @@ impl<Subtype> Decodable for ProprietaryKey<Subtype>
 where
     Subtype: Copy + From<u8> + Into<u8>,
 {
-    fn consensus_decode<R: BufRead + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
+    fn consensus_decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
         let prefix = Vec::<u8>::consensus_decode(r)?;
         let subtype = Subtype::from(r.read_u8()?);
 
