@@ -27,7 +27,7 @@ miniscript-std = ["std", "miniscript/std"]
 miniscript-no-std = ["miniscript/no-std"]
 
 [dependencies]
-bitcoin = { version = "0.32.2", default-features = false }
+bitcoin = { version = "0.32.4", default-features = false }
 bitcoin-internals = { version = "0.3.0", features = ["alloc"] }
 
 # Do NOT use this feature! Use one of the `miniscript-` features instead.
