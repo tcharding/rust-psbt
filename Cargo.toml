@@ -21,7 +21,7 @@ default = ["std"]
 std = ["bitcoin/std", "bitcoin-internals/std", "miniscript?/std"]
 rand = ["bitcoin/rand"]
 rand-std = ["bitcoin/rand-std"]
-serde = ["actual-serde", "bitcoin/serde", "bitcoin-internals/serde"]
+serde = ["dep:actual-serde", "bitcoin/serde", "bitcoin-internals/serde"]
 base64 = ["bitcoin/base64"]
 miniscript = ["dep:miniscript", "miniscript?/no-std"]
 
@@ -30,8 +30,7 @@ bitcoin = { version = "0.32.4", default-features = false }
 bitcoin-internals = { version = "0.3.0", features = ["alloc"] }
 
 miniscript = { version = "12.2.0", default-features = false, optional = true }
-# Do NOT use this as a feature! Use the `serde` feature instead.
-actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = [ "derive", "alloc" ], optional = true }
+actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [dev-dependencies]
 anyhow = "1"
