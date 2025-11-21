@@ -1,0 +1,20 @@
+# Configuration for rbmt (Rust Bitcoin Maintainer Tools)
+
+[test]
+# Examples to run with specific features enabled.
+# Format: "example_name:feature1 feature2"
+examples = [
+    "v0:std",
+    "v2:std",
+    "v2-separate-creator-constructor:std",
+]
+
+# Features to test with the conventional `std` feature enabled.
+# Tests each feature alone with std, all pairs, and all together.
+features_with_std = ["rand", "serde", "base64", "miniscript"]
+
+# Features to test without the `std` feature.
+# Tests each feature alone, all pairs, and all together.
+# Note: rand is a little weird until we can upgrade secp256k1 to v0.30.0
+# Note: miniscript is not included here as it has its own no-std handling
+features_without_std = ["serde", "base64"]
