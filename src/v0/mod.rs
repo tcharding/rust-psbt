@@ -4,10 +4,10 @@
 //!
 //! This module is code imported directly from [`rust-bitcoin`] and [`rust-miniscript`].
 //!
-//! More specifically `v0.31.1` and `v11.0.0` respectively:
+//! More specifically `v0.32.2` and `v12.2.0` respectively:
 //!
-//! - `rust-bitcoin` commit: `cfa018c9 Bump version to 0.31.1`
-//! - `rust-mininscript` comit: `7ebdd2f Merge rust-bitcoin/rust-miniscript#629: Tracking PR for release v11.0.0`
+//! - `rust-bitcoin` commit: `044fb7b Merge rust-bitcoin/rust-bitcoin#2843: release 0.32.2`
+//! - `rust-miniscript` commit: `8f54b5e Merge rust-bitcoin/rust-miniscript#712: Fix panic while decoding large Miniscripts from Script`
 //!
 //! To port code that currently uses those crate you should be able to change:
 //!
@@ -21,12 +21,12 @@
 
 /// Import of the [`bitcoin::psbt`] module.
 ///
-/// [`bitcoin::psbt`]: <https://docs.rs/bitcoin/0.31.1/bitcoin/psbt/index.html>
+/// [`bitcoin::psbt`]: <https://docs.rs/bitcoin/0.32.2/bitcoin/psbt/index.html>
 pub mod bitcoin;
 
 /// Import of the `miniscript::psbt` module.
 ///
-/// [`miniscript::psbt`]: <https://docs.rs/miniscript/latest/miniscript/psbt/index.html>
+/// [`miniscript::psbt`]: <https://docs.rs/miniscript/12.2.0/miniscript/psbt/index.html>
 #[cfg(feature = "miniscript")]
 pub mod miniscript;
 
