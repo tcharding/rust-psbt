@@ -442,7 +442,7 @@ impl Psbt {
                     let (msg, sighash_type) = self.sighash_taproot(input_index, cache, None)?;
                     let key_pair = Keypair::from_secret_key(secp, &sk.inner)
                         .tap_tweak(secp, input.tap_merkle_root)
-                        .to_inner();
+                        .to_keypair();
 
                     #[cfg(feature = "rand")]
                     let signature = secp.sign_schnorr(&msg, &key_pair);
@@ -1215,7 +1215,7 @@ mod tests {
     use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
     use bitcoin::hex::{test_hex_unwrap as hex, FromHex};
     use bitcoin::secp256k1::{self, Secp256k1};
-    #[cfg(feature = "rand-std")]
+    #[cfg(feature = "rand")]
     use bitcoin::secp256k1::{All, SecretKey};
     use bitcoin::NetworkKind;
 
@@ -2128,7 +2128,7 @@ mod tests {
         assert_eq!(psbt1, psbt2);
     }
 
-    #[cfg(feature = "rand-std")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     fn gen_keys() -> (PrivateKey, PublicKey, Secp256k1<All>) {
         use bitcoin::secp256k1::rand::thread_rng;
 
@@ -2142,7 +2142,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "rand-std")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     fn get_key_btree_map() {
         let (priv_key, pk, secp) = gen_keys();
 
@@ -2263,7 +2263,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "rand-std")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     fn sign_psbt() {
         use bitcoin::bip32::{DerivationPath, Fingerprint};
         use bitcoin::witness_version::WitnessVersion;

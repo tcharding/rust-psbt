@@ -18,7 +18,7 @@ pub(crate) struct InputSatisfier<'a> {
     pub(crate) input: &'a Input,
 }
 
-impl<'a, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'a> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'_> {
     fn lookup_tap_key_spend_sig(&self) -> Option<taproot::Signature> { self.input.tap_key_sig }
 
     fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<taproot::Signature> {

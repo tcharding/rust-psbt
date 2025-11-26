@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Read nightly version"
+      - name: "Read toolchain versions"
         id: read_toolchain
         run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
 
@@ -30,18 +30,12 @@ jobs:
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@stable
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh stable
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Run tests"
+        run: rbmt test stable --lock-file ${{ matrix.dep }}
 
   Nightly:                      # 2 jobs, one per lock file.
     name: Test - nightly toolchain
@@ -54,20 +48,14 @@ jobs:
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh nightly
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Run tests"
+        run: rbmt test nightly --lock-file ${{ matrix.dep }}
 
   MSRV:                         # 2 jobs, one per lock file.
     name: Test - MSRV toolchain
@@ -79,20 +67,16 @@ jobs:
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
-      - name: "Select toolchain"
+      - name: "Install stable toolchain"
+        uses: dtolnay/rust-toolchain@stable
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Install MSRV toolchain"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.63.0"
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh msrv
+      - name: "Run tests"
+        run: rbmt test msrv --lock-file ${{ matrix.dep }}
 
   Lint:
     name: Lint - nightly toolchain
@@ -100,50 +84,34 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Install clippy"
         run: rustup component add clippy
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh lint
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Run lint"
+        run: rbmt lint
 
   Docs:
     name: Docs - stable toolchain
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@stable
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh docs
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Build docs"
+        run: rbmt docs
 
   Docsrs:
     name: Docs - nightly toolchain
@@ -151,25 +119,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh docsrs
+      - name: "Install rbmt"
+        run: ./contrib/install-rbmt.sh
+      - name: "Build docs.rs docs"
+        run: rbmt docsrs
 
   Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
@@ -177,17 +137,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          rev: b2ac115
-          path: maintainer-tools
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@v1
         with:

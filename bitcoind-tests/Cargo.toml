@@ -10,7 +10,6 @@ anyhow = "1"
 bitcoin = { version = "0.31.0", features = ["rand-std"] }
 bitcoind = { version = "0.34.1", features = ["25_1"] }
 secp256k1 = { version = "0.28.2", features = ["global-context", "rand-std"] }
-psbt-v2 = { path = "..", features = ["std", "miniscript-std"] }
+psbt-v2 = { path = "..", features = ["std", "miniscript"] }
 
 [dev-dependencies]
-
