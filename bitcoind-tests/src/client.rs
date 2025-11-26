@@ -6,18 +6,15 @@
 
 // We depend upon and import directly from bitcoin because this module is not concerned with PSBT
 // i.e., it is lower down the stack than the psbt_v2 crate.
-use bitcoin::{consensus, Address, Amount, Network, Transaction, Txid};
-use bitcoind::bitcoincore_rpc::bitcoincore_rpc_json::{AddressType, GetBlockchainInfoResult};
-use bitcoind::bitcoincore_rpc::RpcApi;
-use bitcoind::BitcoinD;
+use bitcoin::{Address, Amount, Transaction, Txid};
+use bitcoind::{AddressType, Node, vtype::GetBlockchainInfo};
 
-const NETWORK: Network = Network::Regtest;
 const FIFTY_BTC: Amount = Amount::from_int_btc(50);
 
 /// A custom bitcoind client.
 pub struct Client {
     /// Handle for the regtest `bitcoind` instance.
-    bitcoind: BitcoinD,
+    bitcoind: Node,
     /// This is public so we don't have to handle the complexity of know if send/receives are
     /// to/from the Core controlled wallet or somewhere else. User is required to manage this.
     pub balance: BalanceTracker,
@@ -26,7 +23,8 @@ pub struct Client {
 impl Client {
     /// Creates a new [`Client`].
     pub fn new() -> anyhow::Result<Self> {
-        let bitcoind = BitcoinD::from_downloaded()?;
+        let exe_path = bitcoind::exe_path()?;
+        let bitcoind = Node::new(exe_path)?;
         let balance = BalanceTracker::zero();
 
         let client = Client { bitcoind, balance };
@@ -60,7 +58,7 @@ impl Client {
     }
 
     /// Calls through to bitcoincore_rpc client.
-    pub fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
+    pub fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfo> {
         let client = &self.bitcoind.client;
         Ok(client.get_blockchain_info()?)
     }
@@ -68,21 +66,20 @@ impl Client {
     /// Gets an address controlled by the currently loaded Bitcoin Core wallet (via `bitcoind`).
     pub fn core_wallet_controlled_address(&self) -> anyhow::Result<Address> {
         let client = &self.bitcoind.client;
-        let label = None;
-        let address_type = Some(AddressType::Bech32m);
-        let address = client.get_new_address(label, address_type)?.require_network(NETWORK)?;
+        // Use Bech32 (segwit v0) for compatibility with all Bitcoin Core versions.
+        // Bech32m (taproot) is only available from Bitcoin Core 22.0+.
+        let address = client.new_address_with_type(AddressType::Bech32)?;
         Ok(address)
     }
 
     pub fn balance(&self) -> anyhow::Result<Amount> {
         let client = &self.bitcoind.client;
-        let minconf = None; // What is this?
-        let include_watchonly = None;
-        Ok(client.get_balance(minconf, include_watchonly)?)
+        let balance = client.get_balance()?.balance()?;
+        Ok(balance)
     }
 
     /// Mines `n` blocks to a new address controlled by the currently loaded Bitcoin Core wallet.
-    fn mine_blocks(&self, n: u64) -> anyhow::Result<()> {
+    fn mine_blocks(&self, n: usize) -> anyhow::Result<()> {
         let client = &self.bitcoind.client;
         // Generate to an address controlled by the bitcoind wallet and wait for funds to mature.
         let address = self.core_wallet_controlled_address()?;
@@ -91,45 +88,25 @@ impl Client {
         Ok(())
     }
 
-    /// Send `amount` to `address` setting all other `bitcoincore_prc::send_to_address` args to `None`.
+    /// Send `amount` to `address`.
     ///
     /// Caller required to update balance (ie, call self.balance.send()).
     pub fn send(&self, amount: Amount, address: &Address) -> anyhow::Result<Txid> {
         let client = &self.bitcoind.client;
-
-        let comment = None;
-        let comment_to = None;
-        let subtract_fee = None;
-        let replacable = None;
-        let confirmation_target = None;
-        let estimate_mode = None;
-
-        let txid = client.send_to_address(
-            address,
-            amount,
-            comment,
-            comment_to,
-            subtract_fee,
-            replacable,
-            confirmation_target,
-            estimate_mode,
-        )?;
-
+        let txid = client.send_to_address(address, amount)?.txid()?;
         Ok(txid)
     }
 
     pub fn get_transaction(&self, txid: &Txid) -> anyhow::Result<Transaction> {
         let client = &self.bitcoind.client;
-        let include_watchonly = None;
-        let res = client.get_transaction(txid, include_watchonly)?;
-        let tx: Transaction = consensus::encode::deserialize(&res.hex)?;
+        let res = client.get_transaction(*txid)?;
+        let tx = res.into_model()?.tx;
         Ok(tx)
     }
 
     pub fn send_raw_transaction(&self, tx: &Transaction) -> anyhow::Result<Txid> {
         let client = &self.bitcoind.client;
-        let hex = consensus::encode::serialize_hex(&tx);
-        let txid = client.send_raw_transaction(hex)?;
+        let txid = client.send_raw_transaction(tx)?.txid()?;
         Ok(txid)
     }
 }
