@@ -6,7 +6,7 @@ _default:
 
 # Install rbmt (Rust Bitcoin Maintainer Tools).
 @_install-rbmt:
-  rustup run stable {{justfile_directory()}}/contrib/install-rbmt.sh
+  cargo install --quiet --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat {{justfile_directory()}}/rbmt-version) cargo-rbmt
 
 # Cargo check everything.
 check:
@@ -36,12 +36,12 @@ docsrs *flags:
 # Update the recent and minimal lock files using rbmt.
 [group('tools')]
 @update-lock-files: _install-rbmt
-  rustup run {{NIGHTLY_VERSION}} rbmt lock
+  rustup run {{NIGHTLY_VERSION}} cargo rbmt lock
 
 # Run CI tasks with rbmt.
 [group('ci')]
 @ci task toolchain="stable" lock="recent": _install-rbmt
-  RBMT_LOG_LEVEL=quiet rustup run {{toolchain}} rbmt --lock-file {{lock}} {{task}}
+  RBMT_LOG_LEVEL=quiet rustup run {{toolchain}} cargo rbmt --lock-file {{lock}} {{task}}
 
 # Test crate.
 [group('ci')]
