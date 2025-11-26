@@ -4,7 +4,7 @@ use core::str::FromStr;
 
 // Only depend on `psbt` (and `bitcoind_tests`) because we are explicitly testing the `psbt_v2` crate.
 use bitcoind_tests::client::Client;
-use psbt::bitcoin::{Address, Amount, Network, OutPoint, PublicKey, Script, Transaction, TxOut};
+use psbt::bitcoin::{Address, Amount, CompressedPublicKey, Network, OutPoint, Script, Transaction, TxOut};
 use psbt::v2::{Constructor, InputBuilder, Modifiable, OutputBuilder};
 // The `psbt_v2` crate, as we expect downstream to use it
 // E.g., in manifest file `use psbt = { package = "psbt_v2" ... }`
@@ -74,7 +74,7 @@ impl TransactionExt for Transaction {
         let mut utxos = vec![];
         for (index, utxo) in self.output.iter().enumerate() {
             if &utxo.script_pubkey == script_pubkey {
-                let out_point = OutPoint { txid: self.txid(), vout: index as u32 };
+                let out_point = OutPoint { txid: self.compute_txid(), vout: index as u32 };
 
                 utxos.push((out_point, utxo));
             }
@@ -85,15 +85,15 @@ impl TransactionExt for Transaction {
 
 /// A super basic entity with a single public key.
 pub struct Alice {
-    /// The single public key.
-    public_key: PublicKey,
+    /// The single compressed public key.
+    public_key: CompressedPublicKey,
 }
 
 impl Alice {
     /// Creates a new Alice.
     pub fn new() -> Self {
         // An arbitrary public key, assume the secret key is held by another entity.
-        let public_key = PublicKey::from_str(
+        let public_key = CompressedPublicKey::from_str(
             "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af",
         )
         .unwrap();
@@ -101,8 +101,8 @@ impl Alice {
         Alice { public_key }
     }
 
-    /// Returns a bech32m address from a key Alice controls.
+    /// Returns a bech32 address from a key Alice controls.
     pub fn address(&self) -> Address {
-        Address::p2wpkh(&self.public_key, NETWORK).expect("uncompressed key")
+        Address::p2wpkh(&self.public_key, NETWORK)
     }
 }

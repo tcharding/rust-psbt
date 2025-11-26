@@ -4,12 +4,32 @@ version = "0.1.0"
 authors = ["Tobin C. Harding <me@tobin.cc>"]
 license = "CC0-1.0"
 edition = "2021"
+publish = false
 
 [dependencies]
 anyhow = "1"
-bitcoin = { version = "0.31.0", features = ["rand-std"] }
-bitcoind = { version = "0.34.1", features = ["25_1"] }
-secp256k1 = { version = "0.28.2", features = ["global-context", "rand-std"] }
+bitcoin = { version = "0.32.6", features = ["rand-std"] }
+bitcoind = { package = "corepc-node", version = "0.10.1", features = ["download"] }
+secp256k1 = { version = "0.29.0", features = ["global-context", "rand-std"] }
 psbt-v2 = { path = "..", features = ["std", "miniscript"] }
 
 [dev-dependencies]
+
+[features]
+# Bitcoin Core version features for integration testing.
+# corepc-node provides one feature per major version (latest patch release).
+# Bitcoin Core does not support PSBT v2 (BIP-370) yet.
+"29_0" = ["bitcoind/29_0"]
+"28_2" = ["bitcoind/28_2"]
+"27_2" = ["bitcoind/27_2"]
+"26_2" = ["bitcoind/26_2"]
+"25_2" = ["bitcoind/25_2"]
+"24_2" = ["bitcoind/24_2"]
+"23_2" = ["bitcoind/23_2"]
+"22_1" = ["bitcoind/22_1"]
+"0_21_2" = ["bitcoind/0_21_2"]
+"0_20_2" = ["bitcoind/0_20_2"]
+"0_19_1" = ["bitcoind/0_19_1"]
+"0_18_1" = ["bitcoind/0_18_1"]
+# Starting from 0.17.0 because that's when PSBT v0 (BIP-174) was first introduced.
+"0_17_2" = ["bitcoind/0_17_2"]
