@@ -74,7 +74,7 @@ jobs:
       - name: "Install MSRV toolchain"
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.63.0"
+          toolchain: "1.74.0"
       - name: "Run tests"
         run: rbmt test msrv --lock-file ${{ matrix.dep }}
 
