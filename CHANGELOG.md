@@ -1,3 +1,7 @@
+# Unreleased
+
+- Bump MSRV to Rust `v1.74.0`.
+
 # 0.2.0 - 2024-08-22
 
 - Bump MSRV to Rust `v1.63.0` [#27](https://github.com/tcharding/rust-psbt/pull/27)
