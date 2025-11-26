@@ -16,10 +16,14 @@ check:
 build:
   cargo build --all --all-targets --all-features
 
-# Cargo test everything.
+# Test everything.
 test:
   cargo test --all-targets --all-features
-  cd bitcoind-tests; cargo test
+  just test-bitcoind
+
+# Test bitcoind integration with a bitcoind version.
+test-bitcoind version="29_0":
+  cd {{justfile_directory()}}/bitcoind-tests && cargo test --features={{version}}
 
 # Lint everything.
 lint:
