@@ -107,9 +107,12 @@ impl Output {
         if rv.amount == Amount::ZERO {
             return Err(DecodeError::MissingValue);
         }
+        // BIP-375 allows outputs to be missing scriptPubkey
+        #[cfg(not(feature = "silent-payments"))]
         if rv.script_pubkey == ScriptBuf::default() {
             return Err(DecodeError::MissingScriptPubkey);
         }
+
         Ok(rv)
     }
 
