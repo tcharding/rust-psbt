@@ -13,6 +13,8 @@ use crate::consts::{
     PSBT_GLOBAL_PROPRIETARY, PSBT_GLOBAL_TX_MODIFIABLE, PSBT_GLOBAL_TX_VERSION,
     PSBT_GLOBAL_UNSIGNED_TX, PSBT_GLOBAL_VERSION, PSBT_GLOBAL_XPUB,
 };
+#[cfg(feature = "silent-payments")]
+use crate::consts::{PSBT_GLOBAL_SP_DLEQ, PSBT_GLOBAL_SP_ECDH_SHARE};
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{BufRead, Cursor, Read};
 use crate::prelude::*;
@@ -56,6 +58,16 @@ pub struct Global {
     /// A map from xpub to the used key fingerprint and derivation path as defined by BIP 32.
     pub xpubs: BTreeMap<Xpub, KeySource>,
 
+    /// BIP-375: Map from scan public key to ECDH share (33 bytes each).
+    #[cfg(feature = "silent-payments")]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    pub sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>>,
+
+    /// BIP-375: Map from scan public key to DLEQ proof (64 bytes each).
+    #[cfg(feature = "silent-payments")]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    pub sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>>,
+
     /// Global proprietary key-value pairs.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
@@ -76,6 +88,10 @@ impl Global {
             input_count: 0,
             output_count: 0,
             xpubs: Default::default(),
+            #[cfg(feature = "silent-payments")]
+            sp_ecdh_shares: Default::default(),
+            #[cfg(feature = "silent-payments")]
+            sp_dleq_proofs: Default::default(),
             proprietaries: Default::default(),
             unknowns: Default::default(),
         }
@@ -131,6 +147,10 @@ impl Global {
         let mut input_count: Option<u64> = None;
         let mut output_count: Option<u64> = None;
         let mut xpubs: BTreeMap<Xpub, (Fingerprint, DerivationPath)> = Default::default();
+        #[cfg(feature = "silent-payments")]
+        let mut sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
+        #[cfg(feature = "silent-payments")]
+        let mut sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
         let mut proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>> = Default::default();
         let mut unknowns: BTreeMap<raw::Key, Vec<u8>> = Default::default();
 
@@ -158,7 +178,7 @@ impl Global {
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
                     },
-                PSBT_GLOBAL_TX_VERSION =>
+                PSBT_GLOBAL_TX_VERSION => {
                     if pair.key.key.is_empty() {
                         if tx_version.is_none() {
                             let vlen: usize = pair.value.len();
@@ -173,7 +193,8 @@ impl Global {
                         }
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
-                    },
+                    }
+                }
                 PSBT_GLOBAL_FALLBACK_LOCKTIME =>
                     if pair.key.key.is_empty() {
                         if fallback_lock_time.is_none() {
@@ -189,7 +210,7 @@ impl Global {
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
                     },
-                PSBT_GLOBAL_INPUT_COUNT =>
+                PSBT_GLOBAL_INPUT_COUNT => {
                     if pair.key.key.is_empty() {
                         if output_count.is_none() {
                             // TODO: Do we need to check the length for a VarInt?
@@ -202,8 +223,9 @@ impl Global {
                         }
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
-                    },
-                PSBT_GLOBAL_OUTPUT_COUNT =>
+                    }
+                }
+                PSBT_GLOBAL_OUTPUT_COUNT => {
                     if pair.key.key.is_empty() {
                         if output_count.is_none() {
                             // TODO: Do we need to check the length for a VarInt?
@@ -216,7 +238,8 @@ impl Global {
                         }
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
-                    },
+                    }
+                }
                 PSBT_GLOBAL_TX_MODIFIABLE =>
                     if pair.key.key.is_empty() {
                         if tx_modifiable_flags.is_none() {
@@ -232,7 +255,7 @@ impl Global {
                     } else {
                         return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
                     },
-                PSBT_GLOBAL_XPUB =>
+                PSBT_GLOBAL_XPUB => {
                     if !pair.key.key.is_empty() {
                         let xpub = Xpub::decode(&pair.key.key)?;
                         if pair.value.is_empty() {
@@ -267,7 +290,8 @@ impl Global {
                         }
                     } else {
                         return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
-                    },
+                    }
+                }
                 // TODO: Remove clone by implementing TryFrom for reference.
                 PSBT_GLOBAL_PROPRIETARY =>
                     if !pair.key.key.is_empty() {
@@ -284,6 +308,44 @@ impl Global {
                     } else {
                         return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
                     },
+                #[cfg(feature = "silent-payments")]
+                PSBT_GLOBAL_SP_ECDH_SHARE => {
+                    if pair.key.key.is_empty() {
+                        return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
+                    }
+                    if pair.key.key.len() != 33 {
+                        return Err(InsertPairError::KeyWrongLength(pair.key.key.len(), 33));
+                    }
+                    if pair.value.len() != 33 {
+                        return Err(InsertPairError::ValueWrongLength(pair.value.len(), 33));
+                    }
+                    match sp_ecdh_shares.entry(pair.key.key.clone()) {
+                        btree_map::Entry::Vacant(empty_key) => {
+                            empty_key.insert(pair.value);
+                        }
+                        btree_map::Entry::Occupied(_) =>
+                            return Err(InsertPairError::DuplicateKey(pair.key)),
+                    }
+                }
+                #[cfg(feature = "silent-payments")]
+                PSBT_GLOBAL_SP_DLEQ => {
+                    if pair.key.key.is_empty() {
+                        return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
+                    }
+                    if pair.key.key.len() != 33 {
+                        return Err(InsertPairError::KeyWrongLength(pair.key.key.len(), 33));
+                    }
+                    if pair.value.len() != 64 {
+                        return Err(InsertPairError::ValueWrongLength(pair.value.len(), 64));
+                    }
+                    match sp_dleq_proofs.entry(pair.key.key.clone()) {
+                        btree_map::Entry::Vacant(empty_key) => {
+                            empty_key.insert(pair.value);
+                        }
+                        btree_map::Entry::Occupied(_) =>
+                            return Err(InsertPairError::DuplicateKey(pair.key)),
+                    }
+                }
                 v if v == PSBT_GLOBAL_UNSIGNED_TX =>
                     return Err(InsertPairError::ExcludedKey { key_type_value: v }),
                 _ => match unknowns.entry(pair.key) {
@@ -321,6 +383,15 @@ impl Global {
         let output_count = usize::try_from(output_count.ok_or(DecodeError::MissingOutputCount)?)
             .map_err(|_| DecodeError::OutputCountOverflow(output_count.expect("is some")))?;
 
+        #[cfg(feature = "silent-payments")]
+        {
+            let has_ecdh = !sp_ecdh_shares.is_empty();
+            let has_dleq = !sp_dleq_proofs.is_empty();
+            if has_ecdh != has_dleq {
+                return Err(DecodeError::FieldMismatch);
+            }
+        }
+
         Ok(Global {
             tx_version,
             fallback_lock_time,
@@ -328,6 +399,10 @@ impl Global {
             output_count,
             tx_modifiable_flags,
             version,
+            #[cfg(feature = "silent-payments")]
+            sp_ecdh_shares,
+            #[cfg(feature = "silent-payments")]
+            sp_dleq_proofs,
             xpubs,
             proprietaries,
             unknowns,
@@ -389,6 +464,10 @@ impl Global {
             }
         }
 
+        #[cfg(feature = "silent-payments")]
+        v2_combine_map!(sp_ecdh_shares, self, other);
+        #[cfg(feature = "silent-payments")]
+        v2_combine_map!(sp_dleq_proofs, self, other);
         v2_combine_map!(proprietaries, self, other);
         v2_combine_map!(unknowns, self, other);
 
@@ -445,6 +524,22 @@ impl Map for Global {
             });
         }
 
+        #[cfg(feature = "silent-payments")]
+        for (scan_key, ecdh_share) in &self.sp_ecdh_shares {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_GLOBAL_SP_ECDH_SHARE, key: scan_key.clone() },
+                value: ecdh_share.clone(),
+            });
+        }
+
+        #[cfg(feature = "silent-payments")]
+        for (scan_key, dleq_proof) in &self.sp_dleq_proofs {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_GLOBAL_SP_DLEQ, key: scan_key.clone() },
+                value: dleq_proof.clone(),
+            });
+        }
+
         for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
@@ -477,6 +572,8 @@ pub enum DecodeError {
     MissingOutputCount,
     /// Output count overflows word size for current architecture.
     OutputCountOverflow(u64),
+    /// ECDH shares and DLEQ proofs must both be present or both absent.
+    FieldMismatch,
 }
 
 impl fmt::Display for DecodeError {
@@ -487,14 +584,20 @@ impl fmt::Display for DecodeError {
             InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
             DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
             MissingVersion => write!(f, "serialized PSBT is missing the version number"),
-            MissingTxVersion =>
-                write!(f, "serialized PSBT is missing the transaction version number"),
+            MissingTxVersion => {
+                write!(f, "serialized PSBT is missing the transaction version number")
+            }
             MissingInputCount => write!(f, "serialized PSBT is missing the input count"),
-            InputCountOverflow(count) =>
-                write!(f, "input count overflows word size for current architecture: {}", count),
+            InputCountOverflow(count) => {
+                write!(f, "input count overflows word size for current architecture: {}", count)
+            }
             MissingOutputCount => write!(f, "serialized PSBT is missing the output count"),
-            OutputCountOverflow(count) =>
-                write!(f, "output count overflows word size for current architecture: {}", count),
+            OutputCountOverflow(count) => {
+                write!(f, "output count overflows word size for current architecture: {}", count)
+            }
+            FieldMismatch => {
+                write!(f, "ECDH shares and DLEQ proofs must both be present or both absent")
+            }
         }
     }
 }
@@ -512,7 +615,8 @@ impl std::error::Error for DecodeError {
             | MissingInputCount
             | InputCountOverflow(_)
             | MissingOutputCount
-            | OutputCountOverflow(_) => None,
+            | OutputCountOverflow(_)
+            | FieldMismatch => None,
         }
     }
 }
@@ -554,6 +658,8 @@ pub enum InsertPairError {
         /// Key type value we found.
         key_type_value: u8,
     },
+    /// Key was not the correct length (got, expected).
+    KeyWrongLength(usize, usize),
 }
 
 impl fmt::Display for InsertPairError {
@@ -566,12 +672,15 @@ impl fmt::Display for InsertPairError {
             InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
             Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
             Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
-            ValueWrongLength(got, want) =>
-                write!(f, "value (keyvalue pair) wrong length (got, want) {} {}", got, want),
-            WrongVersion(v) =>
-                write!(f, "PSBT_GLOBAL_VERSION: PSBT v2 expects the version to be 2, found: {}", v),
-            XpubInvalidFingerprint =>
-                write!(f, "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints"),
+            ValueWrongLength(got, want) => {
+                write!(f, "value (keyvalue pair) wrong length (got, want) {} {}", got, want)
+            }
+            WrongVersion(v) => {
+                write!(f, "PSBT_GLOBAL_VERSION: PSBT v2 expects the version to be 2, found: {}", v)
+            }
+            XpubInvalidFingerprint => {
+                write!(f, "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints")
+            }
             XpubInvalidPath(len) => write!(
                 f,
                 "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints: {}",
@@ -589,6 +698,9 @@ impl fmt::Display for InsertPairError {
                 "found a keypair type that is explicitly excluded: {}",
                 consts::psbt_global_key_type_value_to_str(key_type_value)
             ),
+            KeyWrongLength(got, expected) => {
+                write!(f, "key wrong length (got: {}, expected: {})", got, expected)
+            }
         }
     }
 }
@@ -611,7 +723,8 @@ impl std::error::Error for InsertPairError {
             | XpubInvalidPath(_)
             | DuplicateXpub(_)
             | InvalidProprietaryKey
-            | ExcludedKey { .. } => None,
+            | ExcludedKey { .. }
+            | KeyWrongLength(..) => None,
         }
     }
 }
@@ -655,12 +768,15 @@ impl fmt::Display for CombineError {
         use CombineError::*;
 
         match *self {
-            VersionMismatch { ref this, ref that } =>
-                write!(f, "combine two PSBTs with different versions: {:?} {:?}", this, that),
-            TxVersionMismatch { ref this, ref that } =>
-                write!(f, "combine two PSBTs with different tx versions: {:?} {:?}", this, that),
-            InconsistentKeySources(ref e) =>
-                write_err!(f, "combine with inconsistent key sources"; e),
+            VersionMismatch { ref this, ref that } => {
+                write!(f, "combine two PSBTs with different versions: {:?} {:?}", this, that)
+            }
+            TxVersionMismatch { ref this, ref that } => {
+                write!(f, "combine two PSBTs with different tx versions: {:?} {:?}", this, that)
+            }
+            InconsistentKeySources(ref e) => {
+                write_err!(f, "combine with inconsistent key sources"; e)
+            }
         }
     }
 }

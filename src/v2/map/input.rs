@@ -25,6 +25,8 @@ use crate::consts::{
     PSBT_IN_TAP_INTERNAL_KEY, PSBT_IN_TAP_KEY_SIG, PSBT_IN_TAP_LEAF_SCRIPT,
     PSBT_IN_TAP_MERKLE_ROOT, PSBT_IN_TAP_SCRIPT_SIG, PSBT_IN_WITNESS_SCRIPT, PSBT_IN_WITNESS_UTXO,
 };
+#[cfg(feature = "silent-payments")]
+use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
 use crate::error::{write_err, FundingUtxoError};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
@@ -115,6 +117,17 @@ pub struct Input {
     pub tap_internal_key: Option<XOnlyPublicKey>,
     /// Taproot Merkle root.
     pub tap_merkle_root: Option<TapNodeHash>,
+
+    /// BIP-375: Map from scan public key to per-input ECDH share (33 bytes each).
+    #[cfg(feature = "silent-payments")]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    pub sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>>,
+
+    /// BIP-375: Map from scan public key to per-input DLEQ proof (64 bytes each).
+    #[cfg(feature = "silent-payments")]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
+    pub sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>>,
+
     /// Proprietary key-value pairs for this input.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
@@ -151,6 +164,10 @@ impl Input {
             tap_key_origins: BTreeMap::new(),
             tap_internal_key: None,
             tap_merkle_root: None,
+            #[cfg(feature = "silent-payments")]
+            sp_ecdh_shares: BTreeMap::new(),
+            #[cfg(feature = "silent-payments")]
+            sp_dleq_proofs: BTreeMap::new(),
             proprietaries: BTreeMap::new(),
             unknowns: BTreeMap::new(),
         }
@@ -226,6 +243,10 @@ impl Input {
             tap_key_origins: BTreeMap::new(),
             tap_internal_key: None,
             tap_merkle_root: None,
+            #[cfg(feature = "silent-payments")]
+            sp_ecdh_shares: BTreeMap::new(),
+            #[cfg(feature = "silent-payments")]
+            sp_dleq_proofs: BTreeMap::new(),
             proprietaries: BTreeMap::new(),
             unknowns: BTreeMap::new(),
         };
@@ -387,6 +408,16 @@ impl Input {
         if rv.spent_output_index == u32::MAX {
             return Err(DecodeError::MissingSpentOutputIndex);
         }
+
+        #[cfg(feature = "silent-payments")]
+        {
+            let has_ecdh = !rv.sp_ecdh_shares.is_empty();
+            let has_dleq = !rv.sp_dleq_proofs.is_empty();
+            if has_ecdh != has_dleq {
+                return Err(DecodeError::FieldMismatch);
+            }
+        }
+
         Ok(rv)
     }
 
@@ -525,6 +556,44 @@ impl Input {
                     self.tap_merkle_root <= <raw_key: _>|< raw_value: TapNodeHash>
                 }
             }
+            #[cfg(feature = "silent-payments")]
+            PSBT_IN_SP_ECDH_SHARE => {
+                if raw_key.key.is_empty() {
+                    return Err(InsertPairError::InvalidKeyDataEmpty(raw_key));
+                }
+                if raw_key.key.len() != 33 {
+                    return Err(InsertPairError::KeyWrongLength(raw_key.key.len(), 33));
+                }
+                if raw_value.len() != 33 {
+                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 33));
+                }
+                match self.sp_ecdh_shares.entry(raw_key.key.clone()) {
+                    btree_map::Entry::Vacant(empty_key) => {
+                        empty_key.insert(raw_value);
+                    }
+                    btree_map::Entry::Occupied(_) =>
+                        return Err(InsertPairError::DuplicateKey(raw_key)),
+                }
+            }
+            #[cfg(feature = "silent-payments")]
+            PSBT_IN_SP_DLEQ => {
+                if raw_key.key.is_empty() {
+                    return Err(InsertPairError::InvalidKeyDataEmpty(raw_key));
+                }
+                if raw_key.key.len() != 33 {
+                    return Err(InsertPairError::KeyWrongLength(raw_key.key.len(), 33));
+                }
+                if raw_value.len() != 64 {
+                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 64));
+                }
+                match self.sp_dleq_proofs.entry(raw_key.key.clone()) {
+                    btree_map::Entry::Vacant(empty_key) => {
+                        empty_key.insert(raw_value);
+                    }
+                    btree_map::Entry::Occupied(_) =>
+                        return Err(InsertPairError::DuplicateKey(raw_key)),
+                }
+            }
             PSBT_IN_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
                 match self.proprietaries.entry(key) {
@@ -593,6 +662,10 @@ impl Input {
         v2_combine_map!(tap_key_origins, self, other);
         v2_combine_option!(tap_internal_key, self, other);
         v2_combine_option!(tap_merkle_root, self, other);
+        #[cfg(feature = "silent-payments")]
+        v2_combine_map!(sp_ecdh_shares, self, other);
+        #[cfg(feature = "silent-payments")]
+        v2_combine_map!(sp_dleq_proofs, self, other);
         v2_combine_map!(proprietaries, self, other);
         v2_combine_map!(unknowns, self, other);
 
@@ -699,6 +772,23 @@ impl Map for Input {
         v2_impl_psbt_get_pair! {
             rv.push(self.tap_merkle_root, PSBT_IN_TAP_MERKLE_ROOT)
         }
+
+        #[cfg(feature = "silent-payments")]
+        for (scan_key, ecdh_share) in &self.sp_ecdh_shares {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_IN_SP_ECDH_SHARE, key: scan_key.clone() },
+                value: ecdh_share.clone(),
+            });
+        }
+
+        #[cfg(feature = "silent-payments")]
+        for (scan_key, dleq_proof) in &self.sp_dleq_proofs {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_IN_SP_DLEQ, key: scan_key.clone() },
+                value: dleq_proof.clone(),
+            });
+        }
+
         for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
@@ -796,6 +886,8 @@ pub enum DecodeError {
     MissingPreviousTxid,
     /// Input must contain a spent output index.
     MissingSpentOutputIndex,
+    /// BIP-375: ECDH shares and DLEQ proofs must both be present or both absent.
+    FieldMismatch,
 }
 
 impl fmt::Display for DecodeError {
@@ -807,6 +899,9 @@ impl fmt::Display for DecodeError {
             DeserPair(ref e) => write_err!(f, "error decoding pair"; e),
             MissingPreviousTxid => write!(f, "input must contain a previous txid"),
             MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
+            FieldMismatch => {
+                write!(f, "ECDH shares and DLEQ proofs must both be present or both absent")
+            }
         }
     }
 }
@@ -820,6 +915,7 @@ impl std::error::Error for DecodeError {
             InsertPair(ref e) => Some(e),
             DeserPair(ref e) => Some(e),
             MissingPreviousTxid | MissingSpentOutputIndex => None,
+            FieldMismatch => None,
         }
     }
 }
@@ -841,6 +937,10 @@ pub enum InsertPairError {
     InvalidKeyDataNotEmpty(raw::Key),
     /// The pre-image must hash to the correponding psbt hash
     HashPreimage(HashPreimageError),
+    /// Key was not the correct length (got, expected).
+    KeyWrongLength(usize, usize),
+    /// Value was not the correct length (got, expected).
+    ValueWrongLength(usize, usize),
 }
 
 impl fmt::Display for InsertPairError {
@@ -853,6 +953,12 @@ impl fmt::Display for InsertPairError {
             InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
             InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
             HashPreimage(ref e) => write_err!(f, "invalid hash preimage"; e),
+            KeyWrongLength(got, expected) => {
+                write!(f, "key wrong length (got: {}, expected: {})", got, expected)
+            }
+            ValueWrongLength(got, expected) => {
+                write!(f, "value wrong length (got: {}, expected: {})", got, expected)
+            }
         }
     }
 }
@@ -865,7 +971,11 @@ impl std::error::Error for InsertPairError {
         match *self {
             Deser(ref e) => Some(e),
             HashPreimage(ref e) => Some(e),
-            DuplicateKey(_) | InvalidKeyDataEmpty(_) | InvalidKeyDataNotEmpty(_) => None,
+            DuplicateKey(_)
+            | InvalidKeyDataEmpty(_)
+            | InvalidKeyDataNotEmpty(_)
+            | KeyWrongLength(..)
+            | ValueWrongLength(..) => None,
         }
     }
 }
@@ -975,8 +1085,9 @@ impl fmt::Display for CombineError {
         use CombineError::*;
 
         match *self {
-            PreviousTxidMismatch { ref this, ref that } =>
-                write!(f, "combine two PSBTs with different previous txids: {:?} {:?}", this, that),
+            PreviousTxidMismatch { ref this, ref that } => {
+                write!(f, "combine two PSBTs with different previous txids: {:?} {:?}", this, that)
+            }
             SpentOutputIndexMismatch { ref this, ref that } => write!(
                 f,
                 "combine two PSBTs with different spent output indecies: {:?} {:?}",

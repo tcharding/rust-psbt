@@ -21,6 +21,12 @@ pub(crate) const PSBT_GLOBAL_INPUT_COUNT: u8 = 0x04;
 pub(crate) const PSBT_GLOBAL_OUTPUT_COUNT: u8 = 0x05;
 /// Type: Transaction Modifiable Flags PSBT_GLOBAL_TX_MODIFIABLE = 0x06
 pub(crate) const PSBT_GLOBAL_TX_MODIFIABLE: u8 = 0x06;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment ECDH Share PSBT_GLOBAL_SP_ECDH_SHARE = 0x07
+pub(crate) const PSBT_GLOBAL_SP_ECDH_SHARE: u8 = 0x07;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment DLEQ PSBT_GLOBAL_SP_DLEQ = 0x08
+pub(crate) const PSBT_GLOBAL_SP_DLEQ: u8 = 0x08;
 /// Type: Version Number PSBT_GLOBAL_VERSION = 0xFB
 pub(crate) const PSBT_GLOBAL_VERSION: u8 = 0xFB;
 /// Type: Proprietary Use Type PSBT_GLOBAL_PROPRIETARY = 0xFC
@@ -77,6 +83,12 @@ pub(crate) const PSBT_IN_TAP_BIP32_DERIVATION: u8 = 0x16;
 pub(crate) const PSBT_IN_TAP_INTERNAL_KEY: u8 = 0x17;
 /// Type: Taproot Merkle Root PSBT_IN_TAP_MERKLE_ROOT = 0x18
 pub(crate) const PSBT_IN_TAP_MERKLE_ROOT: u8 = 0x18;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment ECDH Share PSBT_IN_SP_ECDH_SHARE = 0x1D
+pub(crate) const PSBT_IN_SP_ECDH_SHARE: u8 = 0x1D;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment DLEQ Proof PSBT_IN_SP_DLEQ = 0x1E
+pub(crate) const PSBT_IN_SP_DLEQ: u8 = 0x1E;
 /// Type: Proprietary Use Type PSBT_IN_PROPRIETARY = 0xFC
 pub(crate) const PSBT_IN_PROPRIETARY: u8 = 0xFC;
 
@@ -96,6 +108,12 @@ pub(crate) const PSBT_OUT_TAP_INTERNAL_KEY: u8 = 0x05;
 pub(crate) const PSBT_OUT_TAP_TREE: u8 = 0x06;
 /// Type: Taproot Key BIP 32 Derivation Path PSBT_OUT_TAP_BIP32_DERIVATION = 0x07
 pub(crate) const PSBT_OUT_TAP_BIP32_DERIVATION: u8 = 0x07;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment v0 Info PSBT_OUT_SP_V0_INFO = 0x09
+pub(crate) const PSBT_OUT_SP_V0_INFO: u8 = 0x09;
+#[cfg(feature = "silent-payments")]
+/// Type: Silent Payment v0 Label PSBT_OUT_SP_V0_LABEL = 0x0A
+pub(crate) const PSBT_OUT_SP_V0_LABEL: u8 = 0x0A;
 /// Type: Proprietary Use Type PSBT_IN_PROPRIETARY = 0xFC
 pub(crate) const PSBT_OUT_PROPRIETARY: u8 = 0xFC;
 
@@ -109,6 +127,10 @@ pub(crate) fn psbt_global_key_type_value_to_str(v: u8) -> &'static str {
         PSBT_GLOBAL_INPUT_COUNT => "PSBT_GLOBAL_INPUT_COUNT",
         PSBT_GLOBAL_OUTPUT_COUNT => "PSBT_GLOBAL_OUTPUT_COUNT",
         PSBT_GLOBAL_TX_MODIFIABLE => "PSBT_GLOBAL_TX_MODIFIABLE",
+        #[cfg(feature = "silent-payments")]
+        PSBT_GLOBAL_SP_ECDH_SHARE => "PSBT_GLOBAL_SP_ECDH_SHARE",
+        #[cfg(feature = "silent-payments")]
+        PSBT_GLOBAL_SP_DLEQ => "PSBT_GLOBAL_SP_DLEQ",
         PSBT_GLOBAL_VERSION => "PSBT_GLOBAL_VERSION",
         PSBT_GLOBAL_PROPRIETARY => "PSBT_GLOBAL_PROPRIETARY",
         _ => "unknown PSBT_GLOBAL_ key type value",
@@ -143,6 +165,10 @@ pub(crate) fn psbt_in_key_type_value_to_str(v: u8) -> &'static str {
         PSBT_IN_TAP_BIP32_DERIVATION => "PSBT_IN_TAP_BIP32_DERIVATION",
         PSBT_IN_TAP_INTERNAL_KEY => "PSBT_IN_TAP_INTERNAL_KEY",
         PSBT_IN_TAP_MERKLE_ROOT => "PSBT_IN_TAP_MERKLE_ROOT",
+        #[cfg(feature = "silent-payments")]
+        PSBT_IN_SP_ECDH_SHARE => "PSBT_IN_SP_ECDH_SHARE",
+        #[cfg(feature = "silent-payments")]
+        PSBT_IN_SP_DLEQ => "PSBT_IN_SP_DLEQ",
         PSBT_IN_PROPRIETARY => "PSBT_IN_PROPRIETARY",
         _ => "unknown PSBT_IN_ key type value",
     }
@@ -159,6 +185,10 @@ pub(crate) fn psbt_out_key_type_value_to_str(v: u8) -> &'static str {
         PSBT_OUT_TAP_INTERNAL_KEY => "PSBT_OUT_TAP_INTERNAL_KEY",
         PSBT_OUT_TAP_TREE => "PSBT_OUT_TAP_TREE",
         PSBT_OUT_TAP_BIP32_DERIVATION => "PSBT_OUT_TAP_BIP32_DERIVATION",
+        #[cfg(feature = "silent-payments")]
+        PSBT_OUT_SP_V0_INFO => "PSBT_OUT_SP_V0_INFO",
+        #[cfg(feature = "silent-payments")]
+        PSBT_OUT_SP_V0_LABEL => "PSBT_OUT_SP_V0_LABEL",
         PSBT_OUT_PROPRIETARY => "PSBT_OUT_PROPRIETARY",
         _ => "unknown PSBT_OUT_ key type value",
     }

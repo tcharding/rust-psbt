@@ -14,6 +14,8 @@ use crate::consts::{
     PSBT_OUT_SCRIPT, PSBT_OUT_TAP_BIP32_DERIVATION, PSBT_OUT_TAP_INTERNAL_KEY, PSBT_OUT_TAP_TREE,
     PSBT_OUT_WITNESS_SCRIPT,
 };
+#[cfg(feature = "silent-payments")]
+use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
 use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
@@ -47,6 +49,15 @@ pub struct Output {
     /// Map of tap root x only keys to origin info and leaf hashes contained in it.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
     pub tap_key_origins: BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
+
+    /// BIP-375: Silent payment v0 address info (66 bytes: scan_key || spend_key).
+    #[cfg(feature = "silent-payments")]
+    pub sp_v0_info: Option<Vec<u8>>,
+
+    /// BIP-375: Silent payment v0 label (4-byte little-endian u32).
+    #[cfg(feature = "silent-payments")]
+    pub sp_v0_label: Option<u32>,
+
     /// Proprietary key-value pairs for this output.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
     pub proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>>,
@@ -67,6 +78,10 @@ impl Output {
             tap_internal_key: None,
             tap_tree: None,
             tap_key_origins: BTreeMap::new(),
+            #[cfg(feature = "silent-payments")]
+            sp_v0_info: None,
+            #[cfg(feature = "silent-payments")]
+            sp_v0_label: None,
             proprietaries: BTreeMap::new(),
             unknowns: BTreeMap::new(),
         }
@@ -111,6 +126,11 @@ impl Output {
         #[cfg(not(feature = "silent-payments"))]
         if rv.script_pubkey == ScriptBuf::default() {
             return Err(DecodeError::MissingScriptPubkey);
+        }
+
+        #[cfg(feature = "silent-payments")]
+        if rv.sp_v0_label.is_some() && rv.sp_v0_info.is_none() {
+            return Err(DecodeError::LabelWithoutInfo);
         }
 
         Ok(rv)
@@ -175,6 +195,34 @@ impl Output {
                     self.tap_key_origins <= <raw_key: XOnlyPublicKey>|< raw_value: (Vec<TapLeafHash>, KeySource)>
                 }
             }
+            #[cfg(feature = "silent-payments")]
+            PSBT_OUT_SP_V0_INFO => {
+                if self.sp_v0_info.is_some() {
+                    return Err(InsertPairError::DuplicateKey(raw_key));
+                }
+                if !raw_key.key.is_empty() {
+                    return Err(InsertPairError::InvalidKeyDataNotEmpty(raw_key));
+                }
+                if raw_value.len() != 66 {
+                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 66));
+                }
+                self.sp_v0_info = Some(raw_value);
+            }
+            #[cfg(feature = "silent-payments")]
+            PSBT_OUT_SP_V0_LABEL => {
+                if self.sp_v0_label.is_some() {
+                    return Err(InsertPairError::DuplicateKey(raw_key));
+                }
+                if !raw_key.key.is_empty() {
+                    return Err(InsertPairError::InvalidKeyDataNotEmpty(raw_key));
+                }
+                if raw_value.len() != 4 {
+                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 4));
+                }
+                let label =
+                    u32::from_le_bytes([raw_value[0], raw_value[1], raw_value[2], raw_value[3]]);
+                self.sp_v0_label = Some(label);
+            }
             // Note, PSBT v2 does not exclude any keys from the input map.
             _ => match self.unknowns.entry(raw_key) {
                 btree_map::Entry::Vacant(empty_key) => {
@@ -207,6 +255,10 @@ impl Output {
         v2_combine_option!(tap_internal_key, self, other);
         v2_combine_option!(tap_tree, self, other);
         v2_combine_map!(tap_key_origins, self, other);
+        #[cfg(feature = "silent-payments")]
+        v2_combine_option!(sp_v0_info, self, other);
+        #[cfg(feature = "silent-payments")]
+        v2_combine_option!(sp_v0_label, self, other);
         v2_combine_map!(proprietaries, self, other);
         v2_combine_map!(unknowns, self, other);
 
@@ -252,6 +304,22 @@ impl Map for Output {
             rv.push_map(self.tap_key_origins, PSBT_OUT_TAP_BIP32_DERIVATION)
         }
 
+        #[cfg(feature = "silent-payments")]
+        if let Some(sp_info) = &self.sp_v0_info {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_OUT_SP_V0_INFO, key: vec![] },
+                value: sp_info.clone(),
+            });
+        }
+
+        #[cfg(feature = "silent-payments")]
+        if let Some(label) = self.sp_v0_label {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_OUT_SP_V0_LABEL, key: vec![] },
+                value: label.to_le_bytes().to_vec(),
+            });
+        }
+
         for (key, value) in self.proprietaries.iter() {
             rv.push(raw::Pair { key: key.to_key(), value: value.clone() });
         }
@@ -288,6 +356,8 @@ pub enum DecodeError {
     MissingValue,
     /// Encoded output is missing a script pubkey.
     MissingScriptPubkey,
+    /// Encoded output is missing a sp_v0_info.
+    LabelWithoutInfo,
 }
 
 impl fmt::Display for DecodeError {
@@ -299,6 +369,7 @@ impl fmt::Display for DecodeError {
             DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
             MissingValue => write!(f, "encoded output is missing a value"),
             MissingScriptPubkey => write!(f, "encoded output is missing a script pubkey"),
+            LabelWithoutInfo => write!(f, "output has a sp_v0_label without a sp_v0_info"),
         }
     }
 }
@@ -311,7 +382,7 @@ impl std::error::Error for DecodeError {
         match *self {
             InsertPair(ref e) => Some(e),
             DeserPair(ref e) => Some(e),
-            MissingValue | MissingScriptPubkey => None,
+            MissingValue | MissingScriptPubkey | LabelWithoutInfo => None,
         }
     }
 }
@@ -331,6 +402,8 @@ pub enum InsertPairError {
     InvalidKeyDataEmpty(raw::Key),
     /// Key should not contain data.
     InvalidKeyDataNotEmpty(raw::Key),
+    /// Value was not the correct length (got, expected).
+    ValueWrongLength(usize, usize),
 }
 
 impl fmt::Display for InsertPairError {
@@ -342,6 +415,9 @@ impl fmt::Display for InsertPairError {
             Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
             InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
             InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
+            ValueWrongLength(got, expected) => {
+                write!(f, "value wrong length (got: {}, expected: {})", got, expected)
+            }
         }
     }
 }
@@ -353,7 +429,10 @@ impl std::error::Error for InsertPairError {
 
         match *self {
             Deser(ref e) => Some(e),
-            DuplicateKey(_) | InvalidKeyDataEmpty(_) | InvalidKeyDataNotEmpty(_) => None,
+            DuplicateKey(_)
+            | InvalidKeyDataEmpty(_)
+            | InvalidKeyDataNotEmpty(_)
+            | ValueWrongLength(..) => None,
         }
     }
 }
@@ -387,10 +466,12 @@ impl fmt::Display for CombineError {
         use CombineError::*;
 
         match *self {
-            AmountMismatch { ref this, ref that } =>
-                write!(f, "combine two PSBTs with different amounts: {} {}", this, that),
-            ScriptPubkeyMismatch { ref this, ref that } =>
-                write!(f, "combine two PSBTs with different script_pubkeys: {:x} {:x}", this, that),
+            AmountMismatch { ref this, ref that } => {
+                write!(f, "combine two PSBTs with different amounts: {} {}", this, that)
+            }
+            ScriptPubkeyMismatch { ref this, ref that } => {
+                write!(f, "combine two PSBTs with different script_pubkeys: {:x} {:x}", this, that)
+            }
         }
     }
 }
