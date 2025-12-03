@@ -7,7 +7,9 @@
 //! taken as NOT PROVEN CORRECT.
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
+use psbt_v2::bitcoin::bip32::{DerivationPath, Fingerprint};
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
@@ -85,6 +87,17 @@ fn main() -> anyhow::Result<()> {
     // data and would get them from there.
     psbt.inputs[0].witness_utxo = Some(alice.input_utxo());
     psbt.inputs[1].witness_utxo = Some(bob.input_utxo());
+
+    // Add BIP32 derivation information for signing.
+    // Without this, psbt.sign() will not sign the inputs because bip32_sign_ecdsa() iterates
+    // over psbt.bip32_derivation to determine which keys should sign.
+    let fake_fp: [u8; 4] = [0; 4];
+    psbt.inputs[0]
+        .bip32_derivation
+        .insert(alice.0.pk, (Fingerprint::from(fake_fp), DerivationPath::from_str("m")?));
+    psbt.inputs[1]
+        .bip32_derivation
+        .insert(bob.0.pk, (Fingerprint::from(fake_fp), DerivationPath::from_str("m")?));
 
     // Since we are spending 2 p2wpkh inputs there are no other updates needed.
 
