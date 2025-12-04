@@ -4,12 +4,9 @@ We are attempting to run max 20 parallel jobs using GitHub actions (usage limit 
 
 ref: https://docs.github.com/en/actions/learn-github-actions/usage-limits-billing-and-administration
 
-The minimal/recent lock files are handled by CI (`rust.yml`).
-
 ## Jobs
 
-Run from rust.yml unless stated otherwise. Unfortunately we are now exceeding the 20 job target.
-(Prepare is quick and must be run first anyway.)
+Run from rust.yml unless stated otherwise.
 
 0.  `Prepare`
 1.  `Stable - minimal`
@@ -22,3 +19,4 @@ Run from rust.yml unless stated otherwise. Unfortunately we are now exceeding th
 8.  `Docs`
 9.  `Docsrs`
 10. `Format`
+11. `Integration`
