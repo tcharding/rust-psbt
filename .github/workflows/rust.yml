@@ -16,7 +16,7 @@ jobs:
       rbmt_version: ${{ steps.read_toolchain.outputs.rbmt_version }}
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Read toolchain versions"
         id: read_toolchain
         run: |
@@ -32,9 +32,11 @@ jobs:
         dep: [minimal, recent]
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - name: "Install rbmt"
         run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Run tests"
@@ -50,9 +52,9 @@ jobs:
         dep: [minimal, recent]
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Install rbmt"
@@ -69,13 +71,15 @@ jobs:
         dep: [minimal, recent]
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Install stable toolchain"
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - name: "Install rbmt"
         run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Install MSRV toolchain"
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.74.0"
       - name: "Run tests"
@@ -89,13 +93,12 @@ jobs:
       fail-fast: false
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install clippy"
-        run: rustup component add clippy
+          components: clippy
       - name: "Install rbmt"
         run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev ${{ needs.Prepare.outputs.rbmt_version }} cargo-rbmt
       - name: "Run lint"
@@ -108,9 +111,11 @@ jobs:
       fail-fast: false
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - name: "Install rbmt"
         run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Build docs"
@@ -124,9 +129,9 @@ jobs:
       fail-fast: false
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Install rbmt"
@@ -142,13 +147,12 @@ jobs:
       fail-fast: false
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install rustfmt"
-        run: rustup component add rustfmt
+          components: rustfmt
       - name: "Check formatting"
         run: cargo fmt --all -- --check
 
@@ -157,9 +161,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
       - name: "Install rbmt"
         run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Run integration tests"
