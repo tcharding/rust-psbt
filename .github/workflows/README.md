@@ -8,7 +8,6 @@ ref: https://docs.github.com/en/actions/learn-github-actions/usage-limits-billin
 
 Run from rust.yml unless stated otherwise.
 
-0.  `Prepare`
 1.  `Stable - minimal`
 2.  `Stable - recent`
 3.  `Nightly - minimal`

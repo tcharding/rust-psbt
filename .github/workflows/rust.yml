@@ -9,20 +9,6 @@ on:   # yamllint disable-line rule:truthy
 name: Continuous integration
 
 jobs:
-  Prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
-      rbmt_version: ${{ steps.read_toolchain.outputs.rbmt_version }}
-    steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Read toolchain versions"
-        id: read_toolchain
-        run: |
-          echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
-          echo "rbmt_version=$(cat rbmt-version)" >> $GITHUB_OUTPUT
-
   Stable:                       # 2 jobs, one per lock file.
     name: Test - stable toolchain
     runs-on: ubuntu-latest
@@ -31,34 +17,25 @@ jobs:
       matrix:
         dep: [minimal, recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
           toolchain: stable
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Run tests"
         run: cargo rbmt test stable --lock-file ${{ matrix.dep }}
 
   Nightly:                      # 2 jobs, one per lock file.
     name: Test - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         dep: [minimal, recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev ${{ needs.Prepare.outputs.rbmt_version }} cargo-rbmt
+          toolchain: nightly
       - name: "Run tests"
         run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
 
@@ -70,16 +47,8 @@ jobs:
       matrix:
         dep: [minimal, recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Install stable toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
-      - name: "Install MSRV toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
           toolchain: "1.74.0"
       - name: "Run tests"
@@ -87,20 +56,15 @@ jobs:
 
   Lint:
     name: Lint - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
+          toolchain: nightly
           components: clippy
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev ${{ needs.Prepare.outputs.rbmt_version }} cargo-rbmt
       - name: "Run lint"
         run: cargo rbmt lint
 
@@ -110,63 +74,47 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
           toolchain: stable
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Build docs"
         run: cargo rbmt docs
 
   Docsrs:
     name: Docs - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev ${{ needs.Prepare.outputs.rbmt_version }} cargo-rbmt
+          toolchain: nightly
       - name: "Build docs.rs docs"
         run: cargo rbmt docsrs
 
   Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
+          toolchain: nightly
           components: rustfmt
       - name: "Check formatting"
         run: cargo fmt --all -- --check
 
   Integration:                  # 1 job, run bitcoin core integration tests using rbmt.
-    name: Integration tests against bitcoind
+    name: Integration - against bitcoind
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v6
-      - name: "Select toolchain"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
           toolchain: stable
-      - name: "Install rbmt"
-        run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat rbmt-version) cargo-rbmt
       - name: "Run integration tests"
         run: cargo rbmt integration
