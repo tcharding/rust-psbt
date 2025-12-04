@@ -6,7 +6,7 @@
 
 // We depend upon and import directly from bitcoin because this module is not concerned with PSBT
 // i.e., it is lower down the stack than the psbt_v2 crate.
-use bitcoin::{Address, Amount, Transaction, Txid};
+use psbt_v2::bitcoin::{Address, Amount, Transaction, Txid};
 use bitcoind::{AddressType, Node, vtype::GetBlockchainInfo};
 
 const FIFTY_BTC: Amount = Amount::from_int_btc(50);
