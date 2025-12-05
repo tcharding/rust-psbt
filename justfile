@@ -54,3 +54,7 @@ ci-test: (ci "test stable")
 # Lint crate.
 [group('ci')]
 ci-lint: (ci "lint" NIGHTLY_VERSION)
+
+# Bitcoin core integration tests.
+[group('ci')]
+ci-integration: (ci "integration")

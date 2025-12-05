@@ -33,13 +33,12 @@ bitcoin-internals = { version = "0.3.0", features = ["alloc"] }
 hex-conservative = { version = "0.2.1", default-features = false }
 
 miniscript = { version = "12.2.0", default-features = false, optional = true }
-actual-serde = { package = "serde", version = "1.0.103", default-features = false, features = ["derive", "alloc"], optional = true }
+actual-serde = { package = "serde", version = "1.0.195", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.86"
-serde_json = "1.0.0"
+serde_json = "1.0.68"
 serde_test = "1.0.19"
-serde_derive = "1.0.103"
 bincode = "1.3.1"
 secp256k1 = { version = "0.29", features = ["rand-std", "global-context"] }
 

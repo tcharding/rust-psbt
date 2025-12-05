@@ -7,9 +7,6 @@ PSBT version 2 as defined in [BIP-370].
 
 This library should always compile with any combination of features on **Rust 1.74.0**.
 
-To build with the MSRV you will likely need to pin a bunch of dependencies, see `./contrib/test.sh`
-for the current list.
-
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

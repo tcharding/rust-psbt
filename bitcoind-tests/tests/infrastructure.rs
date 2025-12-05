@@ -2,7 +2,7 @@
 
 // Depend directly on `bitcoin` (and `bitcoind_tests`) because we are explicitly
 // testing the `bitcoind_tests` crate.
-use bitcoin::Amount;
+use psbt_v2::bitcoin::Amount;
 use bitcoind_tests::client::Client;
 
 #[test]
