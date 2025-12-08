@@ -23,17 +23,12 @@ runs:
         fi
         echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
 
-    - name: "Setup stable toolchain for RBMT"
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-
-    - name: "Install RBMT"
-      shell: bash
-      run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev "$(cat rbmt-version)" cargo-rbmt
-
     - name: "Setup requested toolchain"
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: ${{ steps.toolchain.outputs.version }}
         components: ${{ inputs.components }}
+
+    - name: "Install RBMT"
+      shell: bash
+      run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev "$(cat rbmt-version)" cargo-rbmt --locked
