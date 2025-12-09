@@ -191,7 +191,6 @@ dependencies = [
  "miniscript",
  "serde",
  "serde_json",
- "serde_test",
 ]
 
 [[package]]
@@ -298,15 +297,6 @@ checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
  "itoa",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_test"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "482765e11e55174e2d74a611674d09ed96712c00e0777e305a0c416dfef5fa40"
-dependencies = [
  "serde",
 ]
 
