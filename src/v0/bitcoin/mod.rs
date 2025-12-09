@@ -853,7 +853,9 @@ pub enum GetKeyError {
     NotSupported,
 }
 
-bitcoin_internals::impl_from_infallible!(GetKeyError);
+impl From<core::convert::Infallible> for GetKeyError {
+    fn from(never: core::convert::Infallible) -> Self { match never {} }
+}
 
 impl fmt::Display for GetKeyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -966,7 +968,9 @@ pub enum SignError {
     Unsupported,
 }
 
-bitcoin_internals::impl_from_infallible!(SignError);
+impl From<core::convert::Infallible> for SignError {
+    fn from(never: core::convert::Infallible) -> Self { match never {} }
+}
 
 impl fmt::Display for SignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1055,7 +1059,9 @@ pub enum ExtractTxError {
     },
 }
 
-bitcoin_internals::impl_from_infallible!(ExtractTxError);
+impl From<core::convert::Infallible> for ExtractTxError {
+    fn from(never: core::convert::Infallible) -> Self { match never {} }
+}
 
 impl fmt::Display for ExtractTxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1107,7 +1113,9 @@ pub enum IndexOutOfBoundsError {
     },
 }
 
-bitcoin_internals::impl_from_infallible!(IndexOutOfBoundsError);
+impl From<core::convert::Infallible> for IndexOutOfBoundsError {
+    fn from(never: core::convert::Infallible) -> Self { match never {} }
+}
 
 impl fmt::Display for IndexOutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1160,7 +1168,9 @@ mod display_from_str {
         Base64Encoding(bitcoin::base64::DecodeError),
     }
 
-    bitcoin_internals::impl_from_infallible!(PsbtParseError);
+    impl From<core::convert::Infallible> for PsbtParseError {
+        fn from(never: core::convert::Infallible) -> Self { match never {} }
+    }
 
     impl Display for PsbtParseError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
