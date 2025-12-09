@@ -33,7 +33,6 @@ const SIGHASH_SINGLE: u8 = 0x01 << 2;
 /// The global key-value map.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Global {
     /// The version number of this PSBT.
     pub version: Version,

@@ -36,7 +36,6 @@ use crate::{raw, serialize};
 /// transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Input {
     /// The txid of the previous transaction whose output at `self.spent_output_index` is being spent.
     ///

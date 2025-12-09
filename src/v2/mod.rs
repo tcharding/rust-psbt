@@ -88,7 +88,6 @@ pub fn combine(this: Psbt, that: Psbt) -> Result<Psbt, CombineError> { this.comb
 /// See `examples/v2-separate-creator-constructor.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Creator(Psbt);
 
 impl Creator {
@@ -252,7 +251,6 @@ impl Mod for OutputsOnlyModifiable {}
 /// Uses the builder pattern, and generics to make adding inputs and outputs infallible.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Constructor<T>(Psbt, PhantomData<T>);
 
 impl<T: Mod> Constructor<T> {
@@ -376,7 +374,6 @@ impl Default for Constructor<OutputsOnlyModifiable> {
 /// Implements the BIP-370 Updater role.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Updater(Psbt);
 
 impl Updater {
@@ -430,7 +427,6 @@ impl TryFrom<Psbt> for Updater {
 /// Implements the BIP-370 Signer role.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Signer(Psbt);
 
 impl Signer {
@@ -496,7 +492,6 @@ impl Signer {
 /// A Partially Signed Transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Psbt {
     /// The global map.
     pub global: Global,

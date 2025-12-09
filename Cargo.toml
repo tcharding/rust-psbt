@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = ["std"]
 std = ["bitcoin/std", "miniscript?/std"]
 rand = ["std", "bitcoin/rand-std"]
-serde = ["dep:actual-serde", "bitcoin/serde"]
+serde = ["dep:serde", "bitcoin/serde"]
 base64 = ["bitcoin/base64"]
 miniscript = ["dep:miniscript", "miniscript?/no-std"]
 
@@ -32,7 +32,7 @@ bitcoin = { version = "0.32.6", default-features = false }
 hex-conservative = { version = "0.2.1", default-features = false }
 
 miniscript = { version = "12.2.0", default-features = false, optional = true }
-actual-serde = { package = "serde", version = "1.0.195", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.195", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.86"

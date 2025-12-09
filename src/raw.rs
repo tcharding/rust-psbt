@@ -28,7 +28,6 @@ use crate::serialize::{Deserialize, Serialize};
 /// - `<keypair> := <key> <value>`
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Pair {
     /// The key of this key-value pair.
     pub key: Key,
@@ -76,7 +75,6 @@ impl Deserialize for Pair {
 /// deserializing.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Key {
     /// The `keytype` of this PSBT map key (`keytype`).
     pub type_value: u8,
@@ -138,7 +136,6 @@ pub type ProprietaryType = u8;
 /// structure according to BIP 174.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct ProprietaryKey<Subtype = ProprietaryType>
 where
     Subtype: Copy + From<u8> + Into<u8>,
