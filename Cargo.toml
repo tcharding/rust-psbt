@@ -25,11 +25,7 @@ base64 = ["bitcoin/base64"]
 miniscript = ["dep:miniscript", "miniscript?/no-std"]
 
 [dependencies]
-bitcoin = { version = "0.32.6", default-features = false }
-# Workaround for minimal version resolution bug in bitcoin 0.32.x series.
-# bitcoin 0.32.6 depends on hex-conservative 0.2.0, which incorrectly specifies
-# arrayvec = "0.7" instead of "0.7.2". Is fixed in hex-conservative 0.2.1.
-hex-conservative = { version = "0.2.1", default-features = false }
+bitcoin = { version = "0.32.8", default-features = false }
 
 miniscript = { version = "12.2.0", default-features = false, optional = true }
 serde = { version = "1.0.195", default-features = false, features = ["derive", "alloc"], optional = true }
