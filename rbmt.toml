@@ -4,7 +4,7 @@
 # Examples to run with specific features enabled.
 # Format: "example_name:feature1 feature2"
 examples = [
-    "v0:std",
+    "v0:std rand",
     "v2:std",
     "v2-separate-creator-constructor:std",
 ]

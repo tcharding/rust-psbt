@@ -14,7 +14,7 @@ use psbt_v2::bitcoin::bip32::{DerivationPath, KeySource, Xpriv, Xpub};
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
-use psbt_v2::bitcoin::secp256k1::{self, SECP256K1};
+use psbt_v2::bitcoin::secp256k1::{self, Secp256k1};
 use psbt_v2::bitcoin::{
     script, Address, Amount, CompressedPublicKey, Network, OutPoint, PublicKey, ScriptBuf,
     Sequence, TxOut, Txid,
@@ -241,17 +241,18 @@ impl Default for Bob {
 /// An entity that can take on one of the PSBT roles.
 pub struct Entity {
     master: Xpriv,
+    secp: Secp256k1<secp256k1::All>,
 }
 
 impl Entity {
     /// Creates a new entity with random keys.
-    pub fn new(master: Xpriv) -> Self { Self { master } }
+    pub fn new(master: Xpriv) -> Self { Self { master, secp: Secp256k1::new() } }
 
     /// Returns the pubkey for this entity at `derivation_path`.
     fn public_key(&self, derivation_path: &str) -> anyhow::Result<bitcoin::PublicKey> {
         let path = DerivationPath::from_str(derivation_path)?;
-        let xpriv = self.master.derive_priv(SECP256K1, &path)?;
-        let pk = Xpub::from_priv(SECP256K1, &xpriv);
+        let xpriv = self.master.derive_priv(&self.secp, &path)?;
+        let pk = Xpub::from_priv(&self.secp, &xpriv);
         Ok(pk.to_pub().into())
     }
 
@@ -270,20 +271,20 @@ impl Entity {
         derivation_path: &str,
     ) -> anyhow::Result<(secp256k1::PublicKey, KeySource)> {
         let path = DerivationPath::from_str(derivation_path)?;
-        let xpriv = self.master.derive_priv(SECP256K1, &path).expect("failed to derive xpriv");
-        let fingerprint = xpriv.fingerprint(SECP256K1);
+        let xpriv = self.master.derive_priv(&self.secp, &path).expect("failed to derive xpriv");
+        let fingerprint = xpriv.fingerprint(&self.secp);
         let sk = xpriv.to_priv();
-        Ok((sk.public_key(SECP256K1).inner, (fingerprint, path)))
+        Ok((sk.public_key(&self.secp).inner, (fingerprint, path)))
     }
 
     /// Signs any ECDSA inputs for which we have keys.
     pub fn sign_ecdsa(&self, psbt: Psbt, derivation_path: &str) -> anyhow::Result<Psbt> {
         // Usually we'd have to check this was our input and provide the correct key.
         let path = DerivationPath::from_str(derivation_path)?;
-        let xpriv = self.master.derive_priv(SECP256K1, &path)?;
+        let xpriv = self.master.derive_priv(&self.secp, &path)?;
 
         let signer = Signer::new(psbt)?;
-        match signer.sign(&xpriv, SECP256K1) {
+        match signer.sign(&xpriv, &self.secp) {
             Ok((psbt, _signing_keys)) => Ok(psbt),
             Err(e) => panic!("signing failed: {:?}", e),
         }
