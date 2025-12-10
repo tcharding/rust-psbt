@@ -6,6 +6,8 @@ use core::fmt;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, KeySource, Xpub};
 use bitcoin::consensus::{encode as consensus, Decodable};
 use bitcoin::locktime::absolute;
+#[cfg(feature = "silent-payments")]
+use bitcoin::CompressedPublicKey;
 use bitcoin::{bip32, transaction, VarInt};
 
 use crate::consts::{
@@ -19,6 +21,8 @@ use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{BufRead, Cursor, Read};
 use crate::prelude::*;
 use crate::serialize::Serialize;
+#[cfg(feature = "silent-payments")]
+use crate::v2::dleq::DleqProof;
 use crate::v2::map::Map;
 use crate::version::Version;
 use crate::{consts, raw, serialize, V2};
@@ -60,13 +64,13 @@ pub struct Global {
 
     /// BIP-375: Map from scan public key to ECDH share (33 bytes each).
     #[cfg(feature = "silent-payments")]
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    pub sp_ecdh_shares: BTreeMap<CompressedPublicKey, CompressedPublicKey>,
 
     /// BIP-375: Map from scan public key to DLEQ proof (64 bytes each).
     #[cfg(feature = "silent-payments")]
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    pub sp_dleq_proofs: BTreeMap<CompressedPublicKey, DleqProof>,
 
     /// Global proprietary key-value pairs.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
@@ -148,9 +152,10 @@ impl Global {
         let mut output_count: Option<u64> = None;
         let mut xpubs: BTreeMap<Xpub, (Fingerprint, DerivationPath)> = Default::default();
         #[cfg(feature = "silent-payments")]
-        let mut sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
+        let mut sp_ecdh_shares: BTreeMap<CompressedPublicKey, CompressedPublicKey> =
+            Default::default();
         #[cfg(feature = "silent-payments")]
-        let mut sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
+        let mut sp_dleq_proofs: BTreeMap<CompressedPublicKey, DleqProof> = Default::default();
         let mut proprietaries: BTreeMap<raw::ProprietaryKey, Vec<u8>> = Default::default();
         let mut unknowns: BTreeMap<raw::Key, Vec<u8>> = Default::default();
 
@@ -310,41 +315,16 @@ impl Global {
                     },
                 #[cfg(feature = "silent-payments")]
                 PSBT_GLOBAL_SP_ECDH_SHARE => {
-                    if pair.key.key.is_empty() {
-                        return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
-                    }
-                    if pair.key.key.len() != 33 {
-                        return Err(InsertPairError::KeyWrongLength(pair.key.key.len(), 33));
-                    }
-                    if pair.value.len() != 33 {
-                        return Err(InsertPairError::ValueWrongLength(pair.value.len(), 33));
-                    }
-                    match sp_ecdh_shares.entry(pair.key.key.clone()) {
-                        btree_map::Entry::Vacant(empty_key) => {
-                            empty_key.insert(pair.value);
-                        }
-                        btree_map::Entry::Occupied(_) =>
-                            return Err(InsertPairError::DuplicateKey(pair.key)),
-                    }
+                    v2_impl_psbt_insert_sp_pair!(
+                        sp_ecdh_shares,
+                        pair.key,
+                        pair.value,
+                        compressed_pubkey
+                    );
                 }
                 #[cfg(feature = "silent-payments")]
                 PSBT_GLOBAL_SP_DLEQ => {
-                    if pair.key.key.is_empty() {
-                        return Err(InsertPairError::InvalidKeyDataEmpty(pair.key));
-                    }
-                    if pair.key.key.len() != 33 {
-                        return Err(InsertPairError::KeyWrongLength(pair.key.key.len(), 33));
-                    }
-                    if pair.value.len() != 64 {
-                        return Err(InsertPairError::ValueWrongLength(pair.value.len(), 64));
-                    }
-                    match sp_dleq_proofs.entry(pair.key.key.clone()) {
-                        btree_map::Entry::Vacant(empty_key) => {
-                            empty_key.insert(pair.value);
-                        }
-                        btree_map::Entry::Occupied(_) =>
-                            return Err(InsertPairError::DuplicateKey(pair.key)),
-                    }
+                    v2_impl_psbt_insert_sp_pair!(sp_dleq_proofs, pair.key, pair.value, dleq_proof);
                 }
                 v if v == PSBT_GLOBAL_UNSIGNED_TX =>
                     return Err(InsertPairError::ExcludedKey { key_type_value: v }),
@@ -527,16 +507,22 @@ impl Map for Global {
         #[cfg(feature = "silent-payments")]
         for (scan_key, ecdh_share) in &self.sp_ecdh_shares {
             rv.push(raw::Pair {
-                key: raw::Key { type_value: PSBT_GLOBAL_SP_ECDH_SHARE, key: scan_key.clone() },
-                value: ecdh_share.clone(),
+                key: raw::Key {
+                    type_value: PSBT_GLOBAL_SP_ECDH_SHARE,
+                    key: scan_key.to_bytes().to_vec(),
+                },
+                value: ecdh_share.to_bytes().to_vec(),
             });
         }
 
         #[cfg(feature = "silent-payments")]
         for (scan_key, dleq_proof) in &self.sp_dleq_proofs {
             rv.push(raw::Pair {
-                key: raw::Key { type_value: PSBT_GLOBAL_SP_DLEQ, key: scan_key.clone() },
-                value: dleq_proof.clone(),
+                key: raw::Key {
+                    type_value: PSBT_GLOBAL_SP_DLEQ,
+                    key: scan_key.to_bytes().to_vec(),
+                },
+                value: dleq_proof.as_bytes().to_vec(),
             });
         }
 

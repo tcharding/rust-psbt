@@ -6,16 +6,24 @@ mod util;
 
 use core::str::FromStr;
 
-use psbt_v2::v2::{Creator, Psbt};
+use bitcoin::CompressedPublicKey;
+use psbt_v2::v2::{Creator, DleqProof, Psbt};
 
 /// Helper: Create a minimal valid PSBTv2 with BIP-375 fields populated correctly
 fn valid_psbt_with_bip375_global_fields() -> Psbt {
     let mut psbt = Creator::new().psbt();
-    let scan_key = vec![0x02u8; 33];
-    let ecdh_share = vec![0x04u8; 33];
-    let dleq_proof = vec![0xAAu8; 64];
+    // Use real valid compressed public keys (from secp256k1 generator point and a modified one)
+    let scan_key = CompressedPublicKey::from_str(
+        "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    )
+    .unwrap();
+    let ecdh_share = CompressedPublicKey::from_str(
+        "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+    )
+    .unwrap();
+    let dleq_proof = DleqProof::new([0xAAu8; 64]);
 
-    psbt.global.sp_ecdh_shares.insert(scan_key.clone(), ecdh_share);
+    psbt.global.sp_ecdh_shares.insert(scan_key, ecdh_share);
     psbt.global.sp_dleq_proofs.insert(scan_key, dleq_proof);
     psbt
 }

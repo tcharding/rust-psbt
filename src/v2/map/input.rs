@@ -11,6 +11,8 @@ use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
+#[cfg(feature = "silent-payments")]
+use bitcoin::CompressedPublicKey;
 use bitcoin::{
     ecdsa, hashes, secp256k1, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
     Txid, Witness,
@@ -31,6 +33,8 @@ use crate::error::{write_err, FundingUtxoError};
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
+#[cfg(feature = "silent-payments")]
+use crate::v2::dleq::DleqProof;
 use crate::v2::map::Map;
 use crate::{raw, serialize};
 
@@ -120,13 +124,13 @@ pub struct Input {
 
     /// BIP-375: Map from scan public key to per-input ECDH share (33 bytes each).
     #[cfg(feature = "silent-payments")]
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub sp_ecdh_shares: BTreeMap<Vec<u8>, Vec<u8>>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    pub sp_ecdh_shares: BTreeMap<CompressedPublicKey, CompressedPublicKey>,
 
     /// BIP-375: Map from scan public key to per-input DLEQ proof (64 bytes each).
     #[cfg(feature = "silent-payments")]
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
-    pub sp_dleq_proofs: BTreeMap<Vec<u8>, Vec<u8>>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq"))]
+    pub sp_dleq_proofs: BTreeMap<CompressedPublicKey, DleqProof>,
 
     /// Proprietary key-value pairs for this input.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::btreemap_as_seq_byte_values"))]
@@ -558,41 +562,16 @@ impl Input {
             }
             #[cfg(feature = "silent-payments")]
             PSBT_IN_SP_ECDH_SHARE => {
-                if raw_key.key.is_empty() {
-                    return Err(InsertPairError::InvalidKeyDataEmpty(raw_key));
-                }
-                if raw_key.key.len() != 33 {
-                    return Err(InsertPairError::KeyWrongLength(raw_key.key.len(), 33));
-                }
-                if raw_value.len() != 33 {
-                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 33));
-                }
-                match self.sp_ecdh_shares.entry(raw_key.key.clone()) {
-                    btree_map::Entry::Vacant(empty_key) => {
-                        empty_key.insert(raw_value);
-                    }
-                    btree_map::Entry::Occupied(_) =>
-                        return Err(InsertPairError::DuplicateKey(raw_key)),
-                }
+                v2_impl_psbt_insert_sp_pair!(
+                    self.sp_ecdh_shares,
+                    raw_key,
+                    raw_value,
+                    compressed_pubkey
+                );
             }
             #[cfg(feature = "silent-payments")]
             PSBT_IN_SP_DLEQ => {
-                if raw_key.key.is_empty() {
-                    return Err(InsertPairError::InvalidKeyDataEmpty(raw_key));
-                }
-                if raw_key.key.len() != 33 {
-                    return Err(InsertPairError::KeyWrongLength(raw_key.key.len(), 33));
-                }
-                if raw_value.len() != 64 {
-                    return Err(InsertPairError::ValueWrongLength(raw_value.len(), 64));
-                }
-                match self.sp_dleq_proofs.entry(raw_key.key.clone()) {
-                    btree_map::Entry::Vacant(empty_key) => {
-                        empty_key.insert(raw_value);
-                    }
-                    btree_map::Entry::Occupied(_) =>
-                        return Err(InsertPairError::DuplicateKey(raw_key)),
-                }
+                v2_impl_psbt_insert_sp_pair!(self.sp_dleq_proofs, raw_key, raw_value, dleq_proof);
             }
             PSBT_IN_PROPRIETARY => {
                 let key = raw::ProprietaryKey::try_from(raw_key.clone())?;
@@ -776,16 +755,19 @@ impl Map for Input {
         #[cfg(feature = "silent-payments")]
         for (scan_key, ecdh_share) in &self.sp_ecdh_shares {
             rv.push(raw::Pair {
-                key: raw::Key { type_value: PSBT_IN_SP_ECDH_SHARE, key: scan_key.clone() },
-                value: ecdh_share.clone(),
+                key: raw::Key {
+                    type_value: PSBT_IN_SP_ECDH_SHARE,
+                    key: scan_key.to_bytes().to_vec(),
+                },
+                value: ecdh_share.to_bytes().to_vec(),
             });
         }
 
         #[cfg(feature = "silent-payments")]
         for (scan_key, dleq_proof) in &self.sp_dleq_proofs {
             rv.push(raw::Pair {
-                key: raw::Key { type_value: PSBT_IN_SP_DLEQ, key: scan_key.clone() },
-                value: dleq_proof.clone(),
+                key: raw::Key { type_value: PSBT_IN_SP_DLEQ, key: scan_key.to_bytes().to_vec() },
+                value: dleq_proof.as_bytes().to_vec(),
             });
         }
 

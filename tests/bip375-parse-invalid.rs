@@ -6,7 +6,8 @@ mod util;
 
 use core::str::FromStr;
 
-use psbt_v2::v2::{Creator, Psbt};
+use bitcoin::CompressedPublicKey;
+use psbt_v2::v2::{Creator, DleqProof, Psbt};
 
 /// Test: Global field mismatch - DLEQ proofs present but no ECDH shares
 /// Expected error: DecodeError::FieldMismatch
@@ -14,7 +15,9 @@ use psbt_v2::v2::{Creator, Psbt};
 fn bip375_global_field_mismatch_dleq_only() {
     // Approach 1: Programmatic
     let mut psbt = Creator::new().psbt();
-    psbt.global.sp_dleq_proofs.insert(vec![0x02u8; 33], vec![0xAAu8; 64]);
+    let scan_key = CompressedPublicKey::from_slice(&[0x02u8; 33]).unwrap();
+    let dleq_proof = DleqProof::new([0xAAu8; 64]);
+    psbt.global.sp_dleq_proofs.insert(scan_key, dleq_proof);
 
     let bytes = psbt.serialize();
     assert!(Psbt::deserialize(&bytes).is_err(), "should fail due to DLEQ without ECDH");

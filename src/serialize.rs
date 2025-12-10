@@ -413,6 +413,27 @@ pub enum Error {
     LockTime(absolute::ConversionError),
     /// Unsupported PSBT version.
     UnsupportedVersion(version::UnsupportedVersionError),
+    /// Invalid scan key for BIP-375 silent payments (expected 33 bytes).
+    InvalidScanKey {
+        /// The length that was provided.
+        got: usize,
+        /// The expected length.
+        expected: usize,
+    },
+    /// Invalid ECDH share for BIP-375 silent payments (expected 33 bytes).
+    InvalidEcdhShare {
+        /// The length that was provided.
+        got: usize,
+        /// The expected length.
+        expected: usize,
+    },
+    /// Invalid DLEQ proof for BIP-375 silent payments (expected 64 bytes).
+    InvalidDleqProof {
+        /// The length that was provided.
+        got: usize,
+        /// The expected length.
+        expected: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -440,6 +461,15 @@ impl fmt::Display for Error {
                 f.write_str("data not consumed entirely when explicitly deserializing"),
             LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
             UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
+            InvalidScanKey { got, expected } => {
+                write!(f, "invalid scan key: got {} bytes, expected {}", got, expected)
+            }
+            InvalidEcdhShare { got, expected } => {
+                write!(f, "invalid ECDH share: got {} bytes, expected {}", got, expected)
+            }
+            InvalidDleqProof { got, expected } => {
+                write!(f, "invalid DLEQ proof: got {} bytes, expected {}", got, expected)
+            }
         }
     }
 }
@@ -467,7 +497,10 @@ impl std::error::Error for Error {
             | InvalidLeafVersion
             | Taproot(_)
             | TapTree(_)
-            | PartialDataConsumption => None,
+            | PartialDataConsumption
+            | InvalidScanKey { .. }
+            | InvalidEcdhShare { .. }
+            | InvalidDleqProof { .. } => None,
         }
     }
 }
