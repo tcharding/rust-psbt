@@ -26,7 +26,6 @@ use crate::v2::{DetermineLockTimeError, PartialSigsSighashTypeError, Psbt};
 /// Implements the BIP-370 Finalized role.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Finalizer(Psbt);
 
 impl Finalizer {

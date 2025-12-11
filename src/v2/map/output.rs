@@ -24,7 +24,6 @@ use crate::{raw, serialize};
 /// transaction.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Output {
     /// The output's amount (serialized as satoshis).
     pub amount: Amount,

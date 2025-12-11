@@ -19,7 +19,7 @@ extern crate alloc;
 
 #[cfg(feature = "serde")]
 #[macro_use]
-extern crate actual_serde as serde;
+extern crate serde;
 
 /// Re-export of the `rust-bitcoin` crate.
 pub extern crate bitcoin;

@@ -15,9 +15,7 @@ use core::fmt;
 use std::error;
 
 use bitcoin::hashes::{hash160, sha256d, Hash};
-#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
+use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
 use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{absolute, bip32, relative, transaction, Script, ScriptBuf};

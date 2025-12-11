@@ -13,7 +13,7 @@ use psbt_v2::bitcoin::bip32::{DerivationPath, Fingerprint};
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::bitcoin::opcodes::all::OP_CHECKMULTISIG;
-use psbt_v2::bitcoin::secp256k1::{self, rand, SECP256K1};
+use psbt_v2::bitcoin::secp256k1::{self, rand, Secp256k1};
 use psbt_v2::bitcoin::{
     script, transaction, Address, Amount, CompressedPublicKey, Network, OutPoint, PublicKey,
     ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
@@ -230,7 +230,8 @@ impl Entity {
 
         let mut keys = BTreeMap::new();
         keys.insert(pk, sk);
-        psbt.sign(&keys, SECP256K1).expect("failed to sign psbt");
+        let secp = Secp256k1::new();
+        psbt.sign(&keys, &secp).expect("failed to sign psbt");
 
         Ok(psbt)
     }
@@ -240,7 +241,8 @@ impl Entity {
 ///
 /// In a real application these would come from actual secrets.
 fn random_keys() -> (secp256k1::SecretKey, secp256k1::PublicKey) {
+    let secp = Secp256k1::new();
     let sk = secp256k1::SecretKey::new(&mut rand::thread_rng());
-    let pk = sk.public_key(SECP256K1);
+    let pk = sk.public_key(&secp);
     (sk, pk)
 }
