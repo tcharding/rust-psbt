@@ -204,7 +204,6 @@ dependencies = [
  "anyhow",
  "bincode",
  "bitcoin",
- "bitcoin-internals",
  "hex-conservative",
  "miniscript",
  "secp256k1",
