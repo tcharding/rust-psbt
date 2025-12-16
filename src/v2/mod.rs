@@ -46,6 +46,7 @@ use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::prelude::*;
 use crate::v2::map::Map;
+use crate::{v0, Version};
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
@@ -405,18 +406,31 @@ impl Updater {
         Ok(self)
     }
 
-    // /// Converts the inner PSBT v2 to a PSBT v0.
-    // pub fn into_psbt_v0(self) -> v0::Psbt {
-    //     let unsigned_tx =
-    //         self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
-    //     let psbt = self.psbt();
+    /// Converts the inner PSBT v2 to a PSBT v0.
+    ///
+    /// Conversion is lossy because PSBT v2 introduced global types not present in v0.
+    /// See [BIP-370] for a list of differences.
+    ///
+    /// [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki#specification>
+    pub fn into_psbt_v0(self) -> v0::Psbt {
+        let unsigned_tx =
+            self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
+        let inputs = self.0.inputs.into_iter().map(|input| input.into_v0()).collect();
+        let outputs = self.0.outputs.into_iter().map(|output| output.into_v0()).collect();
+        let proprietary =
+            self.0.global.proprietaries.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+        let unknown = self.0.global.unknowns.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
 
-    //     let global = psbt.global.into_v0(unsigned_tx);
-    //     let inputs = psbt.inputs.into_iter().map(|input| input.into_v0()).collect();
-    //     let outputs = psbt.outputs.into_iter().map(|output| output.into_v0()).collect();
-
-    //     v0::Psbt { global, inputs, outputs }
-    // }
+        v0::Psbt {
+            unsigned_tx,
+            inputs,
+            outputs,
+            version: Version::ZERO.to_u32(),
+            xpub: self.0.global.xpubs,
+            proprietary,
+            unknown,
+        }
+    }
 
     /// Returns the inner [`Psbt`].
     pub fn psbt(self) -> Psbt { self.0 }

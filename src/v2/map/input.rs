@@ -36,7 +36,7 @@ use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 #[cfg(feature = "silent-payments")]
 use crate::v2::dleq::DleqProof;
 use crate::v2::map::Map;
-use crate::{raw, serialize};
+use crate::{raw, serialize, v0};
 
 /// A key-value map for an input of the corresponding index in the unsigned
 /// transaction.
@@ -176,32 +176,35 @@ impl Input {
         }
     }
 
-    // /// Converts this `Input` to a `v0::Input`.
-    // pub(crate) fn into_v0(self) -> v0::Input {
-    //     v0::Input {
-    //         non_witness_utxo: self.non_witness_utxo,
-    //         witness_utxo: self.witness_utxo,
-    //         partial_sigs: self.partial_sigs,
-    //         sighash_type: self.sighash_type,
-    //         redeem_script: self.redeem_script,
-    //         witness_script: self.witness_script,
-    //         bip32_derivation: self.bip32_derivations,
-    //         final_script_sig: self.final_script_sig,
-    //         final_script_witness: self.final_script_witness,
-    //         ripemd160_preimages: self.ripemd160_preimages,
-    //         sha256_preimages: self.sha256_preimages,
-    //         hash160_preimages: self.hash160_preimages,
-    //         hash256_preimages: self.hash256_preimages,
-    //         tap_key_sig: self.tap_key_sig,
-    //         tap_script_sigs: self.tap_script_sigs,
-    //         tap_scripts: self.tap_scripts,
-    //         tap_key_origins: self.tap_key_origins,
-    //         tap_internal_key: self.tap_internal_key,
-    //         tap_merkle_root: self.tap_merkle_root,
-    //         proprietary: self.proprietaries,
-    //         unknown: self.unknowns,
-    //     }
-    // }
+    /// Converts this `Input` to a `v0::Input`.
+    pub(crate) fn into_v0(self) -> v0::Input {
+        let proprietary = self.proprietaries.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+        let unknown = self.unknowns.into_iter().map(|(k, v)| (k.into_v0(), v)).collect();
+
+        v0::Input {
+            non_witness_utxo: self.non_witness_utxo,
+            witness_utxo: self.witness_utxo,
+            partial_sigs: self.partial_sigs,
+            sighash_type: self.sighash_type,
+            redeem_script: self.redeem_script,
+            witness_script: self.witness_script,
+            bip32_derivation: self.bip32_derivations,
+            final_script_sig: self.final_script_sig,
+            final_script_witness: self.final_script_witness,
+            ripemd160_preimages: self.ripemd160_preimages,
+            sha256_preimages: self.sha256_preimages,
+            hash160_preimages: self.hash160_preimages,
+            hash256_preimages: self.hash256_preimages,
+            tap_key_sig: self.tap_key_sig,
+            tap_script_sigs: self.tap_script_sigs,
+            tap_scripts: self.tap_scripts,
+            tap_key_origins: self.tap_key_origins,
+            tap_internal_key: self.tap_internal_key,
+            tap_merkle_root: self.tap_merkle_root,
+            proprietary,
+            unknown,
+        }
+    }
 
     /// Creates a new finalized input.
     ///
