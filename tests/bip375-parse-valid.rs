@@ -21,7 +21,7 @@ fn valid_psbt_with_bip375_global_fields() -> Psbt {
         "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
     )
     .unwrap();
-    let dleq_proof = DleqProof::new([0xAAu8; 64]);
+    let dleq_proof = DleqProof::from([0xAAu8; 64]);
 
     psbt.global.sp_ecdh_shares.insert(scan_key, ecdh_share);
     psbt.global.sp_dleq_proofs.insert(scan_key, dleq_proof);

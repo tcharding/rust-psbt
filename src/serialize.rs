@@ -24,6 +24,8 @@ use bitcoin::{
 use crate::error::write_err;
 use crate::prelude::*;
 use crate::sighash_type::PsbtSighashType;
+#[cfg(feature = "silent-payments")]
+use crate::v2::dleq;
 use crate::version;
 
 /// A trait for serializing a value as raw data for insertion into PSBT
@@ -428,12 +430,8 @@ pub enum Error {
         expected: usize,
     },
     /// Invalid DLEQ proof for BIP-375 silent payments (expected 64 bytes).
-    InvalidDleqProof {
-        /// The length that was provided.
-        got: usize,
-        /// The expected length.
-        expected: usize,
-    },
+    #[cfg(feature = "silent-payments")]
+    InvalidDleqProof(dleq::InvalidLengthError),
 }
 
 impl fmt::Display for Error {
@@ -467,8 +465,9 @@ impl fmt::Display for Error {
             InvalidEcdhShare { got, expected } => {
                 write!(f, "invalid ECDH share: got {} bytes, expected {}", got, expected)
             }
-            InvalidDleqProof { got, expected } => {
-                write!(f, "invalid DLEQ proof: got {} bytes, expected {}", got, expected)
+            #[cfg(feature = "silent-payments")]
+            InvalidDleqProof(e) => {
+                write!(f, "invalid DLEQ proof: got {} bytes, expected {}", e.got, e.expected)
             }
         }
     }
@@ -499,8 +498,9 @@ impl std::error::Error for Error {
             | TapTree(_)
             | PartialDataConsumption
             | InvalidScanKey { .. }
-            | InvalidEcdhShare { .. }
-            | InvalidDleqProof { .. } => None,
+            | InvalidEcdhShare { .. } => None,
+            #[cfg(feature = "silent-payments")]
+            InvalidDleqProof { .. } => None,
         }
     }
 }

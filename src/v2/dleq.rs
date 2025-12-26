@@ -14,10 +14,10 @@ use crate::serialize::{Deserialize, Serialize};
 pub struct DleqProof(pub [u8; 64]);
 
 #[cfg(feature = "serde")]
-impl actual_serde::Serialize for DleqProof {
+impl serde::Serialize for DleqProof {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: actual_serde::Serializer,
+        S: serde::Serializer,
     {
         if serializer.is_human_readable() {
             serializer.serialize_str(&bitcoin::hex::DisplayHex::to_lower_hex_string(&self.0[..]))
@@ -28,14 +28,14 @@ impl actual_serde::Serialize for DleqProof {
 }
 
 #[cfg(feature = "serde")]
-impl<'de> actual_serde::Deserialize<'de> for DleqProof {
+impl<'de> serde::Deserialize<'de> for DleqProof {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: actual_serde::Deserializer<'de>,
+        D: serde::Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             struct HexVisitor;
-            impl actual_serde::de::Visitor<'_> for HexVisitor {
+            impl serde::de::Visitor<'_> for HexVisitor {
                 type Value = DleqProof;
 
                 fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -44,7 +44,7 @@ impl<'de> actual_serde::Deserialize<'de> for DleqProof {
 
                 fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
                 where
-                    E: actual_serde::de::Error,
+                    E: serde::de::Error,
                 {
                     use bitcoin::hex::FromHex;
                     let vec = Vec::<u8>::from_hex(s).map_err(E::custom)?;
@@ -56,7 +56,7 @@ impl<'de> actual_serde::Deserialize<'de> for DleqProof {
             deserializer.deserialize_str(HexVisitor)
         } else {
             struct BytesVisitor;
-            impl actual_serde::de::Visitor<'_> for BytesVisitor {
+            impl serde::de::Visitor<'_> for BytesVisitor {
                 type Value = DleqProof;
 
                 fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -65,7 +65,7 @@ impl<'de> actual_serde::Deserialize<'de> for DleqProof {
 
                 fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
                 where
-                    E: actual_serde::de::Error,
+                    E: serde::de::Error,
                 {
                     DleqProof::try_from(v).map_err(|e| {
                         E::custom(format!("expected {} bytes, got {}", e.expected, e.got))
@@ -78,9 +78,6 @@ impl<'de> actual_serde::Deserialize<'de> for DleqProof {
 }
 
 impl DleqProof {
-    /// Creates a new [`DleqProof`] from a 64-byte array.
-    pub fn new(bytes: [u8; 64]) -> Self { DleqProof(bytes) }
-
     /// Returns the inner 64-byte array.
     pub fn as_bytes(&self) -> &[u8; 64] { &self.0 }
 }
@@ -115,9 +112,11 @@ impl Serialize for DleqProof {
 
 impl Deserialize for DleqProof {
     fn deserialize(bytes: &[u8]) -> Result<Self, crate::serialize::Error> {
-        DleqProof::try_from(bytes).map_err(|e| crate::serialize::Error::InvalidDleqProof {
-            got: e.got,
-            expected: e.expected,
+        DleqProof::try_from(bytes).map_err(|e| {
+            crate::serialize::Error::InvalidDleqProof(InvalidLengthError {
+                got: e.got,
+                expected: e.expected,
+            })
         })
     }
 }

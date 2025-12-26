@@ -16,7 +16,7 @@ fn bip375_global_field_mismatch_dleq_only() {
     // Approach 1: Programmatic
     let mut psbt = Creator::new().psbt();
     let scan_key = CompressedPublicKey::from_slice(&[0x02u8; 33]).unwrap();
-    let dleq_proof = DleqProof::new([0xAAu8; 64]);
+    let dleq_proof = DleqProof::from([0xAAu8; 64]);
     psbt.global.sp_dleq_proofs.insert(scan_key, dleq_proof);
 
     let bytes = psbt.serialize();
