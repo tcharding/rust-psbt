@@ -78,6 +78,7 @@ impl Extractor {
     /// Perform [`Self::extract_tx_fee_rate_limit`] without the fee rate check.
     ///
     /// This can result in a transaction with absurdly high fees. Use with caution.
+    #[allow(clippy::result_large_err)]
     pub fn extract_tx_unchecked_fee_rate(&self) -> Result<Transaction, ExtractTxError> {
         self.internal_extract_tx()
     }
@@ -105,6 +106,7 @@ impl Extractor {
     ///
     /// Uses `miniscript` to do interpreter checks.
     #[inline]
+    #[allow(clippy::result_large_err)]
     fn internal_extract_tx(&self) -> Result<Transaction, ExtractTxError> {
         if !self.0.is_finalized() {
             return Err(ExtractTxError::Unfinalized);
