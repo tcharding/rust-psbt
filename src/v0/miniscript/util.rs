@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: CC0-1.0
 
 //! Private utils copied from `rust-miniscript`'s `util` module.
-    
+
+use crate::prelude::*;
 use bitcoin::consensus::encode::VarInt;
 use miniscript::miniscript::satisfy::Placeholder;
 use miniscript::MiniscriptKey;
