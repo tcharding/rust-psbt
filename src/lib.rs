@@ -8,11 +8,14 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
-#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
+#![no_std]
 // Experimental features we need.
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 // Coding conventions
 #![warn(missing_docs)]
+
+#[cfg(any(feature = "std", test))]
+extern crate std;
 
 #[macro_use]
 extern crate alloc;
@@ -75,6 +78,9 @@ mod prelude {
 
     #[cfg(any(feature = "std", test))]
     pub use std::collections::{BTreeMap, BTreeSet, btree_map, BinaryHeap};
+
+    #[cfg(any(feature = "std", test))]
+    pub use std::{println, print, format, write, writeln};
 
     pub use bitcoin::hex::DisplayHex;
 }
