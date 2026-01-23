@@ -457,6 +457,11 @@ impl Input {
                     self.min_height <= <raw_key: _>|<raw_value: absolute::Height>
                 }
             }
+            PSBT_IN_NON_WITNESS_UTXO => {
+                v2_impl_psbt_insert_pair! {
+                    self.non_witness_utxo <= <raw_key: _>|<raw_value: Transaction>
+                }
+            }
             PSBT_IN_WITNESS_UTXO => {
                 v2_impl_psbt_insert_pair! {
                     self.witness_utxo <= <raw_key: _>|<raw_value: TxOut>
