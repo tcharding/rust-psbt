@@ -20,8 +20,8 @@ use bitcoin::hex::DisplayHex;
 
 use crate::io::{self, BufRead, Write};
 use crate::prelude::*;
-use crate::serialize;
 use crate::serialize::{Deserialize, Serialize};
+use crate::{serialize, v0};
 
 /// A PSBT key-value pair in its raw byte form.
 ///
@@ -110,6 +110,10 @@ impl Key {
 
         Ok(Key { type_value, key })
     }
+
+    pub(crate) fn into_v0(self) -> v0::bitcoin::raw::Key {
+        v0::bitcoin::raw::Key { type_value: self.type_value, key: self.key }
+    }
 }
 
 impl Serialize for Key {
@@ -157,6 +161,14 @@ where
 {
     /// Constructs full [Key] corresponding to this proprietary key type
     pub fn to_key(&self) -> Key { Key { type_value: 0xFC, key: serialize(self) } }
+
+    pub(crate) fn into_v0(self) -> v0::bitcoin::raw::ProprietaryKey<Subtype> {
+        v0::bitcoin::raw::ProprietaryKey {
+            prefix: self.prefix,
+            subtype: self.subtype,
+            key: self.key,
+        }
+    }
 }
 
 impl<Subtype> TryFrom<Key> for ProprietaryKey<Subtype>
