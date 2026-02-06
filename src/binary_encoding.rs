@@ -55,16 +55,12 @@ pub struct KeyDecoder {
 }
 
 impl Default for KeyDecoder {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 impl KeyDecoder {
     /// Constructs a new [`KeyDecoder`].
-    pub const fn new() -> Self {
-        Self { state: KeyDecoderState::KeyLength(ByteVecDecoder::new()) }
-    }
+    pub const fn new() -> Self { Self { state: KeyDecoderState::KeyLength(ByteVecDecoder::new()) } }
 }
 
 /// An error consensus decoding a PSBT [`Key`]
@@ -111,9 +107,7 @@ pub enum KeyDecoderState {
 
 impl Decodable for Key {
     type Decoder = KeyDecoder;
-    fn decoder() -> Self::Decoder {
-        KeyDecoder::new()
-    }
+    fn decoder() -> Self::Decoder { KeyDecoder::new() }
 }
 
 impl Decoder for KeyDecoder {
@@ -137,7 +131,7 @@ impl Decoder for KeyDecoder {
                         return Ok(true);
                     }
                     *key_as_bytes = (*key_as_bytes_slice).to_vec();
-                },
+                }
                 State::Done(..) => return Ok(false),
                 State::Errored => panic!("call to push_bytes() after decoder errored"),
             }
@@ -161,14 +155,11 @@ impl Decoder for KeyDecoder {
 
                     let data = (*type_and_data).to_vec();
 
-                    self.state = State::Done(Key {
-                        type_value: key_type_u8,
-                        key: data,
-                    });
-                },
+                    self.state = State::Done(Key { type_value: key_type_u8, key: data });
+                }
                 State::Done(..) => {
                     return Ok(false);
-                },
+                }
                 State::Errored => panic!("call to push_bytes() after decoder errored"),
             }
         }
@@ -203,10 +194,9 @@ impl Decoder for KeyDecoder {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Key, KeyDecoder, Vec,
-    };
     use encoding::{Decodable, Decoder, Encodable, Encoder};
+
+    use super::{Key, KeyDecoder, Vec};
 
     fn encode_key(key: Key) -> Vec<u8> {
         let mut key_encoder = key.encoder();

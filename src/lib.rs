@@ -39,11 +39,11 @@ mod macros;
 mod serde_utils;
 mod sighash_type;
 
+pub mod binary_encoding;
 pub mod raw;
 pub mod serialize;
 pub mod v0;
 pub mod v2;
-pub mod binary_encoding;
 mod version;
 
 use bitcoin::io;
