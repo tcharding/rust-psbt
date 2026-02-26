@@ -175,6 +175,9 @@ impl Input {
         }
     }
 
+    /// Returns all key-value pairs for this input map in serialization order.
+    pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
+
     // /// Converts this `Input` to a `v0::Input`.
     // pub(crate) fn into_v0(self) -> v0::Input {
     //     v0::Input {

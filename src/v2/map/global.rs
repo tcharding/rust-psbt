@@ -100,6 +100,9 @@ impl Global {
         }
     }
 
+    /// Returns all key-value pairs for this global map in serialization order.
+    pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
+
     pub(crate) fn set_inputs_modifiable_flag(&mut self) {
         self.tx_modifiable_flags |= INPUTS_MODIFIABLE;
     }

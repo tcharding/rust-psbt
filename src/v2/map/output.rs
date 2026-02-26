@@ -86,6 +86,9 @@ impl Output {
         }
     }
 
+    /// Returns all key-value pairs for this output map in serialization order.
+    pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
+
     // /// Converts this `Output` to a `v0::Output`.
     // pub(crate) fn into_v0(self) -> v0::Output {
     //     v0::Output {
