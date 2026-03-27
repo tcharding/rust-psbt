@@ -106,7 +106,7 @@ pub enum Error {
     /// Key must be excluded from this version of PSBT (see consts.rs for u8 values).
     ExcludedKey {
         /// The disallowed valued.
-        key_type_value: u8,
+        key_type_value: u64,
     },
 }
 

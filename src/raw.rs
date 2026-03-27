@@ -77,7 +77,7 @@ impl Deserialize for Pair {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Key {
     /// The `keytype` of this PSBT map key (`keytype`).
-    pub type_value: u8,
+    pub type_value: u64,
     /// The `keydata` itself in raw byte form.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
     pub key: Vec<u8>,
@@ -101,7 +101,7 @@ impl Key {
             .into());
         }
 
-        let type_value: u8 = Decodable::consensus_decode(r)?;
+        let VarInt(type_value): VarInt = Decodable::consensus_decode(r)?;
 
         let mut key = Vec::with_capacity(key_byte_size as usize);
         for _ in 0..key_byte_size {
@@ -119,7 +119,9 @@ impl Serialize for Key {
             .consensus_encode(&mut buf)
             .expect("in-memory writers don't error");
 
-        self.type_value.consensus_encode(&mut buf).expect("in-memory writers don't error");
+        VarInt::from(self.type_value)
+            .consensus_encode(&mut buf)
+            .expect("in-memory writers don't error");
 
         for key in &self.key {
             key.consensus_encode(&mut buf).expect("in-memory writers don't error");

@@ -23,7 +23,7 @@ use crate::v0::bitcoin::Error;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Key {
     /// The type of this PSBT key.
-    pub type_value: u8,
+    pub type_value: u64,
     /// The key itself in raw byte form.
     /// `<key> := <keylen> <keytype> <keydata>`
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
@@ -89,7 +89,7 @@ impl Key {
             .into());
         }
 
-        let type_value: u8 = Decodable::consensus_decode(r)?;
+        let VarInt(type_value): VarInt = Decodable::consensus_decode(r)?;
 
         let mut key = Vec::with_capacity(key_byte_size as usize);
         for _ in 0..key_byte_size {
@@ -107,7 +107,9 @@ impl Serialize for Key {
             .consensus_encode(&mut buf)
             .expect("in-memory writers don't error");
 
-        self.type_value.consensus_encode(&mut buf).expect("in-memory writers don't error");
+        VarInt::from(self.type_value)
+            .consensus_encode(&mut buf)
+            .expect("in-memory writers don't error");
 
         for key in &self.key {
             key.consensus_encode(&mut buf).expect("in-memory writers don't error");
