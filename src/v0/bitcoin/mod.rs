@@ -1521,7 +1521,7 @@ mod tests {
     #[test]
     fn serialize_then_deserialize_psbtkvpair() {
         let expected = raw::Pair {
-            key: raw::Key { type_value: 0u8, key: vec![42u8, 69u8] },
+            key: raw::Key { type_value: 0u64, key: vec![42u8, 69u8] },
             value: vec![69u8, 42u8, 4u8],
         };
 

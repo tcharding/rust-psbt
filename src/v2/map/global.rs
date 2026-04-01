@@ -641,7 +641,7 @@ pub enum InsertPairError {
     /// Key must be excluded from this version of PSBT (see consts.rs for u8 values).
     ExcludedKey {
         /// Key type value we found.
-        key_type_value: u8,
+        key_type_value: u64,
     },
     /// Key was not the correct length (got, expected).
     KeyWrongLength(usize, usize),

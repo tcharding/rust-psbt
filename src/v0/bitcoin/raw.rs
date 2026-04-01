@@ -23,7 +23,7 @@ use crate::v0::bitcoin::Error;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Key {
     /// The type of this PSBT key.
-    pub type_value: u8,
+    pub type_value: u64,
     /// The key itself in raw byte form.
     /// `<key> := <keylen> <keytype> <keydata>`
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_utils::hex_bytes"))]
@@ -79,7 +79,18 @@ impl Key {
             return Err(Error::NoMorePairs);
         }
 
-        let key_byte_size: u64 = byte_size - 1;
+        let type_value: VarInt = Decodable::consensus_decode(r)?;
+
+        let key_byte_size = match byte_size.checked_sub(
+            u64::try_from(type_value.size()).expect("size() returns 1-9, fits inside u64"),
+        ) {
+            Some(val) => val,
+            None => {
+                return Err(encode::Error::ParseFailed(
+                    "encoded keytype is larger than specified length",
+                ))?;
+            }
+        };
 
         if key_byte_size > MAX_VEC_SIZE as u64 {
             return Err(encode::Error::OversizedVectorAllocation {
@@ -89,25 +100,24 @@ impl Key {
             .into());
         }
 
-        let type_value: u8 = Decodable::consensus_decode(r)?;
-
         let mut key = Vec::with_capacity(key_byte_size as usize);
         for _ in 0..key_byte_size {
             key.push(Decodable::consensus_decode(r)?);
         }
 
-        Ok(Key { type_value, key })
+        Ok(Key { type_value: type_value.0, key })
     }
 }
 
 impl Serialize for Key {
     fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        VarInt::from(self.key.len() + 1)
+        let type_value = VarInt::from(self.type_value);
+        VarInt::from(self.key.len() + type_value.size())
             .consensus_encode(&mut buf)
             .expect("in-memory writers don't error");
 
-        self.type_value.consensus_encode(&mut buf).expect("in-memory writers don't error");
+        type_value.consensus_encode(&mut buf).expect("in-memory writers don't error");
 
         for key in &self.key {
             key.consensus_encode(&mut buf).expect("in-memory writers don't error");
