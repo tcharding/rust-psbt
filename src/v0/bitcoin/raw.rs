@@ -10,7 +10,7 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::consensus::encode::{
-    self, deserialize, serialize, Decodable, Encodable, ReadExt, VarInt, WriteExt, MAX_VEC_SIZE,
+    self, deserialize, serialize, Decodable, Encodable, VarInt, MAX_VEC_SIZE,
 };
 
 use super::serialize::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ pub struct Pair {
 }
 
 /// Default implementation for proprietary key subtyping
-pub type ProprietaryType = u8;
+pub type ProprietaryType = u64;
 
 /// Proprietary keys (i.e. keys starting with 0xFC byte) with their internal
 /// structure according to BIP 174.
@@ -52,7 +52,7 @@ pub type ProprietaryType = u8;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProprietaryKey<Subtype = ProprietaryType>
 where
-    Subtype: Copy + From<u8> + Into<u8>,
+    Subtype: Copy + From<u64> + Into<u64>,
 {
     /// Proprietary type prefix used for grouping together keys under some
     /// application and avoid namespace collision
@@ -152,11 +152,11 @@ impl Pair {
 
 impl<Subtype> Encodable for ProprietaryKey<Subtype>
 where
-    Subtype: Copy + From<u8> + Into<u8>,
+    Subtype: Copy + From<u64> + Into<u64>,
 {
     fn consensus_encode<W: Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
-        let mut len = self.prefix.consensus_encode(w)? + 1;
-        w.emit_u8(self.subtype.into())?;
+        let mut len = self.prefix.consensus_encode(w)?;
+        len += VarInt::from(self.subtype.into()).consensus_encode(w)?;
         w.write_all(&self.key)?;
         len += self.key.len();
         Ok(len)
@@ -165,11 +165,12 @@ where
 
 impl<Subtype> Decodable for ProprietaryKey<Subtype>
 where
-    Subtype: Copy + From<u8> + Into<u8>,
+    Subtype: Copy + From<u64> + Into<u64>,
 {
     fn consensus_decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
         let prefix = Vec::<u8>::consensus_decode(r)?;
-        let subtype = Subtype::from(r.read_u8()?);
+        let VarInt(subtype_u64): VarInt = Decodable::consensus_decode(r)?;
+        let subtype = Subtype::from(subtype_u64);
 
         // The limit is a DOS protection mechanism the exact value is not
         // important, 1024 bytes is bigger than any key should be.
@@ -182,7 +183,7 @@ where
 
 impl<Subtype> ProprietaryKey<Subtype>
 where
-    Subtype: Copy + From<u8> + Into<u8>,
+    Subtype: Copy + From<u64> + Into<u64>,
 {
     /// Constructs full [Key] corresponding to this proprietary key type
     pub fn to_key(&self) -> Key { Key { type_value: 0xFC, key: serialize(self) } }
@@ -190,7 +191,7 @@ where
 
 impl<Subtype> TryFrom<Key> for ProprietaryKey<Subtype>
 where
-    Subtype: Copy + From<u8> + Into<u8>,
+    Subtype: Copy + From<u64> + Into<u64>,
 {
     type Error = Error;
 
@@ -212,7 +213,7 @@ impl<'a> arbitrary::Arbitrary<'a> for ProprietaryKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(ProprietaryKey {
             prefix: Vec::<u8>::arbitrary(u)?,
-            subtype: u8::arbitrary(u)?,
+            subtype: u64::arbitrary(u)?,
             key: Vec::<u8>::arbitrary(u)?,
         })
     }
