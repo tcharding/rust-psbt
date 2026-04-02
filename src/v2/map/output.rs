@@ -520,4 +520,17 @@ mod tests {
 
         assert_eq!(decoded, output);
     }
+
+    #[test]
+    fn pairs_matches_serialize_map() {
+        let output = Output::new(tx_out());
+
+        let mut from_pairs = Vec::new();
+        for pair in output.pairs() {
+            from_pairs.extend(pair.serialize());
+        }
+        from_pairs.push(0x00);
+
+        assert_eq!(from_pairs, output.serialize_map());
+    }
 }

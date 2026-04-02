@@ -784,3 +784,21 @@ impl std::error::Error for CombineError {
 impl From<InconsistentKeySourcesError> for CombineError {
     fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pairs_matches_serialize_map() {
+        let global = Global::default();
+
+        let mut from_pairs = Vec::new();
+        for pair in global.pairs() {
+            from_pairs.extend(pair.serialize());
+        }
+        from_pairs.push(0x00);
+
+        assert_eq!(from_pairs, global.serialize_map());
+    }
+}
