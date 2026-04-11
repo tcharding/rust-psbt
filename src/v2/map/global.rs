@@ -100,6 +100,9 @@ impl Global {
         }
     }
 
+    /// Returns all key-value pairs for this global map in serialization order.
+    pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
+
     pub(crate) fn set_inputs_modifiable_flag(&mut self) {
         self.tx_modifiable_flags |= INPUTS_MODIFIABLE;
     }
@@ -780,4 +783,22 @@ impl std::error::Error for CombineError {
 
 impl From<InconsistentKeySourcesError> for CombineError {
     fn from(e: InconsistentKeySourcesError) -> Self { Self::InconsistentKeySources(e) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pairs_matches_serialize_map() {
+        let global = Global::default();
+
+        let mut from_pairs = Vec::new();
+        for pair in global.pairs() {
+            from_pairs.extend(pair.serialize());
+        }
+        from_pairs.push(0x00);
+
+        assert_eq!(from_pairs, global.serialize_map());
+    }
 }

@@ -86,6 +86,9 @@ impl Output {
         }
     }
 
+    /// Returns all key-value pairs for this output map in serialization order.
+    pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
+
     // /// Converts this `Output` to a `v0::Output`.
     // pub(crate) fn into_v0(self) -> v0::Output {
     //     v0::Output {
@@ -516,5 +519,18 @@ mod tests {
         let decoded = Output::decode(&mut d).expect("failed to decode");
 
         assert_eq!(decoded, output);
+    }
+
+    #[test]
+    fn pairs_matches_serialize_map() {
+        let output = Output::new(tx_out());
+
+        let mut from_pairs = Vec::new();
+        for pair in output.pairs() {
+            from_pairs.extend(pair.serialize());
+        }
+        from_pairs.push(0x00);
+
+        assert_eq!(from_pairs, output.serialize_map());
     }
 }

@@ -114,7 +114,7 @@ pub(crate) const PSBT_OUT_SP_V0_INFO: u64 = 0x09;
 #[cfg(feature = "silent-payments")]
 /// Type: Silent Payment v0 Label PSBT_OUT_SP_V0_LABEL = 0x0A
 pub(crate) const PSBT_OUT_SP_V0_LABEL: u64 = 0x0A;
-/// Type: Proprietary Use Type PSBT_IN_PROPRIETARY = 0xFC
+/// Type: Proprietary Use Type PSBT_OUT_PROPRIETARY = 0xFC
 pub(crate) const PSBT_OUT_PROPRIETARY: u64 = 0xFC;
 
 /// Converts a global key type value consts to a string, useful for debugging.
