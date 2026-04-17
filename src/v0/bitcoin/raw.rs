@@ -211,9 +211,18 @@ where
 #[cfg(feature = "arbitrary")]
 impl<'a> arbitrary::Arbitrary<'a> for ProprietaryKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        /// Default maximum size of a decoded object in bytes.
+        ///
+        /// Matches Bitcoin Core's default [serialization limit]. This is
+        /// a high level anti-DoS limit which all bitcoin types should
+        /// easily fit within.
+        ///
+        /// [serialization limit]: https://github.com/bitcoin/bitcoin/blob/a7c29df0e5ace05b6186612671d6103c112ec922/src/serialize.h#L32
+        const MAX_COMPACT_SIZE: u64 = 0x0200_0000;
+        let subtype = u.int_in_range(0..=MAX_COMPACT_SIZE)?;
         Ok(ProprietaryKey {
             prefix: Vec::<u8>::arbitrary(u)?,
-            subtype: u64::arbitrary(u)?,
+            subtype,
             key: Vec::<u8>::arbitrary(u)?,
         })
     }
