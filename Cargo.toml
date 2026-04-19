@@ -14,7 +14,7 @@ exclude = ["api", "tests", "contrib"]
 
 [package.metadata.rbmt.toolchains]
 nightly = "nightly-2026-03-30"
-stable = "1.94.1"
+stable = "1.95.0"
 
 [package.metadata.rbmt.test]
 examples = [
