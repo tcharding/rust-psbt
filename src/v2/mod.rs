@@ -640,13 +640,16 @@ impl Psbt {
     /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
         const MAGIC_BYTES: &[u8] = b"psbt";
-        if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(DeserializeError::InvalidMagic);
+        let magic: [u8; 4] =
+            bytes.get(0..4).and_then(|s| <&[u8; 4]>::try_from(s).ok()).copied().unwrap_or([0; 4]);
+
+        if magic != *MAGIC_BYTES {
+            return Err(DeserializeError::InvalidMagic(magic));
         }
 
         const PSBT_SEPARATOR: u8 = 0xff_u8;
         if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
-            return Err(DeserializeError::InvalidSeparator);
+            return Err(DeserializeError::InvalidSeparator(bytes.get(MAGIC_BYTES.len()).copied()));
         }
 
         let mut d = bytes.get(5..).ok_or(DeserializeError::NoMorePairs)?;

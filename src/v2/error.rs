@@ -18,11 +18,9 @@ use crate::v2::map::{global, input, output};
 #[non_exhaustive]
 pub enum DeserializeError {
     /// Invalid magic bytes, expected the ASCII for "psbt" serialized in most significant byte order.
-    // TODO: Consider adding the invalid bytes.
-    InvalidMagic,
+    InvalidMagic([u8; 4]),
     /// The separator for a PSBT must be `0xff`.
-    // TODO: Consider adding the invalid separator byte.
-    InvalidSeparator,
+    InvalidSeparator(Option<u8>),
     /// Signals that there are no more key-value pairs in a key-value map.
     NoMorePairs,
     /// Error decoding the global map.
@@ -46,8 +44,11 @@ pub enum DeserializeError {
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidMagic => f.write_str("invalid magic bytes"),
-            Self::InvalidSeparator => f.write_str("invalid separator"),
+            Self::InvalidMagic(ref magic) => write!(f, "invalid magic bytes: {:?}", magic),
+            Self::InvalidSeparator(Some(separator)) => {
+                write!(f, "invalid separator byte: 0x{:02x}", separator)
+            }
+            Self::InvalidSeparator(None) => write!(f, "invalid separator byte: missing"),
             Self::NoMorePairs => f.write_str("no more key-value pairs"),
             Self::DecodeGlobal(e) => write!(f, "error decoding global map: {}", e),
             Self::DecodeInput(e) => write!(f, "error decoding input map: {}", e),
@@ -70,7 +71,7 @@ impl std::error::Error for DeserializeError {
             Self::DecodeGlobal(e) => Some(e),
             Self::DecodeInput(e) => Some(e),
             Self::DecodeOutput(e) => Some(e),
-            Self::InvalidMagic | Self::InvalidSeparator | Self::NoMorePairs => None,
+            Self::InvalidMagic(_) | Self::InvalidSeparator(_) | Self::NoMorePairs => None,
             Self::IncorrectNonWitnessUtxo { .. } => None,
         }
     }
