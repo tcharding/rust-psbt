@@ -384,10 +384,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            // TODO: Loads of error messages are capitalized, they should not be.
             Self::FundingUtxo(ref e) => write_err!(f, "Finalizer missing funding UTXO"; e),
             Self::DetermineLockTime(ref e) =>
-                write_err!(f, "finalizer must be able to determine the lock time"; e),
+                write_err!(f, "Finalizer must be able to determine the lock time"; e),
             Self::PartialSigsSighashType(ref e) => write_err!(f, "Finalizer sighash type error"; e),
         }
     }

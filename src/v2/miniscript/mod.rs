@@ -201,10 +201,12 @@ pub enum InterpreterCheckInputError {
 impl fmt::Display for InterpreterCheckInputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Constructor { input_index, ref error } =>
-                write_err!(f, "Interpreter constructor failed for input {}", input_index; error),
-            Self::Satisfaction { input_index, ref error } =>
-                write_err!(f, "Interpreter satisfaction failed for input {}", input_index; error),
+            Self::Constructor { input_index, ref error } => {
+                write_err!(f, "interpreter constructor failed for input {}", input_index; error)
+            }
+            Self::Satisfaction { input_index, ref error } => {
+                write_err!(f, "interpreter satisfaction failed for input {}", input_index; error)
+            }
         }
     }
 }
