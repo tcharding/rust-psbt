@@ -149,6 +149,15 @@ impl fmt::Display for SignerChecksError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for SignerChecksError {
-    // TODO: Match explicitly.
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::NonWitnessSig
+            | Self::NonWitnessUtxoTxidMismatch
+            | Self::WitnessAndNonWitnessUtxo
+            | Self::RedeemScriptMismatch
+            | Self::MissingTxOut
+            | Self::WitnessScriptMismatchWsh
+            | Self::WitnessScriptMismatchShWsh => None,
+        }
+    }
 }
