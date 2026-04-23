@@ -13,6 +13,8 @@ mod util;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
+use bitcoin::{transaction, Sequence, Transaction, TxIn, Witness};
+use psbt_v2::bitcoin::absolute::LockTime;
 use psbt_v2::bitcoin::bip32::{DerivationPath, Xpriv};
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
 use psbt_v2::v0::Psbt;
@@ -68,8 +70,8 @@ struct TestFile {
 struct TestCase {
     #[serde(default, alias = "description")]
     _description: String,
-    #[serde(default, alias = "expected")]
-    _expected: PsbtData,
+    #[serde(default)]
+    expected: PsbtData,
     supplementary: Supplementary,
 }
 
@@ -87,7 +89,7 @@ struct PsbtData {
 #[derive(Debug, Deserialize)]
 struct InputUpdate {
     /// Consensus-encoded hex of the funding transaction.
-    #[serde(alias = "previous_tx")]
+    #[serde(default, alias = "previous_tx")]
     _previous_tx: String,
     /// If true, install the matched output as `witness_utxo`; otherwise
     /// install the whole transaction as `non_witness_utxo`.
@@ -130,12 +132,12 @@ struct Supplementary {
     _seed: Option<PrivateKey>,
 
     /// Transaction inputs for the creator task.
-    #[serde(default, alias = "inputs")]
-    _inputs: Option<Vec<OutPoint>>,
+    #[serde(default)]
+    inputs: Option<Vec<OutPoint>>,
 
     /// Transaction outputs for the creator task.
-    #[serde(default, alias = "outputs")]
-    _outputs: Option<Vec<TxOut>>,
+    #[serde(default)]
+    outputs: Option<Vec<TxOut>>,
 
     /// Private key / derivation path pairs (sign task).
     #[serde(default, alias = "private_keys")]
@@ -187,12 +189,39 @@ fn run_deserialize(supplementary: &Supplementary) {
     }
 }
 
+/// Creator: build an unsigned transaction from the given inputs and outputs,
+/// wrap it in a PSBT, and compare against the expected serialisation.
+fn run_create(expected: &PsbtData, supplementary: &Supplementary) {
+    let inputs = supplementary.inputs.as_ref().expect("create task needs inputs");
+    let outputs = supplementary.outputs.as_ref().expect("create task needs outputs");
+    let expected_hex = expected.hex.as_deref().expect("create expected must have hex");
+
+    let tx = Transaction {
+        version: transaction::Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: inputs
+            .iter()
+            .map(|o| TxIn {
+                previous_output: OutPoint { txid: o.txid, vout: o.vout },
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            })
+            .collect(),
+        output: outputs.clone(),
+    };
+
+    let psbt = Psbt::from_unsigned_tx(tx).expect("failed to create PSBT from unsigned tx");
+    let expected_psbt = util::hex_psbt_v0(expected_hex).expect("expected PSBT must be valid");
+    assert_eq!(psbt, expected_psbt);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
         Task::FailSign => run_fail_sign(&case.supplementary),
         Task::Deserialize => run_deserialize(&case.supplementary),
-        Task::Create => unimplemented!("run_create not yet implemented"),
+        Task::Create => run_create(&case.expected, &case.supplementary),
         Task::Update => unimplemented!("run_update not yet implemented"),
         Task::Sign => unimplemented!("run_sign not yet implemented"),
         Task::Combine => unimplemented!("run_combine not yet implemented"),
@@ -320,3 +349,6 @@ fn redeemscript_with_witness_utxo_does_not_match_the_scriptpubkey() { check_case
 
 #[test]
 fn witness_script_with_witness_utxo_does_not_match_the_redeemscript() { check_case(33); }
+
+#[test]
+fn workflow_a_step_1_creator_creates_psbt() { check_case(34); }
