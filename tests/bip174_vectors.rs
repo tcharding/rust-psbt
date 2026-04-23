@@ -369,6 +369,190 @@ fn run_combine(expected: &PsbtData, supplementary: &Supplementary) {
     assert_eq!(combined, expected_psbt);
 }
 
+/// Return the partial signatures ordered by the position of their pubkey
+/// in the given multisig script (redeemScript or witnessScript).
+///
+/// Bitcoin multisig validation requires signatures to be pushed in the same
+/// order as the corresponding public keys appear in the script.
+fn sigs_in_script_order<'a>(
+    partial_sigs: &'a std::collections::BTreeMap<PublicKey, bitcoin::ecdsa::Signature>,
+    script: &ScriptBuf,
+) -> Vec<&'a bitcoin::ecdsa::Signature> {
+    // Extract all compressed pubkeys from the script bytes in order.
+    let script_bytes = script.as_bytes();
+    let mut key_order: Vec<PublicKey> = Vec::new();
+    let mut i = 0;
+    while i < script_bytes.len() {
+        let byte = script_bytes[i];
+        // A push of exactly 33 bytes (0x21) followed by a compressed pubkey (02/03).
+        if byte == 0x21 && i + 33 < script_bytes.len() {
+            let prefix = script_bytes[i + 1];
+            if prefix == 0x02 || prefix == 0x03 {
+                if let Ok(pk) = PublicKey::from_slice(&script_bytes[i + 1..i + 34]) {
+                    key_order.push(pk);
+                }
+                i += 34;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    // Return sigs in script key order, skipping keys we have no sig for.
+    key_order.iter().filter_map(|pk| partial_sigs.get(pk)).collect()
+}
+
+/// Classify and finalize a single PSBT input in-place.
+///
+/// Supported script types:
+///   - P2PKH  (non-witness, bare):  final_script_sig = <sig> <pubkey>
+///   - P2SH multisig (non-witness): final_script_sig = OP_0 <sig…> <redeemScript>
+///   - P2SH-P2WPKH:  final_script_sig = <redeemScript>,
+///     final_script_witness = <sig> <pubkey>
+///   - P2SH-P2WSH multisig: final_script_sig = <redeemScript>,
+///     final_script_witness = OP_0 <sig…> <witnessScript>
+///   - Native P2WPKH: final_script_witness = <sig> <pubkey>
+///   - Native P2WSH multisig: final_script_witness = OP_0 <sig…> <witnessScript>
+fn finalize_input(input: &mut psbt_v2::v0::Input, spk: &ScriptBuf) {
+    use std::convert::TryFrom;
+
+    use psbt_v2::bitcoin::blockdata::opcodes::all::OP_PUSHBYTES_0;
+    use psbt_v2::bitcoin::blockdata::script::Builder;
+    use psbt_v2::bitcoin::script::PushBytes;
+
+    if spk.is_p2pkh() {
+        // P2PKH: one sig, one pubkey.
+        assert_eq!(input.partial_sigs.len(), 1, "P2PKH input must have exactly one partial sig");
+        let (pk, sig) = input.partial_sigs.iter().next().unwrap();
+        let script_sig = Builder::new().push_slice(sig.serialize()).push_key(pk).into_script();
+        input.final_script_sig = Some(script_sig);
+    } else if spk.is_p2sh() {
+        let redeem_script =
+            input.redeem_script.as_ref().expect("P2SH input must have a redeemScript");
+
+        if redeem_script.is_p2wpkh() {
+            // P2SH-P2WPKH: push the redeemScript as scriptSig; sig+pubkey go into witness.
+            assert_eq!(
+                input.partial_sigs.len(),
+                1,
+                "P2SH-P2WPKH input must have exactly one partial sig"
+            );
+            let (pk, sig) = input.partial_sigs.iter().next().unwrap();
+            let script_sig = Builder::new()
+                .push_slice(
+                    <&PushBytes>::try_from(redeem_script.as_bytes())
+                        .expect("redeemScript fits PushBytes"),
+                )
+                .into_script();
+            let mut witness = psbt_v2::bitcoin::Witness::new();
+            witness.push(sig.serialize());
+            witness.push(pk.to_bytes());
+            input.final_script_sig = Some(script_sig);
+            input.final_script_witness = Some(witness);
+        } else if redeem_script.is_p2wsh() {
+            // P2SH-P2WSH multisig.
+            let witness_script =
+                input.witness_script.as_ref().expect("P2SH-P2WSH input must have a witnessScript");
+            let ordered_sigs = sigs_in_script_order(&input.partial_sigs, witness_script);
+            let script_sig = Builder::new()
+                .push_slice(
+                    <&PushBytes>::try_from(redeem_script.as_bytes())
+                        .expect("redeemScript fits PushBytes"),
+                )
+                .into_script();
+            let mut witness = psbt_v2::bitcoin::Witness::new();
+            witness.push([]); // OP_CHECKMULTISIG dummy
+            for sig in &ordered_sigs {
+                witness.push(sig.serialize());
+            }
+            witness.push(witness_script.as_bytes());
+            input.final_script_sig = Some(script_sig);
+            input.final_script_witness = Some(witness);
+        } else {
+            // Bare P2SH multisig (legacy).
+            let ordered_sigs = sigs_in_script_order(&input.partial_sigs, redeem_script);
+            let mut builder = Builder::new().push_opcode(OP_PUSHBYTES_0);
+            for sig in &ordered_sigs {
+                builder = builder.push_slice(sig.serialize());
+            }
+            builder = builder.push_slice(
+                <&PushBytes>::try_from(redeem_script.as_bytes())
+                    .expect("redeemScript fits PushBytes"),
+            );
+            input.final_script_sig = Some(builder.into_script());
+        }
+    } else if spk.is_p2wpkh() {
+        // Native P2WPKH.
+        assert_eq!(input.partial_sigs.len(), 1, "P2WPKH input must have exactly one partial sig");
+        let (pk, sig) = input.partial_sigs.iter().next().unwrap();
+        let mut witness = psbt_v2::bitcoin::Witness::new();
+        witness.push(sig.serialize());
+        witness.push(pk.to_bytes());
+        input.final_script_witness = Some(witness);
+    } else if spk.is_p2wsh() {
+        // Native P2WSH multisig.
+        let witness_script =
+            input.witness_script.as_ref().expect("P2WSH input must have a witnessScript");
+        let ordered_sigs = sigs_in_script_order(&input.partial_sigs, witness_script);
+        let mut witness = psbt_v2::bitcoin::Witness::new();
+        witness.push([]); // OP_CHECKMULTISIG dummy
+        for sig in &ordered_sigs {
+            witness.push(sig.serialize());
+        }
+        witness.push(witness_script.as_bytes());
+        input.final_script_witness = Some(witness);
+    } else {
+        panic!("finalize_input: unsupported scriptPubKey type: {}", spk);
+    }
+
+    // Clear per-input signing data per BIP 174 Finalizer role.
+    input.partial_sigs.clear();
+    input.sighash_type = None;
+    input.redeem_script = None;
+    input.witness_script = None;
+    input.bip32_derivation.clear();
+}
+
+/// Finalizer: apply the generic finalizer to each input, then compare
+/// the resulting PSBT against the expected.
+fn run_finalize(expected: &PsbtData, supplementary: &Supplementary) {
+    let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
+    assert!(!input_psbts.is_empty(), "finalize task needs at least one input PSBT");
+
+    let input_hex = input_psbts[0].hex.as_deref().expect("finalize input must have hex");
+    let mut psbt = util::hex_psbt_v0(input_hex).expect("finalize input PSBT must be valid");
+
+    let expected_hex = expected.hex.as_deref().expect("finalize expected must have hex");
+    let expected_psbt =
+        util::hex_psbt_v0(expected_hex).expect("finalize expected PSBT must be valid");
+
+    // Collect the spending scriptPubKeys before mutably borrowing inputs.
+    let spks: Vec<ScriptBuf> = (0..psbt.inputs.len())
+        .map(|i| {
+            let input = &psbt.inputs[i];
+            if let Some(witness_utxo) = &input.witness_utxo {
+                witness_utxo.script_pubkey.clone()
+            } else if let Some(non_witness_utxo) = &input.non_witness_utxo {
+                let vout = psbt.unsigned_tx.input[i].previous_output.vout as usize;
+                non_witness_utxo.output[vout].script_pubkey.clone()
+            } else {
+                panic!("finalize: input {} has no UTXO data", i);
+            }
+        })
+        .collect();
+
+    for (i, spk) in spks.iter().enumerate() {
+        // Skip inputs that are already finalized.
+        if psbt.inputs[i].final_script_sig.is_some()
+            || psbt.inputs[i].final_script_witness.is_some()
+        {
+            continue;
+        }
+        finalize_input(&mut psbt.inputs[i], spk);
+    }
+
+    assert_eq!(psbt, expected_psbt);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
@@ -378,7 +562,7 @@ fn execute_case(case: &TestCase) {
         Task::Update => run_update(&case.expected, &case.supplementary),
         Task::Sign => run_sign(&case.expected, &case.supplementary),
         Task::Combine => run_combine(&case.expected, &case.supplementary),
-        Task::Finalize => unimplemented!("run_finalize not yet implemented"),
+        Task::Finalize => run_finalize(&case.expected, &case.supplementary),
         Task::Extract => unimplemented!("run_extract not yet implemented"),
     }
 }
@@ -520,9 +704,12 @@ fn workflow_a_step_4_signer_that_supports_sighash_all_for_p2pkh_and_p2wpkh_spend
 
 #[test]
 fn workflow_a_step_5_signer_provides_second_signature() { check_case(38); }
- 
+
 #[test]
 fn workflow_a_step_6_combiner_combines() { check_case(39); }
+
+#[test]
+fn workflow_a_step_7_input_finalizer_finalizes() { check_case(40); }
 
 #[test]
 fn combiner_combines_keys_lexicographically() { check_case(42); }
