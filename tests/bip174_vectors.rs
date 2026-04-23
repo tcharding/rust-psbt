@@ -10,6 +10,7 @@
 
 mod util;
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
@@ -46,10 +47,8 @@ struct PubKeyPath {
 
 #[derive(Debug, Deserialize)]
 struct PrivKeyPath {
-    #[serde(alias = "key")]
-    pub _key: PrivateKey,
-    #[serde(alias = "path")]
-    pub _path: DerivationPath,
+    pub key: PrivateKey,
+    pub path: DerivationPath,
 }
 
 fn deserialize_sighash<'de, D: Deserializer<'de>>(
@@ -129,8 +128,8 @@ struct Supplementary {
     xpriv: Option<Xpriv>,
 
     /// Seed WIF (create task - used to verify xpriv derivation).
-    #[serde(default, alias = "seed")]
-    _seed: Option<PrivateKey>,
+    #[serde(default)]
+    seed: Option<PrivateKey>,
 
     /// Transaction inputs for the creator task.
     #[serde(default)]
@@ -141,8 +140,8 @@ struct Supplementary {
     outputs: Option<Vec<TxOut>>,
 
     /// Private key / derivation path pairs (sign task).
-    #[serde(default, alias = "private_keys")]
-    _private_keys: Option<Vec<PrivKeyPath>>,
+    #[serde(default)]
+    private_keys: Option<Vec<PrivKeyPath>>,
 
     /// Sighash type symbolic name.
     #[serde(default, deserialize_with = "deserialize_sighash")]
@@ -295,6 +294,59 @@ fn run_update(expected: &PsbtData, supplementary: &Supplementary) {
     assert_eq!(psbt, expected_psbt);
 }
 
+/// Signer: for each listed private key, derive it from the canonical BIP-174
+/// master xpriv via the supplied path, assert it matches the WIF key in the
+/// vector (strict verification), then sign the PSBT and compare.
+fn run_sign(expected: &PsbtData, supplementary: &Supplementary) {
+    let secp = Secp256k1::new();
+    let xpriv = supplementary.xpriv.expect("must be available to verify public keys");
+
+    if let Some(sk) = supplementary.seed {
+        let seeded = Xpriv::new_master(xpriv.network, &sk.inner.secret_bytes()).unwrap();
+        assert_eq!(seeded, xpriv);
+    }
+
+    let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
+    assert!(!input_psbts.is_empty(), "sign task needs at least one input PSBT");
+    let input_hex = input_psbts[0].hex.as_deref().expect("sign input must have hex");
+    let mut psbt = util::hex_psbt_v0(input_hex).expect("sign input PSBT must be valid");
+
+    let expected_hex = expected.hex.as_deref().expect("sign expected must have hex");
+    let expected_psbt = util::hex_psbt_v0(expected_hex).expect("sign expected PSBT must be valid");
+
+    let mut key_map: BTreeMap<PublicKey, PrivateKey> = BTreeMap::new();
+
+    if let Some(priv_key_paths) = &supplementary.private_keys {
+        for PrivKeyPath { key: wif_priv, path } in priv_key_paths {
+            let derived =
+                xpriv.derive_priv(&secp, path).expect("derivation must succeed").to_priv();
+            assert_eq!(
+                *wif_priv, derived,
+                "WIF key in vector must match derivation from canonical xpriv"
+            );
+            key_map.insert(wif_priv.public_key(&secp), *wif_priv);
+        }
+    }
+
+    // sign() returns Err when it encounters errors for some inputs, even if
+    // other inputs were signed successfully. We tolerate errors only when the
+    // failing input had no key in our map (expected for multisig where we hold
+    // a subset of the required keys).
+    match psbt.sign(&key_map, &secp) {
+        Ok(_) => {}
+        Err((_, errors)) =>
+            for (input_idx, err) in &errors {
+                assert!(
+                    matches!(err, psbt_v2::v0::bitcoin::SignError::KeyNotFound),
+                    "unexpected sign error on input {}: {:?}",
+                    input_idx,
+                    err
+                );
+            },
+    }
+    assert_eq!(psbt, expected_psbt);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
@@ -302,7 +354,7 @@ fn execute_case(case: &TestCase) {
         Task::Deserialize => run_deserialize(&case.supplementary),
         Task::Create => run_create(&case.expected, &case.supplementary),
         Task::Update => run_update(&case.expected, &case.supplementary),
-        Task::Sign => unimplemented!("run_sign not yet implemented"),
+        Task::Sign => run_sign(&case.expected, &case.supplementary),
         Task::Combine => unimplemented!("run_combine not yet implemented"),
         Task::Finalize => unimplemented!("run_finalize not yet implemented"),
         Task::Extract => unimplemented!("run_extract not yet implemented"),
@@ -437,3 +489,12 @@ fn workflow_a_step_2_updater_updates_keys() { check_case(35); }
 
 #[test]
 fn workflow_a_step_3_updater_updates_sighash() { check_case(36); }
+
+#[test]
+fn workflow_a_step_4_signer_that_supports_sighash_all_for_p2pkh_and_p2wpkh_spends_and_uses_rfc6979_for_nonce_generation_provides_first_signature(
+) {
+    check_case(37);
+}
+
+#[test]
+fn workflow_a_step_5_signer_provides_second_signature() { check_case(38); }
