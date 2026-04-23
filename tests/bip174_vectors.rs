@@ -15,7 +15,10 @@ use std::sync::OnceLock;
 
 use bitcoin::{transaction, Sequence, Transaction, TxIn, Witness};
 use psbt_v2::bitcoin::absolute::LockTime;
-use psbt_v2::bitcoin::bip32::{DerivationPath, Xpriv};
+use psbt_v2::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
+use psbt_v2::bitcoin::consensus::encode::deserialize;
+use psbt_v2::bitcoin::hex::FromHex;
+use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
 use psbt_v2::v0::Psbt;
 use psbt_v2::PsbtSighashType;
@@ -37,10 +40,8 @@ enum Task {
 
 #[derive(Debug, Deserialize)]
 struct PubKeyPath {
-    #[serde(alias = "key")]
-    pub _key: PublicKey,
-    #[serde(alias = "path")]
-    pub _path: DerivationPath,
+    pub key: PublicKey,
+    pub path: DerivationPath,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,25 +90,25 @@ struct PsbtData {
 #[derive(Debug, Deserialize)]
 struct InputUpdate {
     /// Consensus-encoded hex of the funding transaction.
-    #[serde(default, alias = "previous_tx")]
-    _previous_tx: String,
+    #[serde(default)]
+    previous_tx: String,
     /// If true, install the matched output as `witness_utxo`; otherwise
     /// install the whole transaction as `non_witness_utxo`.
-    #[serde(default, alias = "witness")]
-    _witness: bool,
-    #[serde(default, alias = "redeem_script")]
-    _redeem_script: Option<ScriptBuf>,
-    #[serde(default, alias = "witness_script")]
-    _witness_script: Option<ScriptBuf>,
-    #[serde(default, alias = "bip32_derivation")]
-    _bip32_derivation: Vec<PubKeyPath>,
+    #[serde(default)]
+    witness: bool,
+    #[serde(default)]
+    redeem_script: Option<ScriptBuf>,
+    #[serde(default)]
+    witness_script: Option<ScriptBuf>,
+    #[serde(default)]
+    bip32_derivation: Vec<PubKeyPath>,
 }
 
 /// Per-output update data for the updater task (positional).
 #[derive(Debug, Deserialize, Default)]
 struct OutputUpdate {
-    #[serde(default, alias = "bip32_derivation")]
-    _bip32_derivation: Vec<PubKeyPath>,
+    #[serde(default)]
+    bip32_derivation: Vec<PubKeyPath>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,8 +125,8 @@ struct Supplementary {
     psbts: Option<Vec<PsbtData>>,
 
     /// Master extended private key (create/update tasks).
-    #[serde(default, alias = "xpriv")]
-    _xpriv: Option<Xpriv>,
+    #[serde(default)]
+    xpriv: Option<Xpriv>,
 
     /// Seed WIF (create task - used to verify xpriv derivation).
     #[serde(default, alias = "seed")]
@@ -144,16 +145,16 @@ struct Supplementary {
     _private_keys: Option<Vec<PrivKeyPath>>,
 
     /// Sighash type symbolic name.
-    #[serde(default, deserialize_with = "deserialize_sighash", alias = "sighash")]
-    _sighash: Option<PsbtSighashType>,
+    #[serde(default, deserialize_with = "deserialize_sighash")]
+    sighash: Option<PsbtSighashType>,
 
     /// Per-input update directives for the updater task.
-    #[serde(default, alias = "input_updates")]
-    _input_updates: Option<Vec<InputUpdate>>,
+    #[serde(default)]
+    input_updates: Option<Vec<InputUpdate>>,
 
     /// Per-output update directives for the updater task (positional).
-    #[serde(default, alias = "output_updates")]
-    _output_updates: Option<Vec<OutputUpdate>>,
+    #[serde(default)]
+    output_updates: Option<Vec<OutputUpdate>>,
 }
 
 fn run_fail_deserialize(supplementary: &Supplementary) {
@@ -216,13 +217,91 @@ fn run_create(expected: &PsbtData, supplementary: &Supplementary) {
     assert_eq!(psbt, expected_psbt);
 }
 
+/// Decode a consensus-encoded transaction from a hex string.
+fn consensus_tx(hex: &str) -> Transaction {
+    let bytes = Vec::from_hex(hex).expect("previous_tx must be valid hex");
+    deserialize::<Transaction>(&bytes).expect("previous_tx must be a valid transaction")
+}
+
+/// Updater: apply whatever combination of UTXOs, scripts, BIP-32 derivation
+/// paths, and sighash type the vector specifies, then compare against the
+/// expected PSBT.
+///
+/// Per-input updates are matched to PSBT inputs by `txid(previous_tx)`.
+/// Per-output updates are applied positionally.
+/// A sighash type, when present, is applied to every input.
+fn run_update(expected: &PsbtData, supplementary: &Supplementary) {
+    let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
+    assert!(!input_psbts.is_empty(), "update task needs at least one input PSBT");
+    let input_hex = input_psbts[0].hex.as_deref().expect("update input must have hex");
+    let mut psbt = util::hex_psbt_v0(input_hex).expect("update input PSBT must be valid");
+
+    let expected_hex = expected.hex.as_deref().expect("update expected must have hex");
+    let expected_psbt =
+        util::hex_psbt_v0(expected_hex).expect("update expected PSBT must be valid");
+
+    // Compute the fingerprint lazily — only needed when bip32_derivation is present.
+    let fp = supplementary.xpriv.map(|xpriv| {
+        let secp = Secp256k1::new();
+        Xpub::from_priv(&secp, &xpriv).fingerprint()
+    });
+
+    if let Some(updates) = supplementary.input_updates.as_ref() {
+        for u in updates {
+            let prev_tx = consensus_tx(&u.previous_tx);
+            let txid = prev_tx.compute_txid();
+            let i = psbt
+                .unsigned_tx
+                .input
+                .iter()
+                .position(|txin| txin.previous_output.txid == txid)
+                .expect("input_update previous_tx does not match any PSBT input");
+            let vout = psbt.unsigned_tx.input[i].previous_output.vout as usize;
+            if u.witness {
+                psbt.inputs[i].witness_utxo = Some(prev_tx.output[vout].clone());
+            } else {
+                psbt.inputs[i].non_witness_utxo = Some(prev_tx);
+            }
+            if let Some(rs) = &u.redeem_script {
+                psbt.inputs[i].redeem_script = Some(rs.clone());
+            }
+            if let Some(ws) = &u.witness_script {
+                psbt.inputs[i].witness_script = Some(ws.clone());
+            }
+            if !u.bip32_derivation.is_empty() {
+                let fp = fp.expect("bip32_derivation requires xpriv");
+                psbt.inputs[i].bip32_derivation =
+                    u.bip32_derivation.iter().map(|p| (p.key, (fp, p.path.clone()))).collect();
+            }
+        }
+    }
+
+    if let Some(updates) = supplementary.output_updates.as_ref() {
+        for (i, u) in updates.iter().enumerate() {
+            if !u.bip32_derivation.is_empty() {
+                let fp = fp.expect("bip32_derivation requires xpriv");
+                psbt.outputs[i].bip32_derivation =
+                    u.bip32_derivation.iter().map(|p| (p.key, (fp, p.path.clone()))).collect();
+            }
+        }
+    }
+
+    if let Some(sighash) = supplementary.sighash {
+        for input in &mut psbt.inputs {
+            input.sighash_type = Some(sighash);
+        }
+    }
+
+    assert_eq!(psbt, expected_psbt);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
         Task::FailSign => run_fail_sign(&case.supplementary),
         Task::Deserialize => run_deserialize(&case.supplementary),
         Task::Create => run_create(&case.expected, &case.supplementary),
-        Task::Update => unimplemented!("run_update not yet implemented"),
+        Task::Update => run_update(&case.expected, &case.supplementary),
         Task::Sign => unimplemented!("run_sign not yet implemented"),
         Task::Combine => unimplemented!("run_combine not yet implemented"),
         Task::Finalize => unimplemented!("run_finalize not yet implemented"),
@@ -352,3 +431,9 @@ fn witness_script_with_witness_utxo_does_not_match_the_redeemscript() { check_ca
 
 #[test]
 fn workflow_a_step_1_creator_creates_psbt() { check_case(34); }
+
+#[test]
+fn workflow_a_step_2_updater_updates_keys() { check_case(35); }
+
+#[test]
+fn workflow_a_step_3_updater_updates_sighash() { check_case(36); }
