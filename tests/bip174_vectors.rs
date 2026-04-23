@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use bitcoin::{transaction, Sequence, Transaction, TxIn, Witness};
 use psbt_v2::bitcoin::absolute::LockTime;
 use psbt_v2::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
-use psbt_v2::bitcoin::consensus::encode::deserialize;
+use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt_v2::bitcoin::hex::FromHex;
 use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
@@ -116,8 +116,8 @@ struct Supplementary {
     task: Task,
 
     /// Consensus-encoded hex of the final extracted transaction (extract task).
-    #[serde(default, alias = "tx")]
-    _tx: Option<String>,
+    #[serde(default)]
+    tx: Option<String>,
 
     /// Input PSBTs for update/sign/combine/finalize/extract tasks.
     #[serde(default)]
@@ -553,6 +553,22 @@ fn run_finalize(expected: &PsbtData, supplementary: &Supplementary) {
     assert_eq!(psbt, expected_psbt);
 }
 
+/// Transaction Extractor: extract the final transaction from a fully-finalized
+/// PSBT and compare its consensus hex against the expected transaction.
+fn run_extract(supplementary: &Supplementary) {
+    let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
+    assert!(!input_psbts.is_empty(), "extract task needs at least one input PSBT");
+
+    let input_hex = input_psbts[0].hex.as_deref().expect("extract input must have hex");
+    let psbt = util::hex_psbt_v0(input_hex).expect("extract input PSBT must be valid");
+
+    let expected_tx_hex =
+        supplementary.tx.as_deref().expect("extract task must provide expected tx hex");
+
+    let tx = psbt.extract_tx_unchecked_fee_rate();
+    assert_eq!(serialize_hex(&tx), expected_tx_hex);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
@@ -563,7 +579,7 @@ fn execute_case(case: &TestCase) {
         Task::Sign => run_sign(&case.expected, &case.supplementary),
         Task::Combine => run_combine(&case.expected, &case.supplementary),
         Task::Finalize => run_finalize(&case.expected, &case.supplementary),
-        Task::Extract => unimplemented!("run_extract not yet implemented"),
+        Task::Extract => run_extract(&case.supplementary),
     }
 }
 
