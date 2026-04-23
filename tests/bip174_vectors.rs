@@ -347,6 +347,28 @@ fn run_sign(expected: &PsbtData, supplementary: &Supplementary) {
     assert_eq!(psbt, expected_psbt);
 }
 
+/// Combiner: merge all input PSBTs into one and compare against expected.
+fn run_combine(expected: &PsbtData, supplementary: &Supplementary) {
+    let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
+    assert!(input_psbts.len() >= 2, "combine task needs at least two input PSBTs");
+
+    let expected_hex = expected.hex.as_deref().expect("combine expected must have hex");
+    let expected_psbt =
+        util::hex_psbt_v0(expected_hex).expect("combine expected PSBT must be valid");
+
+    let mut combined =
+        util::hex_psbt_v0(input_psbts[0].hex.as_deref().expect("combine input[0] must have hex"))
+            .expect("combine input[0] must be valid");
+
+    for p in &input_psbts[1..] {
+        let next = util::hex_psbt_v0(p.hex.as_deref().expect("combine input must have hex"))
+            .expect("combine input must be valid");
+        combined.combine(next).expect("combine must succeed");
+    }
+
+    assert_eq!(combined, expected_psbt);
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
@@ -355,7 +377,7 @@ fn execute_case(case: &TestCase) {
         Task::Create => run_create(&case.expected, &case.supplementary),
         Task::Update => run_update(&case.expected, &case.supplementary),
         Task::Sign => run_sign(&case.expected, &case.supplementary),
-        Task::Combine => unimplemented!("run_combine not yet implemented"),
+        Task::Combine => run_combine(&case.expected, &case.supplementary),
         Task::Finalize => unimplemented!("run_finalize not yet implemented"),
         Task::Extract => unimplemented!("run_extract not yet implemented"),
     }
@@ -498,3 +520,9 @@ fn workflow_a_step_4_signer_that_supports_sighash_all_for_p2pkh_and_p2wpkh_spend
 
 #[test]
 fn workflow_a_step_5_signer_provides_second_signature() { check_case(38); }
+ 
+#[test]
+fn workflow_a_step_6_combiner_combines() { check_case(39); }
+
+#[test]
+fn combiner_combines_keys_lexicographically() { check_case(42); }
