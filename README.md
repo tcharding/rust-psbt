@@ -9,7 +9,11 @@ This library should always compile with any combination of features on **Rust 1.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+The canonical repository is at [git.rust-bitcoin.org/rust-bitcoin/rust-psbt](https://git.rust-bitcoin.org/rust-bitcoin/rust-psbt). A read-only remote exists on [GitHub](https://github.com/rust-bitcoin/rust-psbt).
+
+We have a dedicated developer channel on IRC, #bitcoin-rust@libera.chat where you may get helpful advice if you have questions.
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
