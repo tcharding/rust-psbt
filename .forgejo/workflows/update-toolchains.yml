@@ -1,0 +1,33 @@
+name: Update Toolchains
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at 00:00 UTC.
+  workflow_dispatch:     # Allow manual triggering.
+
+permissions:
+  contents: write
+
+jobs:
+  update-toolchains:
+    runs-on: debian-trixie
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6
+      - uses: https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools/actions/setup-rbmt@2a517aea4fbd928c5f0025abf63bc2677cb25599
+      - name: Configure git
+        run: |
+          git config user.name "RBMT Bot"
+          git config user.email "bot@example.com"
+      - name: Update nightly version and commit
+        run: |
+          cargo rbmt toolchains --update-nightly
+          git add . && git commit -m "Update nightly toolchain" || echo "No nightly toolchain updates"
+      - name: Update stable version and commit
+        run: |
+          cargo rbmt toolchains --update-stable
+          git add . && git commit -m "Update stable toolchain" || echo "No stable toolchain updates"
+      - name: Create pull request using agit
+        run: |
+          git push origin HEAD:refs/for/master/update-toolchains \
+            -o title="Update toolchains" \
+            -o description="Automated update to toolchains by update-toolchains workflow." || echo "No toolchain changes to push"
