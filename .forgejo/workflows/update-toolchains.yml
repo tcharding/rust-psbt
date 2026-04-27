@@ -13,7 +13,7 @@ jobs:
     runs-on: debian-trixie
     steps:
       - uses: https://data.forgejo.org/actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6
-      - uses: https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools/actions/setup-rbmt@2a517aea4fbd928c5f0025abf63bc2677cb25599
+      - uses: https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools/actions/setup-rbmt@46d459105f770106a2812641a54bd0e24bb57395
       - name: Configure git
         run: |
           git config user.name "RBMT Bot"

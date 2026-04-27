@@ -6,16 +6,16 @@ _default:
 # Install workspace tools including rbmt.
 [group('system')]
 @tools:
-  cargo install --quiet --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev $(cat {{justfile_directory()}}/rbmt-version) cargo-rbmt
+  cargo install --quiet --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev $(cat {{justfile_directory()}}/rbmt-version) cargo-rbmt
 
 # Install workspace toolchains.
 [group('system')]
 @toolchains: tools
-  RBMT_LOG_LEVEL=quiet cargo rbmt toolchains > /dev/null
+  RBMT_LOG_LEVEL=progress cargo rbmt toolchains > /dev/null
 
 # Setup rbmt and run with given args.
 @rbmt *args: toolchains
-  RBMT_LOG_LEVEL=quiet cargo rbmt {{args}}
+  RBMT_LOG_LEVEL=progress cargo rbmt {{args}}
 
 # Update the recent and minimal lock files.
 [group('ci')]
