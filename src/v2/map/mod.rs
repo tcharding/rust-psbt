@@ -17,8 +17,18 @@ pub mod input;
 pub mod output;
 
 use crate::prelude::*;
-use crate::raw;
 use crate::serialize::Serialize;
+use crate::{raw, v0};
+
+/// Converts a v2 raw [`Key`] into the equivalent v0 raw key.
+pub(crate) fn raw_key_v2_to_v0(k: raw::Key) -> v0::bitcoin::raw::Key {
+    v0::bitcoin::raw::Key { type_value: k.type_value, key: k.key }
+}
+
+/// Converts a v2 raw [`ProprietaryKey`] into the equivalent v0 raw proprietary key.
+pub(crate) fn raw_proprietary_v2_to_v0(k: raw::ProprietaryKey) -> v0::bitcoin::raw::ProprietaryKey {
+    v0::bitcoin::raw::ProprietaryKey { prefix: k.prefix, subtype: k.subtype, key: k.key }
+}
 
 /// A trait that describes a PSBT key-value map.
 pub(crate) trait Map {
