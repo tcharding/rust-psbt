@@ -12,6 +12,16 @@ use crate::prelude::*;
 /// type can be either [`EcdsaSighashType`] or [`TapSighashType`] but it is not possible to know
 /// directly which signature hash type the user is dealing with. Therefore, the user is responsible
 /// for converting to/from [`PsbtSighashType`] from/to the desired signature hash type they need.
+///
+/// # Examples
+///
+/// ```
+/// use bitcoin::{EcdsaSighashType, TapSighashType};
+/// use psbt_v2::PsbtSighashType;
+///
+/// let ecdsa_sighash_all: PsbtSighashType = EcdsaSighashType::All.into();
+/// let tap_sighash_all: PsbtSighashType = TapSighashType::All.into();
+/// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PsbtSighashType {
