@@ -624,7 +624,7 @@ impl Psbt {
             witness_utxo
         } else if let Some(non_witness_utxo) = &input.non_witness_utxo {
             let vout = self.unsigned_tx.input[input_index].previous_output.vout;
-            &non_witness_utxo.output[vout as usize]
+            non_witness_utxo.output.get(vout as usize).ok_or(SignError::MissingSpendUtxo)?
         } else {
             return Err(SignError::MissingSpendUtxo);
         };
@@ -2490,5 +2490,51 @@ mod tests {
 
         assert_eq!(signing_keys.len(), 1);
         assert_eq!(signing_keys[&0], SigningKeys::Ecdsa(vec![pk]));
+    }
+
+    #[test]
+    fn spending_psbt_with_missing_txout() {
+        let psbt = Psbt {
+            unsigned_tx: Transaction {
+                version: transaction::Version::TWO,
+                lock_time: absolute::LockTime::from_consensus(1257139),
+                input: vec![TxIn {
+                    previous_output: OutPoint {
+                        txid: "f61b1742ca13176464adb3cb66050c00787bb3a4eead37e985f2df1e37718126"
+                            .parse()
+                            .unwrap(),
+                        vout: 0,
+                    },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
+                    witness: Witness::default(),
+                }],
+                output: vec![
+                    TxOut {
+                        value: Amount::from_sat(99_999_699),
+                        script_pubkey: ScriptBuf::from_hex(
+                            "76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac",
+                        )
+                        .unwrap(),
+                    },
+                ],
+            },
+            xpub: Default::default(),
+            version: 0,
+            proprietary: Default::default(),
+            unknown: Default::default(),
+            inputs: vec![Input {
+                non_witness_utxo: Some(Transaction {
+                    version: transaction::Version::TWO,
+                    lock_time: absolute::LockTime::ZERO,
+                    input: vec![],
+                    output: vec![], // No outputs here
+                }),
+                ..Default::default()
+            }],
+            outputs: vec![Output::default()],
+        };
+
+        assert!(matches!(psbt.spend_utxo(0), Err(SignError::MissingSpendUtxo)))
     }
 }
