@@ -62,6 +62,23 @@ impl From<TapSighashType> for PsbtSighashType {
 }
 
 impl PsbtSighashType {
+    /// Ambiguous `ALL` sighash type, may refer to either [`EcdsaSighashType::All`]
+    /// or [`TapSighashType::All`].
+    ///
+    /// This is equivalent to either `EcdsaSighashType::All.into()` or `TapSighashType::All.into()`.
+    /// For sighash types other than `ALL` use the ECDSA or Taproot sighash type directly.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bitcoin::EcdsaSighashType;
+    /// use bitcoin::TapSighashType;
+    /// use psbt_v2::PsbtSighashType;
+    /// let ecdsa_sighash_anyone_can_pay: PsbtSighashType = EcdsaSighashType::AllPlusAnyoneCanPay.into();
+    /// let tap_sighash_anyone_can_pay: PsbtSighashType = TapSighashType::AllPlusAnyoneCanPay.into();
+    /// ```
+    pub const ALL: Self = Self { inner: 0x01 };
+
     /// Returns the [`EcdsaSighashType`] if the [`PsbtSighashType`] can be
     /// converted to one.
     pub fn ecdsa_hash_ty(self) -> Result<EcdsaSighashType, NonStandardSighashTypeError> {
@@ -206,5 +223,15 @@ mod tests {
         // TODO: Add this assertion once we remove InvalidSighashTypeError
         // assert_eq!(back.ecdsa_hash_ty(), Err(NonStandardSighashTypeError(nonstd)));
         assert_eq!(back.taproot_hash_ty(), Err(InvalidSighashTypeError::Invalid(nonstd)));
+    }
+
+    #[test]
+    fn psbt_sighash_const_all() {
+        use bitcoin::EcdsaSighashType;
+        use bitcoin::TapSighashType;
+
+        assert_eq!(PsbtSighashType::ALL.to_u32(), 0x01);
+        assert_eq!(PsbtSighashType::ALL.ecdsa_hash_ty().unwrap(), EcdsaSighashType::All);
+        assert_eq!(PsbtSighashType::ALL.taproot_hash_ty().unwrap(), TapSighashType::All);
     }
 }
