@@ -715,15 +715,15 @@ impl Psbt {
     /// - [`Error::NegativeFee`] if calculated value is negative.
     /// - [`Error::FeeOverflow`] if an integer overflow occurs.
     pub fn fee(&self) -> Result<Amount, Error> {
-        let mut inputs: u64 = 0;
+        let mut inputs = Amount::ZERO;
         for utxo in self.iter_funding_utxos() {
-            inputs = inputs.checked_add(utxo?.value.to_sat()).ok_or(Error::FeeOverflow)?;
+            inputs = inputs.checked_add(utxo?.value).ok_or(Error::FeeOverflow)?;
         }
-        let mut outputs: u64 = 0;
+        let mut outputs = Amount::ZERO;
         for out in &self.unsigned_tx.output {
-            outputs = outputs.checked_add(out.value.to_sat()).ok_or(Error::FeeOverflow)?;
+            outputs = outputs.checked_add(out.value).ok_or(Error::FeeOverflow)?;
         }
-        inputs.checked_sub(outputs).map(Amount::from_sat).ok_or(Error::NegativeFee)
+        inputs.checked_sub(outputs).ok_or(Error::NegativeFee)
     }
 }
 
@@ -1403,9 +1403,11 @@ mod tests {
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
         assert_eq!(
-            psbt_with_values(5_000_000_000_000, 1000).extract_tx_fee_rate_limit().map_err(|e| match e {
-                ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                _ => panic!(""),
+            psbt_with_values(5_000_000_000_000, 1000).extract_tx_fee_rate_limit().map_err(|e| {
+                match e {
+                    ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
+                    _ => panic!(""),
+                }
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
@@ -2515,15 +2517,13 @@ mod tests {
                     sequence: Sequence::ENABLE_LOCKTIME_NO_RBF,
                     witness: Witness::default(),
                 }],
-                output: vec![
-                    TxOut {
-                        value: Amount::from_sat(99_999_699),
-                        script_pubkey: ScriptBuf::from_hex(
-                            "76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac",
-                        )
-                        .unwrap(),
-                    },
-                ],
+                output: vec![TxOut {
+                    value: Amount::from_sat(99_999_699),
+                    script_pubkey: ScriptBuf::from_hex(
+                        "76a914d0c59903c5bac2868760e90fd521a4665aa7652088ac",
+                    )
+                    .unwrap(),
+                }],
             },
             xpub: Default::default(),
             version: 0,
