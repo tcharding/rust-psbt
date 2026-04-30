@@ -102,7 +102,7 @@ impl Creator {
             inputs: Default::default(),
             outputs: Default::default(),
         };
-        Creator(psbt)
+        Self(psbt)
     }
 
     /// Sets the fallback lock time.
@@ -399,7 +399,7 @@ impl Updater {
         mut self,
         n: Sequence,
         input_index: usize,
-    ) -> Result<Updater, IndexOutOfBoundsError> {
+    ) -> Result<Self, IndexOutOfBoundsError> {
         let input = self.0.checked_input_mut(input_index)?;
         input.sequence = Some(n);
         Ok(self)
@@ -650,7 +650,7 @@ impl Psbt {
             outputs
         };
 
-        Ok(Psbt { global, inputs, outputs })
+        Ok(Self { global, inputs, outputs })
     }
 
     /// Returns an iterator for the funding UTXOs of the psbt
@@ -672,7 +672,7 @@ impl Psbt {
     /// This function is commutative `A.combine_with(B) = B.combine_with(A)`.
     ///
     /// See [`combine()`] for a non-consuming version of this function.
-    pub fn combine_with(mut self, other: Self) -> Result<Psbt, CombineError> {
+    pub fn combine_with(mut self, other: Self) -> Result<Self, CombineError> {
         self.global.combine(other.global)?;
 
         for (self_input, other_input) in self.inputs.iter_mut().zip(other.inputs) {
@@ -1145,7 +1145,7 @@ impl std::error::Error for GetKeyError {
 }
 
 impl From<bip32::Error> for GetKeyError {
-    fn from(e: bip32::Error) -> Self { GetKeyError::Bip32(e) }
+    fn from(e: bip32::Error) -> Self { Self::Bip32(e) }
 }
 
 /// The various output types supported by the Bitcoin network.
@@ -1275,7 +1275,7 @@ mod display_from_str {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             let data = BASE64_STANDARD.decode(s).map_err(ParsePsbtError::Base64Encoding)?;
-            Psbt::deserialize(&data).map_err(ParsePsbtError::PsbtEncoding)
+            Self::deserialize(&data).map_err(ParsePsbtError::PsbtEncoding)
         }
     }
 

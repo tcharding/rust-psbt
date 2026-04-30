@@ -98,7 +98,7 @@ impl Psbt {
             return Err(Error::InvalidSeparator);
         }
 
-        let mut global = Psbt::decode_global(r)?;
+        let mut global = Self::decode_global(r)?;
         global.unsigned_tx_checks()?;
 
         let inputs: Vec<Input> = {
@@ -161,7 +161,7 @@ impl Serialize for PublicKey {
 
 impl Deserialize for PublicKey {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        PublicKey::from_slice(bytes).map_err(Error::InvalidPublicKey)
+        Self::from_slice(bytes).map_err(Error::InvalidPublicKey)
     }
 }
 
@@ -171,7 +171,7 @@ impl Serialize for secp256k1::PublicKey {
 
 impl Deserialize for secp256k1::PublicKey {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        secp256k1::PublicKey::from_slice(bytes).map_err(Error::InvalidSecp256k1PublicKey)
+        Self::from_slice(bytes).map_err(Error::InvalidSecp256k1PublicKey)
     }
 }
 
@@ -194,7 +194,7 @@ impl Deserialize for ecdsa::Signature {
         // also has a field sighash_u32 (See BIP141). For example, when signing with non-standard
         // 0x05, the sighash message would have the last field as 0x05u32 while, the verification
         // would use check the signature assuming sighash_u32 as `0x01`.
-        ecdsa::Signature::from_slice(bytes).map_err(|e| match e {
+        Self::from_slice(bytes).map_err(|e| match e {
             ecdsa::Error::EmptySignature => Error::InvalidEcdsaSignature(e),
             ecdsa::Error::SighashType(err) => Error::NonStandardSighashType(err.0),
             ecdsa::Error::Secp256k1(..) => Error::InvalidEcdsaSignature(e),
@@ -255,18 +255,18 @@ impl Serialize for PsbtSighashType {
 impl Deserialize for PsbtSighashType {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
         let raw: u32 = encode::deserialize(bytes)?;
-        Ok(PsbtSighashType { inner: raw })
+        Ok(Self { inner: raw })
     }
 }
 
 // Taproot related ser/deser
 impl Serialize for XOnlyPublicKey {
-    fn serialize(&self) -> Vec<u8> { XOnlyPublicKey::serialize(self).to_vec() }
+    fn serialize(&self) -> Vec<u8> { Self::serialize(self).to_vec() }
 }
 
 impl Deserialize for XOnlyPublicKey {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        XOnlyPublicKey::from_slice(bytes).map_err(|_| Error::InvalidXOnlyPublicKey)
+        Self::from_slice(bytes).map_err(|_| Error::InvalidXOnlyPublicKey)
     }
 }
 
@@ -278,7 +278,7 @@ impl Deserialize for taproot::Signature {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
         use crate::bitcoin::taproot::SigFromSliceError::*;
 
-        taproot::Signature::from_slice(bytes).map_err(|e| match e {
+        Self::from_slice(bytes).map_err(|e| match e {
             SighashType(err) => Error::NonStandardSighashType(err.0),
             InvalidSignatureSize(_) => Error::InvalidTaprootSignature(e),
             Secp256k1(..) => Error::InvalidTaprootSignature(e),
@@ -309,7 +309,7 @@ impl Deserialize for (XOnlyPublicKey, TapLeafHash) {
 }
 
 impl Serialize for ControlBlock {
-    fn serialize(&self) -> Vec<u8> { ControlBlock::serialize(self) }
+    fn serialize(&self) -> Vec<u8> { Self::serialize(self) }
 }
 
 impl Deserialize for ControlBlock {
@@ -398,7 +398,7 @@ impl Deserialize for TapTree {
                 .add_leaf_with_ver(*depth, script, leaf_version)
                 .map_err(|_| Error::Taproot("Tree not in DFS order"))?;
         }
-        TapTree::try_from(builder).map_err(Error::TapTree)
+        Self::try_from(builder).map_err(Error::TapTree)
     }
 }
 

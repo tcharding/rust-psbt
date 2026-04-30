@@ -200,7 +200,7 @@ impl From<IndexOutOfBoundsError> for SignError {
 }
 
 impl From<sighash::TaprootError> for SignError {
-    fn from(e: sighash::TaprootError) -> Self { SignError::TaprootError(e) }
+    fn from(e: sighash::TaprootError) -> Self { Self::TaprootError(e) }
 }
 
 impl From<FundingUtxoError> for SignError {

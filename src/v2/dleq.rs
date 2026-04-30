@@ -83,7 +83,7 @@ impl DleqProof {
 }
 
 impl From<[u8; 64]> for DleqProof {
-    fn from(bytes: [u8; 64]) -> Self { DleqProof(bytes) }
+    fn from(bytes: [u8; 64]) -> Self { Self(bytes) }
 }
 
 impl AsRef<[u8]> for DleqProof {
@@ -112,7 +112,7 @@ impl Serialize for DleqProof {
 
 impl Deserialize for DleqProof {
     fn deserialize(bytes: &[u8]) -> Result<Self, crate::serialize::Error> {
-        DleqProof::try_from(bytes).map_err(|e| {
+        Self::try_from(bytes).map_err(|e| {
             crate::serialize::Error::InvalidDleqProof(InvalidLengthError {
                 got: e.got,
                 expected: e.expected,

@@ -215,13 +215,13 @@ impl std::error::Error for Error {
 }
 
 impl From<hashes::FromSliceError> for Error {
-    fn from(e: hashes::FromSliceError) -> Error { Error::InvalidHash(e) }
+    fn from(e: hashes::FromSliceError) -> Self { Self::InvalidHash(e) }
 }
 
 impl From<encode::Error> for Error {
-    fn from(e: encode::Error) -> Self { Error::ConsensusEncoding(e) }
+    fn from(e: encode::Error) -> Self { Self::ConsensusEncoding(e) }
 }
 
 impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self { Error::Io(e) }
+    fn from(e: io::Error) -> Self { Self::Io(e) }
 }

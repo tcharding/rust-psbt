@@ -82,7 +82,7 @@ pub struct Global {
 
 impl Global {
     fn new() -> Self {
-        Global {
+        Self {
             version: V2,
             // TODO: Is this default correct?
             tx_version: transaction::Version::TWO,
@@ -374,7 +374,7 @@ impl Global {
             }
         }
 
-        Ok(Global {
+        Ok(Self {
             tx_version,
             fallback_lock_time,
             input_count,

@@ -64,3 +64,4 @@ required-features = ["std"]
 
 [lints.clippy]
 redundant_clone = "warn"
+use_self = "warn"
