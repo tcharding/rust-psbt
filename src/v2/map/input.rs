@@ -1044,7 +1044,8 @@ impl fmt::Display for FinalizeError {
     }
 }
 
-#[cfg(all(feature = "std", feature = "miniscript"))]
+#[cfg(feature = "std")]
+#[cfg(feature = "miniscript")]
 impl std::error::Error for FinalizeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }

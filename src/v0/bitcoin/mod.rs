@@ -2215,7 +2215,8 @@ mod tests {
         assert_eq!(psbt1, psbt2);
     }
 
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn gen_keys() -> (PrivateKey, PublicKey, Secp256k1<bitcoin::secp256k1::All>) {
         use bitcoin::secp256k1::rand::thread_rng;
 
@@ -2229,7 +2230,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn get_key_btree_map() {
         let (priv_key, pk, secp) = gen_keys();
 
@@ -2241,7 +2243,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn pubkey_map_get_key_negates_odd_parity_keys() {
         let (mut priv_key, mut pk, secp) = gen_keys();
         let (xonly, parity) = pk.inner.x_only_public_key();
@@ -2384,7 +2387,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn hashmap_can_sign_taproot() {
         let (priv_key, pk, secp) = gen_keys();
         let internal_key: XOnlyPublicKey = pk.inner.into();
@@ -2417,7 +2421,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn xonly_hashmap_can_sign_taproot() {
         let (priv_key, pk, secp) = gen_keys();
         let internal_key: XOnlyPublicKey = pk.inner.into();
@@ -2450,7 +2455,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "std"))]
+    #[cfg(feature = "rand")]
+    #[cfg(feature = "std")]
     fn sign_psbt() {
         let unsigned_tx = Transaction {
             version: transaction::Version::TWO,

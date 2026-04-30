@@ -2,6 +2,20 @@
 
 We generally follow the contribution guidelines of [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin/blob/master/CONTRIBUTING.md).
 
+## Policies
+
+- Use stacked attributes over `#[cfg(all(...))]` when a simple conjunction applies to the same item.
+
+    Good:
+    ```rust
+    #[cfg(feature = "alloc")]
+    #[cfg(feature = "hex")]
+    ```
+    Bad:
+    ```rust
+    #[cfg(all(feature = "alloc", feature = "hex"))]
+    ```
+
 ## Development Workflow
 
 We use [`just`](https://just.systems/man/en/) for running development workflow commands. Run `just` from your shell to see the list of available commands.
