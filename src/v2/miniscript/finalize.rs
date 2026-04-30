@@ -76,7 +76,7 @@ impl Finalizer {
         let allow_mall = true; // TODO: Add mall and no-mall versions.
         let (script_sig, witness) = self.final_script_sig_and_witness(input, allow_mall)?;
 
-        Ok(input.finalize(script_sig, witness)?.clone())
+        input.finalize(script_sig, witness).map_err(From::from)
     }
 
     /// Returns the final script_sig and final witness for this input.

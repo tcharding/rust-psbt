@@ -1396,21 +1396,21 @@ mod tests {
     fn psbt_high_fee_checks() {
         let psbt = psbt_with_values(5_000_000_000_000, 1000);
         assert_eq!(
-            psbt.clone().extract_tx().map_err(|e| match e {
+            psbt_with_values(5_000_000_000_000, 1000).extract_tx().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
                 _ => panic!(""),
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
         assert_eq!(
-            psbt.clone().extract_tx_fee_rate_limit().map_err(|e| match e {
+            psbt_with_values(5_000_000_000_000, 1000).extract_tx_fee_rate_limit().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
                 _ => panic!(""),
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
         assert_eq!(
-            psbt.clone()
+            psbt_with_values(5_000_000_000_000, 1000)
                 .extract_tx_with_fee_rate_limit(FeeRate::from_sat_per_kwu(15060240960842))
                 .map_err(|e| match e {
                     ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,

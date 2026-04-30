@@ -207,7 +207,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             if witness_script.to_p2wsh() != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
-                    p2wsh_expected: script_pubkey.clone(),
+                    p2wsh_expected: script_pubkey,
                 });
             }
             let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
@@ -225,7 +225,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 if redeem_script.to_p2sh() != *script_pubkey {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
-                        p2sh_expected: script_pubkey.clone(),
+                        p2sh_expected: script_pubkey,
                     });
                 }
                 if redeem_script.is_p2wsh() {
