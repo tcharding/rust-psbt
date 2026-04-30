@@ -210,7 +210,7 @@ impl Serialize for KeySource {
 
         rv.append(&mut self.0.to_bytes().to_vec());
 
-        for cnum in self.1.into_iter() {
+        for cnum in &self.1 {
             rv.append(&mut serialize(&u32::from(*cnum)))
         }
 
