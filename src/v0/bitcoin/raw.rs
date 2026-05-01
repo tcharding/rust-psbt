@@ -220,11 +220,7 @@ impl<'a> arbitrary::Arbitrary<'a> for ProprietaryKey {
         /// [serialization limit]: https://github.com/bitcoin/bitcoin/blob/a7c29df0e5ace05b6186612671d6103c112ec922/src/serialize.h#L32
         const MAX_COMPACT_SIZE: u64 = 0x0200_0000;
         let subtype = u.int_in_range(0..=MAX_COMPACT_SIZE)?;
-        Ok(Self {
-            prefix: Vec::<u8>::arbitrary(u)?,
-            subtype,
-            key: Vec::<u8>::arbitrary(u)?,
-        })
+        Ok(Self { prefix: Vec::<u8>::arbitrary(u)?, subtype, key: Vec::<u8>::arbitrary(u)? })
     }
 }
 

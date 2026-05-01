@@ -417,5 +417,3 @@ impl Map for Input {
 }
 
 impl_psbtmap_ser_de_serialize!(Input);
-
-

@@ -633,8 +633,7 @@ impl fmt::Display for InputError {
                 pubkey, got, required
             ),
             Self::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
-            Self::NonStandardSighashType(ref e) =>
-                write!(f, "Non-standard sighash type {}", e),
+            Self::NonStandardSighashType(ref e) => write!(f, "Non-standard sighash type {}", e),
         }
     }
 }
