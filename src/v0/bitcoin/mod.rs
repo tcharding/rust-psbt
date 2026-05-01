@@ -5,7 +5,6 @@
 //! Implementation of BIP174 Partially Signed Bitcoin Transaction Format as
 //! defined at <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! except we define PSBTs containing non-standard sighash types as invalid.
-//!
 
 #[macro_use]
 mod macros;
@@ -747,6 +746,7 @@ pub trait GetKey {
     /// Attempts to get the private key for `key_request`.
     ///
     /// # Returns
+    ///
     /// - `Some(key)` if the key is found.
     /// - `None` if the key was not found but no error was encountered.
     /// - `Err` if an error was encountered while looking for the key.
