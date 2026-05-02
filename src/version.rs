@@ -31,7 +31,7 @@ impl Version {
 }
 
 impl From<Version> for u32 {
-    fn from(v: Version) -> u32 { v.to_u32() }
+    fn from(v: Version) -> Self { v.to_u32() }
 }
 
 impl TryFrom<u32> for Version {
@@ -39,8 +39,8 @@ impl TryFrom<u32> for Version {
 
     fn try_from(n: u32) -> Result<Self, Self::Error> {
         match n {
-            0 => Ok(Version::ZERO),
-            2 => Ok(Version::TWO),
+            0 => Ok(Self::ZERO),
+            2 => Ok(Self::TWO),
             n => Err(UnsupportedVersionError(n)),
         }
     }
@@ -53,7 +53,7 @@ impl Serialize for Version {
 impl Deserialize for Version {
     fn deserialize(bytes: &[u8]) -> Result<Self, serialize::Error> {
         let n: u32 = consensus::deserialize(bytes)?;
-        let version = Version::try_from(n)?;
+        let version = Self::try_from(n)?;
         Ok(version)
     }
 }

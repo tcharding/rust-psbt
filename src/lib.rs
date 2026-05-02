@@ -62,16 +62,20 @@ pub const V2: Version = Version::TWO;
 mod prelude {
     #![allow(unused_imports)]
 
-    #[cfg(all(not(feature = "std"), not(test)))]
+    #[cfg(not(feature = "std"))]
+    #[cfg(not(test))]
     pub use alloc::{string::{String, ToString}, vec::Vec, boxed::Box, borrow::{Borrow, BorrowMut, Cow, ToOwned}, slice, rc};
 
-    #[cfg(all(not(feature = "std"), not(test), target_has_atomic = "ptr"))]
+    #[cfg(not(feature = "std"))]
+    #[cfg(not(test))]
+    #[cfg(target_has_atomic = "ptr")]
     pub use alloc::sync;
 
     #[cfg(any(feature = "std", test))]
     pub use std::{string::{String, ToString}, vec::Vec, boxed::Box, borrow::{Borrow, BorrowMut, Cow, ToOwned}, slice, rc, sync};
 
-    #[cfg(all(not(feature = "std"), not(test)))]
+    #[cfg(not(feature = "std"))]
+    #[cfg(not(test))]
     pub use alloc::collections::{BTreeMap, BTreeSet, btree_map, BinaryHeap};
 
     #[cfg(any(feature = "std", test))]

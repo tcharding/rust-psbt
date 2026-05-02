@@ -76,7 +76,7 @@ impl Finalizer {
         let allow_mall = true; // TODO: Add mall and no-mall versions.
         let (script_sig, witness) = self.final_script_sig_and_witness(input, allow_mall)?;
 
-        Ok(input.finalize(script_sig, witness)?.clone())
+        input.finalize(script_sig, witness).map_err(From::from)
     }
 
     /// Returns the final script_sig and final witness for this input.
@@ -596,45 +596,44 @@ impl std::error::Error for InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            InputError::InvalidSignature { ref pubkey, ref sig } => {
+            Self::InvalidSignature { ref pubkey, ref sig } => {
                 write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
             }
-            InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
-            InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
-            InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
-            InputError::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
+            Self::KeyErr(ref e) => write!(f, "Key Err: {}", e),
+            Self::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
+            Self::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
+            Self::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
                 f,
                 "Redeem script {} does not match the p2sh script {}",
                 redeem, p2sh_expected
             ),
-            InputError::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
+            Self::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
                 f,
                 "Witness script {} does not match the p2wsh script {}",
                 witness_script, p2wsh_expected
             ),
-            InputError::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
-            InputError::MissingWitness => write!(f, "PSBT is missing witness"),
-            InputError::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
-            InputError::MissingUtxo => {
+            Self::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
+            Self::MissingWitness => write!(f, "PSBT is missing witness"),
+            Self::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
+            Self::MissingUtxo => {
                 write!(f, "PSBT is missing both witness and non-witness UTXO")
             }
-            InputError::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
-            InputError::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
-            InputError::NonEmptyRedeemScript => {
+            Self::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
+            Self::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
+            Self::NonEmptyRedeemScript => {
                 write!(f, "PSBT has non-empty redeem script at for legacy transactions")
             }
-            InputError::NonEmptyWitnessScript => {
+            Self::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
-            InputError::WrongSighashFlag { required, got, pubkey } => write!(
+            Self::WrongSighashFlag { required, got, pubkey } => write!(
                 f,
                 "PSBT: signature with key {:?} had \
                  sighashflag {:?} rather than required {:?}",
                 pubkey, got, required
             ),
-            InputError::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
-            InputError::NonStandardSighashType(ref e) =>
-                write!(f, "Non-standard sighash type {}", e),
+            Self::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
+            Self::NonStandardSighashType(ref e) => write!(f, "Non-standard sighash type {}", e),
         }
     }
 }

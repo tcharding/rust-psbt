@@ -411,7 +411,7 @@ fn combine_lexicographically() {
     let v = Vec::from_hex(psbt_2_hex).unwrap();
     let psbt_2 = Psbt::deserialize(&v).expect("failed to deserialize psbt 2");
 
-    let mut got = psbt_1.clone();
+    let mut got = psbt_1;
     got.combine(psbt_2).expect("failed to combine PSBTs");
 
     assert_eq!(got, expected_psbt);

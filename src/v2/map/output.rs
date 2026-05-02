@@ -68,7 +68,7 @@ pub struct Output {
 impl Output {
     /// Creates a new [`Output`] using `utxo`.
     pub fn new(utxo: TxOut) -> Self {
-        Output {
+        Self {
             amount: utxo.value,
             script_pubkey: utxo.script_pubkey,
             redeem_script: None,
@@ -345,7 +345,7 @@ pub struct OutputBuilder(Output);
 
 impl OutputBuilder {
     /// Creates a new builder that can be used to build an [`Output`] around `utxo`.
-    pub fn new(utxo: TxOut) -> Self { OutputBuilder(Output::new(utxo)) }
+    pub fn new(utxo: TxOut) -> Self { Self(Output::new(utxo)) }
 
     /// Build the [`Output`].
     pub fn build(self) -> Output { self.0 }

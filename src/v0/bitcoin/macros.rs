@@ -115,6 +115,30 @@ macro_rules! impl_psbt_insert_pair {
 }
 
 #[rustfmt::skip]
+macro_rules! psbt_insert_hash_pair {
+    (&mut $slf:ident.$map:ident <= $raw_key:ident|$raw_value:ident|$hash:path|$hash_type_error:path) => {
+        if $raw_key.key.is_empty() {
+            return Err($crate::v0::bitcoin::Error::InvalidKey($raw_key));
+        }
+        let key_val: $hash = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_key.key)?;
+        match $slf.$map.entry(key_val) {
+            $crate::prelude::btree_map::Entry::Vacant(empty_key) => {
+                let val: $crate::prelude::Vec<u8> = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_value)?;
+                if <$hash as $crate::bitcoin::hashes::Hash>::hash(&val) != key_val {
+                    return Err($crate::v0::bitcoin::Error::InvalidPreimageHashPair {
+                        preimage: val.into_boxed_slice(),
+                        hash: $crate::prelude::Box::from(key_val.as_ref()),
+                        hash_type: $hash_type_error,
+                    });
+                }
+                empty_key.insert(val);
+            }
+            $crate::prelude::btree_map::Entry::Occupied(_) => return Err($crate::v0::bitcoin::Error::DuplicateKey($raw_key)),
+        }
+    }
+}
+
+#[rustfmt::skip]
 macro_rules! impl_psbt_get_pair {
     ($rv:ident.push($slf:ident.$unkeyed_name:ident, $unkeyed_typeval:ident)) => {
         if let Some(ref $unkeyed_name) = $slf.$unkeyed_name {

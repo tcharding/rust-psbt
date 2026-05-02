@@ -209,7 +209,7 @@ impl Entity {
     /// Creates a new entity with random keys.
     pub fn new_random() -> Self {
         let (sk, pk) = random_keys();
-        Entity { sk, pk }
+        Self { sk, pk }
     }
 
     /// Returns the private key for this entity.

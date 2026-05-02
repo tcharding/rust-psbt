@@ -141,7 +141,7 @@ pub struct Input {
 impl Input {
     /// Creates a new `Input` that spends the `previous_output`.
     pub fn new(previous_output: &OutPoint) -> Self {
-        Input {
+        Self {
             previous_txid: previous_output.txid,
             spent_output_index: previous_output.vout,
             sequence: None,
@@ -216,10 +216,10 @@ impl Input {
         &self,
         final_script_sig: ScriptBuf,
         final_script_witness: Witness,
-    ) -> Result<Input, FinalizeError> {
+    ) -> Result<Self, FinalizeError> {
         debug_assert!(self.has_funding_utxo());
 
-        let mut ret = Input {
+        let mut ret = Self {
             previous_txid: self.previous_txid,
             spent_output_index: self.spent_output_index,
             non_witness_utxo: self.non_witness_utxo.clone(),
@@ -1044,7 +1044,8 @@ impl fmt::Display for FinalizeError {
     }
 }
 
-#[cfg(all(feature = "std", feature = "miniscript"))]
+#[cfg(feature = "std")]
+#[cfg(feature = "miniscript")]
 impl std::error::Error for FinalizeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
