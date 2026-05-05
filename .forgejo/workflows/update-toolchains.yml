@@ -8,11 +8,20 @@ on:
 permissions:
   contents: write
 
+# Use a custom rustup home on the same filesystem to avoid cross-device link errors
+# in container environments with layered filesystems (e.g., Docker/overlayfs).
+env:
+  RUSTUP_HOME: /home/ci/tmp
+
 jobs:
   update-toolchains:
     runs-on: debian-trixie
     steps:
       - uses: https://data.forgejo.org/actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6
+        with:
+          # Use a token associated with a user account, they open the pull request.
+          # The ephemeral workflow token is sometimes user-less.
+          token: ${{ secrets.RBMT }}
       - uses: https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools/actions/setup-rbmt@46d459105f770106a2812641a54bd0e24bb57395
       - name: Configure git
         run: |
@@ -21,13 +30,25 @@ jobs:
       - name: Update nightly version and commit
         run: |
           cargo rbmt toolchains --update-nightly
-          git add . && git commit -m "Update nightly toolchain" || echo "No nightly toolchain updates"
+          if git add . && git commit -m "Update nightly toolchain"; then
+            echo "TOOLCHAIN_UPDATE=true" >> $FORGEJO_ENV
+          fi
+      - name: Update fuzz nightly version and commit
+        working-directory: fuzz
+        run: |
+          cargo rbmt toolchains --update-nightly
+          if git add . && git commit -m "Update nightly toolchain"; then
+            echo "TOOLCHAIN_UPDATE=true" >> $FORGEJO_ENV
+          fi
       - name: Update stable version and commit
         run: |
           cargo rbmt toolchains --update-stable
-          git add . && git commit -m "Update stable toolchain" || echo "No stable toolchain updates"
+          if git add . && git commit -m "Update stable toolchain"; then
+            echo "TOOLCHAIN_UPDATE=true" >> $FORGEJO_ENV
+          fi
       - name: Create pull request using agit
+        if: ${{ env.TOOLCHAIN_UPDATE == 'true' }}
         run: |
           git push origin HEAD:refs/for/master/update-toolchains \
             -o title="Update toolchains" \
-            -o description="Automated update to toolchains by update-toolchains workflow." || echo "No toolchain changes to push"
+            -o description="Automated update to toolchains by update-toolchains workflow."
