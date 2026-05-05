@@ -219,7 +219,7 @@ impl Global {
                     },
                 PSBT_GLOBAL_INPUT_COUNT => {
                     if pair.key.key.is_empty() {
-                        if output_count.is_none() {
+                        if input_count.is_none() {
                             // TODO: Do we need to check the length for a VarInt?
                             // let vlen: usize = pair.value.len();
                             let mut decoder = Cursor::new(pair.value);
