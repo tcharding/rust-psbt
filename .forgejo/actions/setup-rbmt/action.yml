@@ -1,0 +1,15 @@
+name: Setup RBMT
+description: Install cargo-rbmt and toolchains for workspace
+
+runs:
+  using: composite
+  steps:
+    - name: Install cargo-rbmt
+      shell: bash
+      run: |
+        RBMT_VERSION=$(cat rbmt-version)
+        cargo install --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev "$RBMT_VERSION" cargo-rbmt
+
+    - name: Install toolchains
+      shell: bash
+      run: cargo rbmt toolchains

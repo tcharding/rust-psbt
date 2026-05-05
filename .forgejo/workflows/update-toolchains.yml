@@ -22,7 +22,7 @@ jobs:
           # Use a token associated with a user account, they open the pull request.
           # The ephemeral workflow token is sometimes user-less.
           token: ${{ secrets.RBMT }}
-      - uses: https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools/actions/setup-rbmt@46d459105f770106a2812641a54bd0e24bb57395
+      - uses: ./.forgejo/actions/setup-rbmt
       - name: Configure git
         run: |
           git config user.name "RBMT Bot"
