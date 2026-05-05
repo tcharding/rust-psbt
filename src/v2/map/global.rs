@@ -663,7 +663,7 @@ impl fmt::Display for InsertPairError {
                 write!(f, "PSBT_GLOBAL_VERSION: PSBT v2 expects the version to be 2, found: {}", v)
             }
             Self::XpubInvalidFingerprint => {
-                write!(f, "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints")
+                write!(f, "PSBT_GLOBAL_XPUB: xpub fingerprint must be 4 bytes")
             }
             Self::XpubInvalidPath(len) => write!(
                 f,
