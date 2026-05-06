@@ -7,14 +7,14 @@
 // We depend upon and import directly from bitcoin because this module is not concerned with PSBT
 // i.e., it is lower down the stack than the psbt_v2 crate.
 use psbt_v2::bitcoin::{Address, Amount, Transaction, Txid};
-use bitcoind::{AddressType, Node, vtype::GetBlockchainInfo};
+use bitcoind::{AddressType, BitcoinD, vtype::GetBlockchainInfo};
 
 const FIFTY_BTC: Amount = Amount::from_int_btc(50);
 
 /// A custom bitcoind client.
 pub struct Client {
     /// Handle for the regtest `bitcoind` instance.
-    bitcoind: Node,
+    bitcoind: BitcoinD,
     /// This is public so we don't have to handle the complexity of know if send/receives are
     /// to/from the Core controlled wallet or somewhere else. User is required to manage this.
     pub balance: BalanceTracker,
@@ -24,7 +24,7 @@ impl Client {
     /// Creates a new [`Client`].
     pub fn new() -> anyhow::Result<Self> {
         let exe_path = bitcoind::exe_path()?;
-        let bitcoind = Node::new(exe_path)?;
+        let bitcoind = BitcoinD::new(exe_path)?;
         let balance = BalanceTracker::zero();
 
         let client = Client { bitcoind, balance };

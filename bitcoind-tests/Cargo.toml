@@ -8,26 +8,14 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-bitcoind = { package = "corepc-node", version = "0.10.1", features = ["download"] }
+bitcoind = { version = "0.38.0", features = ["download"] }
 psbt-v2 = { path = "..", features = ["std", "miniscript", "rand"] }
 
 [dev-dependencies]
 
 [features]
-# Bitcoin Core version features for integration testing.
-# corepc-node provides one feature per major version (latest patch release).
-# Bitcoin Core does not support PSBT v2 (BIP-370) yet.
-"29_0" = ["bitcoind/29_0"]
-"28_2" = ["bitcoind/28_2"]
-"27_2" = ["bitcoind/27_2"]
-"26_2" = ["bitcoind/26_2"]
-"25_2" = ["bitcoind/25_2"]
-"24_2" = ["bitcoind/24_2"]
-"23_2" = ["bitcoind/23_2"]
-"22_1" = ["bitcoind/22_1"]
-"0_21_2" = ["bitcoind/0_21_2"]
-"0_20_2" = ["bitcoind/0_20_2"]
-"0_19_1" = ["bitcoind/0_19_1"]
-"0_18_1" = ["bitcoind/0_18_1"]
+# Bitcoin Core version range integration testing.
 # Starting from 0.17.0 because that's when PSBT v0 (BIP-174) was first introduced.
+# v30.2 is latest, Bitcoin Core will support PSBT v2 (BIP-370) soon, possible v32.
+"30_2" = ["bitcoind/30_2"]
 "0_17_2" = ["bitcoind/0_17_2"]
