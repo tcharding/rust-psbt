@@ -613,43 +613,43 @@ mod bip174 {
         fn duplicate_keys_in_input() { check_case(4); }
 
         #[test]
-        fn invalid_global_transaction() { check_case(5); }
+        fn global_transaction() { check_case(5); }
 
         #[test]
-        fn invalid_input_witness_utxo() { check_case(6); }
+        fn input_witness_utxo() { check_case(6); }
 
         #[test]
-        fn invalid_pubkey_length_for_input_partial_signature() { check_case(7); }
+        fn pubkey_length_for_input_partial_signature() { check_case(7); }
 
         #[test]
-        fn invalid_redeemscript() { check_case(8); }
+        fn redeemscript() { check_case(8); }
 
         #[test]
-        fn invalid_witness_script() { check_case(9); }
+        fn witness_script() { check_case(9); }
 
         #[test]
-        fn invalid_pubkey_in_input_bip_32_derivation_paths() { check_case(10); }
+        fn pubkey_in_input_bip_32_derivation_paths() { check_case(10); }
 
         #[test]
-        fn invalid_non_witness_utxo() { check_case(11); }
+        fn non_witness_utxo() { check_case(11); }
 
         #[test]
-        fn invalid_final_scriptsig() { check_case(12); }
+        fn final_scriptsig() { check_case(12); }
 
         #[test]
-        fn invalid_final_script_witness() { check_case(13); }
+        fn final_script_witness() { check_case(13); }
 
         #[test]
-        fn invalid_pubkey_in_output_bip_32_derivation_paths() { check_case(14); }
+        fn pubkey_in_output_bip_32_derivation_paths() { check_case(14); }
 
         #[test]
-        fn invalid_input_sighash_type() { check_case(15); }
+        fn input_sighash_type() { check_case(15); }
 
         #[test]
-        fn invalid_output_redeemscript() { check_case(16); }
+        fn output_redeemscript() { check_case(16); }
 
         #[test]
-        fn invalid_output_witness_script() { check_case(17); }
+        fn output_witness_script() { check_case(17); }
 
         #[test]
         fn unsigned_tx_serialized_with_witness_serialization_format() { check_case(18); }
