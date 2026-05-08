@@ -2,7 +2,7 @@
 //!
 //! Data driven BIP 174 test vectors executor.
 //!
-//! Parses `bip174_vectors.json` and runs each case through a single dispatcher
+//! Parses `bip174.json` and runs each case through a single dispatcher
 //! keyed on the `task` field. One `#[test]` per vector, named after its
 //! `description`, so `cargo test` output maps 1-to-1 with the JSON document.
 
@@ -586,8 +586,8 @@ fn execute_case(case: &TestCase) {
 fn check_case(idx: usize) {
     static VECTORS: OnceLock<TestFile> = OnceLock::new();
     let file = VECTORS.get_or_init(|| {
-        let data: &str = include_str!("data/bip174_vectors.json");
-        serde_json::from_str(data).expect("failed to deserialise bip174_vectors.json")
+        let data: &str = include_str!("data/bip174.json");
+        serde_json::from_str(data).expect("failed to deserialise bip174.json")
     });
     execute_case(&file.cases[idx]);
 }
