@@ -1,0 +1,34 @@
+[package]
+name = "rust-psbt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+rust-version = "1.74.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[package.metadata.rbmt.tools]
+cargo-fuzz = "0.13.1"
+
+[package.metadata.rbmt.toolchains]
+nightly = "nightly-2026-04-04"
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.4" }
+psbt-v2 = { path = "..", features = ["arbitrary"] }
+
+[[bin]]
+name = "arbitrary_psbt"
+path = "fuzz_targets/arbitrary_psbt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_psbt"
+path = "fuzz_targets/deserialize_psbt.rs"
+test = false
+doc = false
+bench = false
