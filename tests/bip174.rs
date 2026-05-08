@@ -722,27 +722,27 @@ mod bip174 {
     mod workflow {
         use super::check_case;
         #[test]
-        fn workflow_a_step_1_creator_creates_psbt() { check_case(34); }
+        fn step_1_creator_creates_psbt() { check_case(34); }
 
         #[test]
-        fn workflow_a_step_2_updater_updates_keys() { check_case(35); }
+        fn step_2_updater_updates_keys() { check_case(35); }
 
         #[test]
-        fn workflow_a_step_3_updater_updates_sighash() { check_case(36); }
+        fn step_3_updater_updates_sighash() { check_case(36); }
 
         #[test]
-        fn workflow_a_step_4_signer_that_supports_sighash_all_for_p2pkh_and_p2wpkh_spends_and_uses_rfc6979_for_nonce_generation_provides_first_signature(
+        fn step_4_signer_that_supports_sighash_all_for_p2pkh_and_p2wpkh_spends_and_uses_rfc6979_for_nonce_generation_provides_first_signature(
         ) {
             check_case(37);
         }
 
         #[test]
-        fn workflow_a_step_5_signer_provides_second_signature() { check_case(38); }
+        fn step_5_signer_provides_second_signature() { check_case(38); }
 
         #[test]
-        fn workflow_a_step_6_combiner_combines() { check_case(39); }
+        fn step_6_combiner_combines() { check_case(39); }
 
         #[test]
-        fn workflow_a_step_7_input_finalizer_finalizes() { check_case(40); }
+        fn step_7_input_finalizer_finalizes() { check_case(40); }
     }
 }
