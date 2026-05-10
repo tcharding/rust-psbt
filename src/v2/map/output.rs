@@ -19,8 +19,8 @@ use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
 use crate::error::write_err;
 use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
-use crate::v2::map::Map;
-use crate::{raw, serialize};
+use crate::v2::map::{raw_key_v2_to_v0, raw_proprietary_v2_to_v0, Map};
+use crate::{raw, serialize, v0};
 
 /// A key-value map for an output of the corresponding index in the unsigned
 /// transaction.
@@ -89,19 +89,23 @@ impl Output {
     /// Returns all key-value pairs for this output map in serialization order.
     pub fn pairs(&self) -> Vec<raw::Pair> { Map::get_pairs(self) }
 
-    // /// Converts this `Output` to a `v0::Output`.
-    // pub(crate) fn into_v0(self) -> v0::Output {
-    //     v0::Output {
-    //         redeem_script: self.redeem_script,
-    //         witness_script: self.witness_script,
-    //         bip32_derivation: self.bip32_derivations,
-    //         tap_internal_key: self.tap_internal_key,
-    //         tap_tree: self.tap_tree,
-    //         tap_key_origins: self.tap_key_origins,
-    //         proprietary: self.proprietaries,
-    //         unknown: self.unknowns,
-    //     }
-    // }
+    /// Converts this `Output` to a `v0::Output`.
+    pub(crate) fn into_v0(self) -> v0::Output {
+        v0::Output {
+            redeem_script: self.redeem_script,
+            witness_script: self.witness_script,
+            bip32_derivation: self.bip32_derivations,
+            tap_internal_key: self.tap_internal_key,
+            tap_tree: self.tap_tree,
+            tap_key_origins: self.tap_key_origins,
+            proprietary: self
+                .proprietaries
+                .into_iter()
+                .map(|(k, v)| (raw_proprietary_v2_to_v0(k), v))
+                .collect(),
+            unknown: self.unknowns.into_iter().map(|(k, v)| (raw_key_v2_to_v0(k), v)).collect(),
+        }
+    }
 
     /// Creates the [`TxOut`] associated with this `Output`.
     pub(crate) fn tx_out(&self) -> TxOut {
