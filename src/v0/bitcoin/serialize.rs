@@ -91,9 +91,9 @@ impl Psbt {
             return Err(Error::InvalidMagic);
         }
 
-        const PSBT_SERPARATOR: u8 = 0xff_u8;
+        const PSBT_SEPARATOR: u8 = 0xff_u8;
         let separator: u8 = Decodable::consensus_decode(r)?;
-        if separator != PSBT_SERPARATOR {
+        if separator != PSBT_SEPARATOR {
             return Err(Error::InvalidSeparator);
         }
 
@@ -192,7 +192,7 @@ impl Deserialize for ecdsa::Signature {
         // 2) This would cause to have invalid signatures because the sighash message
         // also has a field sighash_u32 (See BIP141). For example, when signing with non-standard
         // 0x05, the sighash message would have the last field as 0x05u32 while, the verification
-        // would use check the signature assuming sighash_u32 as `0x01`.
+        // would check the signature assuming sighash_u32 as `0x01`.
         Self::from_slice(bytes).map_err(|e| match e {
             ecdsa::Error::EmptySignature => Error::InvalidEcdsaSignature(e),
             ecdsa::Error::SighashType(err) => Error::NonStandardSighashType(err.0),

@@ -646,8 +646,8 @@ impl Psbt {
             return Err(InvalidMagic);
         }
 
-        const PSBT_SERPARATOR: u8 = 0xff_u8;
-        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
+        const PSBT_SEPARATOR: u8 = 0xff_u8;
+        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
             return Err(InvalidSeparator);
         }
 
