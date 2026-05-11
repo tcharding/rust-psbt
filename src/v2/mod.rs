@@ -612,10 +612,10 @@ impl Psbt {
     /// Returns true if all inputs for this PSBT have been finalized.
     pub fn is_finalized(&self) -> bool { self.inputs.iter().all(|input| input.is_finalized()) }
 
-    /// Serialize a value as bytes in hex.
+    /// Serializes a value as bytes in hex.
     pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
 
-    /// Serialize as raw binary data
+    /// Serializes as raw binary data
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -637,7 +637,7 @@ impl Psbt {
         buf
     }
 
-    /// Deserialize a value from raw binary data.
+    /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
         use DeserializeError::*;
 

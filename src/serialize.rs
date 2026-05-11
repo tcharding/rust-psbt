@@ -31,13 +31,13 @@ use crate::version;
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
 pub(crate) trait Serialize {
-    /// Serialize a value as raw data.
+    /// Serializes a value as raw data.
     fn serialize(&self) -> Vec<u8>;
 }
 
 /// A trait for deserializing a value from raw data in PSBT key-value maps.
 pub(crate) trait Deserialize: Sized {
-    /// Deserialize a value from raw data.
+    /// Deserializes a value from raw data.
     fn deserialize(bytes: &[u8]) -> Result<Self, Error>;
 }
 
