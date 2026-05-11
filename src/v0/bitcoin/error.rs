@@ -93,7 +93,7 @@ pub enum Error {
     InvalidLeafVersion,
     /// Parsing error indicating a taproot error
     Taproot(&'static str),
-    /// Taproot tree deserilaization error
+    /// Taproot tree deserialization error
     TapTree(bitcoin::taproot::IncompleteBuilderError),
     /// Error related to an xpub key
     XPubKey(&'static str),

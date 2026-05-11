@@ -342,7 +342,7 @@ impl Serialize for TapTree {
             // safe to cast from usize to u8
             buf.push(leaf_info.merkle_branch().len() as u8);
             buf.push(leaf_info.version().to_consensus());
-            leaf_info.script().consensus_encode(&mut buf).expect("Vecs dont err");
+            leaf_info.script().consensus_encode(&mut buf).expect("Vecs don't err");
         }
         buf
     }
@@ -406,7 +406,7 @@ pub enum Error {
     InvalidLeafVersion,
     /// Parsing error indicating a taproot error
     Taproot(&'static str),
-    /// Taproot tree deserilaization error
+    /// Taproot tree deserialization error
     TapTree(taproot::IncompleteBuilderError),
     /// Error related to PSBT version
     /// PSBT data is not consumed entirely
