@@ -1060,16 +1060,16 @@ impl std::error::Error for FinalizeError {
 pub enum CombineError {
     /// The previous txids are not the same.
     PreviousTxidMismatch {
-        /// Attempted to combine a PBST with `this` previous txid.
+        /// Attempted to combine a PSBT with `this` previous txid.
         this: Txid,
-        /// Into a PBST with `that` previous txid.
+        /// Into a PSBT with `that` previous txid.
         that: Txid,
     },
     /// The spent output indecies are not the same.
     SpentOutputIndexMismatch {
-        /// Attempted to combine a PBST with `this` spent output index.
+        /// Attempted to combine a PSBT with `this` spent output index.
         this: u32,
-        /// Into a PBST with `that` spent output index.
+        /// Into a PSBT with `that` spent output index.
         that: u32,
     },
 }

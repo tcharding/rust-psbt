@@ -145,7 +145,7 @@ impl Global {
 
     pub(crate) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // TODO: Consider adding protection against memory exhaustion here by defining a maximum
-        // PBST size and using `take` as we do in rust-bitcoin consensus decoding.
+        // PSBT size and using `take` as we do in rust-bitcoin consensus decoding.
         let mut version: Option<Version> = None;
         let mut tx_version: Option<transaction::Version> = None;
         let mut fallback_lock_time: Option<absolute::LockTime> = None;
@@ -735,16 +735,16 @@ impl From<bip32::Error> for InsertPairError {
 pub enum CombineError {
     /// The version numbers are not the same.
     VersionMismatch {
-        /// Attempted to combine a PBST with `this` version.
+        /// Attempted to combine a PSBT with `this` version.
         this: Version,
-        /// Into a PBST with `that` version.
+        /// Into a PSBT with `that` version.
         that: Version,
     },
     /// The transaction version numbers are not the same.
     TxVersionMismatch {
-        /// Attempted to combine a PBST with `this` tx version.
+        /// Attempted to combine a PSBT with `this` tx version.
         this: transaction::Version,
-        /// Into a PBST with `that` tx version.
+        /// Into a PSBT with `that` tx version.
         that: transaction::Version,
     },
     /// Xpubs have inconsistent key sources.

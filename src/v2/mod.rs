@@ -933,7 +933,7 @@ impl Psbt {
         Ok(output_type.signing_algorithm())
     }
 
-    /// Returns the [`OutputType`] of the spend utxo for this PBST's input at `input_index`.
+    /// Returns the [`OutputType`] of the spend utxo for this PSBT's input at `input_index`.
     fn output_type(&self, input_index: usize) -> Result<OutputType, SignError> {
         let input = self.checked_input(input_index)?;
         let utxo = input.funding_utxo()?;
