@@ -1128,18 +1128,16 @@ impl From<core::convert::Infallible> for ExtractTxError {
 
 impl fmt::Display for ExtractTxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { fee_rate, .. } =>
-                write!(f, "An absurdly high fee rate of {}", fee_rate),
-            MissingInputValue { .. } => write!(
+        match self {
+            Self::AbsurdFeeRate { fee_rate, .. } =>
+                write!(f, "an absurdly high fee rate of {}", fee_rate),
+            Self::MissingInputValue { .. } => write!(
                 f,
-                "One of the inputs lacked value information (witness_utxo or non_witness_utxo)"
+                "one of the inputs lacked value information (witness_utxo or non_witness_utxo)"
             ),
-            SendingTooMuch { .. } => write!(
+            Self::SendingTooMuch { .. } => write!(
                 f,
-                "Transaction would be invalid due to output value being greater than input value."
+                "transaction would be invalid due to output value being greater than input value."
             ),
         }
     }
@@ -1148,10 +1146,8 @@ impl fmt::Display for ExtractTxError {
 #[cfg(feature = "std")]
 impl std::error::Error for ExtractTxError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { .. } | MissingInputValue { .. } | SendingTooMuch { .. } => None,
+        match self {
+            Self::AbsurdFeeRate { .. } | Self::MissingInputValue { .. } | Self::SendingTooMuch { .. } => None,
         }
     }
 }
