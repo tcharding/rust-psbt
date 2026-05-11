@@ -1398,7 +1398,7 @@ mod tests {
         assert_eq!(
             psbt_with_values(5_000_000_000_000, 1000).extract_tx().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                _ => panic!(""),
+                other => panic!("expected AbsurdFeeRate error, got {other:?}"),
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
@@ -1406,7 +1406,7 @@ mod tests {
             psbt_with_values(5_000_000_000_000, 1000).extract_tx_fee_rate_limit().map_err(|e| {
                 match e {
                     ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                    _ => panic!(""),
+                    other => panic!("expected AbsurdFeeRate error, got {other:?}"),
                 }
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
@@ -1416,7 +1416,7 @@ mod tests {
                 .extract_tx_with_fee_rate_limit(FeeRate::from_sat_per_kwu(15060240960842))
                 .map_err(|e| match e {
                     ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                    _ => panic!(""),
+                    other => panic!("expected AbsurdFeeRate error, got {other:?}"),
                 }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
@@ -1428,7 +1428,7 @@ mod tests {
         assert_eq!(
             psbt_with_values(2076001, 1000).extract_tx().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                _ => panic!(""),
+                other => panic!("expected AbsurdFeeRate error, got {other:?}"),
             }),
             Err(FeeRate::from_sat_per_kwu(6250003)) // 6250000 is 25k sat/vbyte
         );
