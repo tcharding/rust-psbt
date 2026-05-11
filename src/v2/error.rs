@@ -119,7 +119,7 @@ pub enum SignError {
     MissingWitnessScript,
     /// Signing algorithm and key type does not match.
     MismatchedAlgoKey,
-    /// Attempted to ECDSA sign an non-ECDSA input.
+    /// Attempted to ECDSA sign a non-ECDSA input.
     NotEcdsa,
     /// The `scriptPubkey` is not a P2WPKH script.
     NotWpkh,
@@ -141,26 +141,25 @@ pub enum SignError {
 
 impl fmt::Display for SignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SignError::*;
-
-        match *self {
-            IndexOutOfBounds(ref e) => write_err!(f, "index out of bounds"; e),
-            InvalidSighashType => write!(f, "invalid sighash type"),
-            MissingInputUtxo => write!(f, "missing input utxo in PBST"),
-            MissingRedeemScript => write!(f, "missing redeem script"),
-            FundingUtxo(ref e) => write_err!(f, "input funding utxo error"; e),
-            MissingWitnessScript => write!(f, "missing witness script"),
-            MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
-            NotEcdsa => write!(f, "attempted to ECDSA sign an non-ECDSA input"),
-            NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
-            SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
-            P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
-            TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
-            UnknownOutputType => write!(f, "unable to determine the output type"),
-            KeyNotFound => write!(f, "unable to find key"),
-            WrongSigningAlgorithm =>
+        match self {
+            Self::IndexOutOfBounds(ref e) => write_err!(f, "index out of bounds"; e),
+            Self::InvalidSighashType => write!(f, "invalid sighash type"),
+            Self::MissingInputUtxo => write!(f, "missing input utxo in PBST"),
+            Self::MissingRedeemScript => write!(f, "missing redeem script"),
+            Self::FundingUtxo(ref e) => write_err!(f, "input funding utxo error"; e),
+            Self::MissingWitnessScript => write!(f, "missing witness script"),
+            Self::MismatchedAlgoKey =>
+                write!(f, "signing algorithm and key type does not match"),
+            Self::NotEcdsa => write!(f, "attempted to ECDSA sign a non-ECDSA input"),
+            Self::NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
+            Self::SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
+            Self::P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
+            Self::TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
+            Self::UnknownOutputType => write!(f, "unable to determine the output type"),
+            Self::KeyNotFound => write!(f, "unable to find key"),
+            Self::WrongSigningAlgorithm =>
                 write!(f, "attempt to sign an input with the wrong signing algorithm"),
-            Unsupported => write!(f, "signing request currently unsupported"),
+            Self::Unsupported => write!(f, "signing request currently unsupported"),
         }
     }
 }

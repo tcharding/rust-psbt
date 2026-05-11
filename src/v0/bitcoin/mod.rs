@@ -1010,7 +1010,7 @@ pub enum SignError {
     MissingWitnessScript,
     /// Signing algorithm and key type does not match.
     MismatchedAlgoKey,
-    /// Attempted to ECDSA sign an non-ECDSA input.
+    /// Attempted to ECDSA sign a non-ECDSA input.
     NotEcdsa,
     /// The `scriptPubkey` is not a P2WPKH script.
     NotWpkh,
@@ -2170,7 +2170,7 @@ mod tests {
         let rtt: Psbt = hex_psbt(&unserialized.serialize_hex()).unwrap();
         assert_eq!(rtt, unserialized);
 
-        // Now add an ripemd160 with incorrect preimage
+        // Now add a ripemd160 with incorrect preimage
         let mut ripemd160_preimages = BTreeMap::new();
         ripemd160_preimages.insert(ripemd160::Hash::hash(&[17u8]), vec![18u8]);
         unserialized.inputs[0].ripemd160_preimages = ripemd160_preimages;
