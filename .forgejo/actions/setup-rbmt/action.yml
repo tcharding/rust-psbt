@@ -8,7 +8,7 @@ runs:
       shell: bash
       run: |
         RBMT_VERSION=$(cat rbmt-version)
-        cargo install --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev "$RBMT_VERSION" cargo-rbmt
+        cargo install --locked --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev "$RBMT_VERSION" cargo-rbmt
 
     - name: Install toolchains
       shell: bash
