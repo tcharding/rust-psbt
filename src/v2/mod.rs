@@ -612,10 +612,10 @@ impl Psbt {
     /// Returns true if all inputs for this PSBT have been finalized.
     pub fn is_finalized(&self) -> bool { self.inputs.iter().all(|input| input.is_finalized()) }
 
-    /// Serialize a value as bytes in hex.
+    /// Serializes a value as bytes in hex.
     pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
 
-    /// Serialize as raw binary data
+    /// Serializes as raw binary data
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -637,7 +637,7 @@ impl Psbt {
         buf
     }
 
-    /// Deserialize a value from raw binary data.
+    /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
         use DeserializeError::*;
 
@@ -646,8 +646,8 @@ impl Psbt {
             return Err(InvalidMagic);
         }
 
-        const PSBT_SERPARATOR: u8 = 0xff_u8;
-        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SERPARATOR) {
+        const PSBT_SEPARATOR: u8 = 0xff_u8;
+        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
             return Err(InvalidSeparator);
         }
 
@@ -933,7 +933,7 @@ impl Psbt {
         Ok(output_type.signing_algorithm())
     }
 
-    /// Returns the [`OutputType`] of the spend utxo for this PBST's input at `input_index`.
+    /// Returns the [`OutputType`] of the spend utxo for this PSBT's input at `input_index`.
     fn output_type(&self, input_index: usize) -> Result<OutputType, SignError> {
         let input = self.checked_input(input_index)?;
         let utxo = input.funding_utxo()?;

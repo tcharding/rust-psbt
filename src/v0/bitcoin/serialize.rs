@@ -30,28 +30,28 @@ use crate::v0::bitcoin::{Error, Psbt};
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
 pub(crate) trait Serialize {
-    /// Serialize a value as raw data.
+    /// Serializes a value as raw data.
     fn serialize(&self) -> Vec<u8>;
 }
 
 /// A trait for deserializing a value from raw data in PSBT key-value maps.
 pub(crate) trait Deserialize: Sized {
-    /// Deserialize a value from raw data.
+    /// Deserializes a value from raw data.
     fn deserialize(bytes: &[u8]) -> Result<Self, Error>;
 }
 
 impl Psbt {
-    /// Serialize a value as bytes in hex.
+    /// Serializes a value as bytes in hex.
     pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
 
-    /// Serialize as raw binary data
+    /// Serializes as raw binary data
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         self.serialize_to_writer(&mut buf).expect("Writing to Vec can't fail");
         buf
     }
 
-    /// Serialize the PSBT into a writer.
+    /// Serializes the PSBT into a writer.
     pub fn serialize_to_writer(&self, w: &mut impl Write) -> io::Result<usize> {
         let mut written_len = 0;
 
@@ -77,12 +77,12 @@ impl Psbt {
         Ok(written_len)
     }
 
-    /// Deserialize a value from raw binary data.
+    /// Deserializes a value from raw binary data.
     pub fn deserialize(mut bytes: &[u8]) -> Result<Self, Error> {
         Self::deserialize_from_reader(&mut bytes)
     }
 
-    /// Deserialize a value from raw binary data read from a `Read` object.
+    /// Deserializes a value from raw binary data read from a `Read` object.
     pub fn deserialize_from_reader<R: io::Read>(r: &mut R) -> Result<Self, Error> {
         const MAGIC_BYTES: &[u8] = b"psbt";
 
@@ -91,9 +91,9 @@ impl Psbt {
             return Err(Error::InvalidMagic);
         }
 
-        const PSBT_SERPARATOR: u8 = 0xff_u8;
+        const PSBT_SEPARATOR: u8 = 0xff_u8;
         let separator: u8 = Decodable::consensus_decode(r)?;
-        if separator != PSBT_SERPARATOR {
+        if separator != PSBT_SEPARATOR {
             return Err(Error::InvalidSeparator);
         }
 
@@ -192,12 +192,12 @@ impl Deserialize for ecdsa::Signature {
         // 2) This would cause to have invalid signatures because the sighash message
         // also has a field sighash_u32 (See BIP141). For example, when signing with non-standard
         // 0x05, the sighash message would have the last field as 0x05u32 while, the verification
-        // would use check the signature assuming sighash_u32 as `0x01`.
+        // would check the signature assuming sighash_u32 as `0x01`.
         Self::from_slice(bytes).map_err(|e| match e {
             ecdsa::Error::EmptySignature => Error::InvalidEcdsaSignature(e),
             ecdsa::Error::SighashType(err) => Error::NonStandardSighashType(err.0),
             ecdsa::Error::Secp256k1(..) => Error::InvalidEcdsaSignature(e),
-            ecdsa::Error::Hex(..) => unreachable!("Decoding from slice, not hex"),
+            ecdsa::Error::Hex(..) => unreachable!("decoding from slice, not hex"),
             _ => unreachable!("in rust-bitcoin v0.32.2"),
         })
     }
@@ -371,11 +371,11 @@ impl Serialize for TapTree {
         for leaf_info in self.script_leaves() {
             // # Cast Safety:
             //
-            // TaprootMerkleBranch can only have len atmost 128(TAPROOT_CONTROL_MAX_NODE_COUNT).
+            // TaprootMerkleBranch can only have len at most 128(TAPROOT_CONTROL_MAX_NODE_COUNT).
             // safe to cast from usize to u8
             buf.push(leaf_info.merkle_branch().len() as u8);
             buf.push(leaf_info.version().to_consensus());
-            leaf_info.script().consensus_encode(&mut buf).expect("Vecs dont err");
+            leaf_info.script().consensus_encode(&mut buf).expect("Vecs don't err");
         }
         buf
     }
@@ -386,7 +386,7 @@ impl Deserialize for TapTree {
         let mut builder = TaprootBuilder::new();
         let mut bytes_iter = bytes.iter();
         while let Some(depth) = bytes_iter.next() {
-            let version = bytes_iter.next().ok_or(Error::Taproot("Invalid Taproot Builder"))?;
+            let version = bytes_iter.next().ok_or(Error::Taproot("invalid Taproot Builder"))?;
             let (script, consumed) = deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
             if consumed > 0 {
                 bytes_iter.nth(consumed - 1);
@@ -410,7 +410,7 @@ mod tests {
 
     use super::*;
 
-    // Composes tree matching a given depth map, filled with dumb script leafs,
+    // Composes tree matching a given depth map, filled with dumb script leaves,
     // each of which consists of a single push-int op code, with int value
     // increased for each consecutive leaf.
     pub fn compose_taproot_builder<'map>(

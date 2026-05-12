@@ -458,16 +458,16 @@ impl From<serialize::Error> for InsertPairError {
 pub enum CombineError {
     /// The amounts are not the same.
     AmountMismatch {
-        /// Attempted to combine a PBST with `this` previous txid.
+        /// Attempted to combine a PSBT with `this` previous txid.
         this: Amount,
-        /// Into a PBST with `that` previous txid.
+        /// Into a PSBT with `that` previous txid.
         that: Amount,
     },
     /// The script_pubkeys are not the same.
     ScriptPubkeyMismatch {
-        /// Attempted to combine a PBST with `this` script_pubkey.
+        /// Attempted to combine a PSBT with `this` script_pubkey.
         this: ScriptBuf,
-        /// Into a PBST with `that` script_pubkey.
+        /// Into a PSBT with `that` script_pubkey.
         that: ScriptBuf,
     },
 }

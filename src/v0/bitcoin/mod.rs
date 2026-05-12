@@ -1010,7 +1010,7 @@ pub enum SignError {
     MissingWitnessScript,
     /// Signing algorithm and key type does not match.
     MismatchedAlgoKey,
-    /// Attempted to ECDSA sign an non-ECDSA input.
+    /// Attempted to ECDSA sign a non-ECDSA input.
     NotEcdsa,
     /// The `scriptPubkey` is not a P2WPKH script.
     NotWpkh,
@@ -1128,18 +1128,16 @@ impl From<core::convert::Infallible> for ExtractTxError {
 
 impl fmt::Display for ExtractTxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { fee_rate, .. } =>
-                write!(f, "An absurdly high fee rate of {}", fee_rate),
-            MissingInputValue { .. } => write!(
+        match self {
+            Self::AbsurdFeeRate { fee_rate, .. } =>
+                write!(f, "an absurdly high fee rate of {}", fee_rate),
+            Self::MissingInputValue { .. } => write!(
                 f,
-                "One of the inputs lacked value information (witness_utxo or non_witness_utxo)"
+                "one of the inputs lacked value information (witness_utxo or non_witness_utxo)"
             ),
-            SendingTooMuch { .. } => write!(
+            Self::SendingTooMuch { .. } => write!(
                 f,
-                "Transaction would be invalid due to output value being greater than input value."
+                "transaction would be invalid due to output value being greater than input value."
             ),
         }
     }
@@ -1148,10 +1146,10 @@ impl fmt::Display for ExtractTxError {
 #[cfg(feature = "std")]
 impl std::error::Error for ExtractTxError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ExtractTxError::*;
-
-        match *self {
-            AbsurdFeeRate { .. } | MissingInputValue { .. } | SendingTooMuch { .. } => None,
+        match self {
+            Self::AbsurdFeeRate { .. }
+            | Self::MissingInputValue { .. }
+            | Self::SendingTooMuch { .. } => None,
         }
     }
 }
@@ -1398,7 +1396,7 @@ mod tests {
         assert_eq!(
             psbt_with_values(5_000_000_000_000, 1000).extract_tx().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                _ => panic!(""),
+                other => panic!("expected AbsurdFeeRate error, got {other:?}"),
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
@@ -1406,7 +1404,7 @@ mod tests {
             psbt_with_values(5_000_000_000_000, 1000).extract_tx_fee_rate_limit().map_err(|e| {
                 match e {
                     ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                    _ => panic!(""),
+                    other => panic!("expected AbsurdFeeRate error, got {other:?}"),
                 }
             }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
@@ -1416,7 +1414,7 @@ mod tests {
                 .extract_tx_with_fee_rate_limit(FeeRate::from_sat_per_kwu(15060240960842))
                 .map_err(|e| match e {
                     ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                    _ => panic!(""),
+                    other => panic!("expected AbsurdFeeRate error, got {other:?}"),
                 }),
             Err(FeeRate::from_sat_per_kwu(15060240960843))
         );
@@ -1428,7 +1426,7 @@ mod tests {
         assert_eq!(
             psbt_with_values(2076001, 1000).extract_tx().map_err(|e| match e {
                 ExtractTxError::AbsurdFeeRate { fee_rate, .. } => fee_rate,
-                _ => panic!(""),
+                other => panic!("expected AbsurdFeeRate error, got {other:?}"),
             }),
             Err(FeeRate::from_sat_per_kwu(6250003)) // 6250000 is 25k sat/vbyte
         );
@@ -2170,7 +2168,7 @@ mod tests {
         let rtt: Psbt = hex_psbt(&unserialized.serialize_hex()).unwrap();
         assert_eq!(rtt, unserialized);
 
-        // Now add an ripemd160 with incorrect preimage
+        // Now add a ripemd160 with incorrect preimage
         let mut ripemd160_preimages = BTreeMap::new();
         ripemd160_preimages.insert(ripemd160::Hash::hash(&[17u8]), vec![18u8]);
         unserialized.inputs[0].ripemd160_preimages = ripemd160_preimages;
@@ -2471,7 +2469,7 @@ mod tests {
         let (priv_key, pk, secp) = gen_keys();
 
         // key_map implements `GetKey` using KeyRequest::Pubkey. A pubkey key request does not use
-        // keysource so we use default `KeySource` (fingreprint and derivation path) below.
+        // keysource so we use default `KeySource` (fingerprint and derivation path) below.
         let mut key_map = BTreeMap::new();
         key_map.insert(pk, priv_key);
 

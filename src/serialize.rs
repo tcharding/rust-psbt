@@ -31,13 +31,13 @@ use crate::version;
 /// A trait for serializing a value as raw data for insertion into PSBT
 /// key-value maps.
 pub(crate) trait Serialize {
-    /// Serialize a value as raw data.
+    /// Serializes a value as raw data.
     fn serialize(&self) -> Vec<u8>;
 }
 
 /// A trait for deserializing a value from raw data in PSBT key-value maps.
 pub(crate) trait Deserialize: Sized {
-    /// Deserialize a value from raw data.
+    /// Deserializes a value from raw data.
     fn deserialize(bytes: &[u8]) -> Result<Self, Error>;
 }
 
@@ -112,12 +112,12 @@ impl Deserialize for ecdsa::Signature {
         // 2) This would cause to have invalid signatures because the sighash message
         // also has a field sighash_u32 (See BIP141). For example, when signing with non-standard
         // 0x05, the sighash message would have the last field as 0x05u32 while, the verification
-        // would use check the signature assuming sighash_u32 as `0x01`.
+        // would check the signature assuming sighash_u32 as `0x01`.
         Self::from_slice(bytes).map_err(|e| match e {
             ecdsa::Error::EmptySignature => Error::InvalidEcdsaSignature(e),
             ecdsa::Error::SighashType(err) => Error::NonStandardSighashType(err.0),
             ecdsa::Error::Secp256k1(..) => Error::InvalidEcdsaSignature(e),
-            ecdsa::Error::Hex(..) => unreachable!("Decoding from slice, not hex"),
+            ecdsa::Error::Hex(..) => unreachable!("decoding from slice, not hex"),
             _ => panic!("TODO: Handle non_exhaustive error"),
         })
     }
@@ -338,11 +338,11 @@ impl Serialize for TapTree {
         for leaf_info in self.script_leaves() {
             // # Cast Safety:
             //
-            // TaprootMerkleBranch can only have len atmost 128(TAPROOT_CONTROL_MAX_NODE_COUNT).
+            // TaprootMerkleBranch can only have len at most 128(TAPROOT_CONTROL_MAX_NODE_COUNT).
             // safe to cast from usize to u8
             buf.push(leaf_info.merkle_branch().len() as u8);
             buf.push(leaf_info.version().to_consensus());
-            leaf_info.script().consensus_encode(&mut buf).expect("Vecs dont err");
+            leaf_info.script().consensus_encode(&mut buf).expect("Vecs don't err");
         }
         buf
     }
@@ -353,7 +353,7 @@ impl Deserialize for TapTree {
         let mut builder = TaprootBuilder::new();
         let mut bytes_iter = bytes.iter();
         while let Some(depth) = bytes_iter.next() {
-            let version = bytes_iter.next().ok_or(Error::Taproot("Invalid Taproot Builder"))?;
+            let version = bytes_iter.next().ok_or(Error::Taproot("invalid Taproot Builder"))?;
             let (script, consumed) =
                 consensus::deserialize_partial::<ScriptBuf>(bytes_iter.as_slice())?;
             if consumed > 0 {
@@ -406,7 +406,7 @@ pub enum Error {
     InvalidLeafVersion,
     /// Parsing error indicating a taproot error
     Taproot(&'static str),
-    /// Taproot tree deserilaization error
+    /// Taproot tree deserialization error
     TapTree(taproot::IncompleteBuilderError),
     /// Error related to PSBT version
     /// PSBT data is not consumed entirely
@@ -527,7 +527,7 @@ mod tests {
 
     use super::*;
 
-    // Composes tree matching a given depth map, filled with dumb script leafs,
+    // Composes tree matching a given depth map, filled with dumb script leaves,
     // each of which consists of a single push-int op code, with int value
     // increased for each consecutive leaf.
     pub fn compose_taproot_builder<'map>(
