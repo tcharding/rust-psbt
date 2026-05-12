@@ -1147,7 +1147,9 @@ impl fmt::Display for ExtractTxError {
 impl std::error::Error for ExtractTxError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::AbsurdFeeRate { .. } | Self::MissingInputValue { .. } | Self::SendingTooMuch { .. } => None,
+            Self::AbsurdFeeRate { .. }
+            | Self::MissingInputValue { .. }
+            | Self::SendingTooMuch { .. } => None,
         }
     }
 }

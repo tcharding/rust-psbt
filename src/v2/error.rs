@@ -148,8 +148,7 @@ impl fmt::Display for SignError {
             Self::MissingRedeemScript => write!(f, "missing redeem script"),
             Self::FundingUtxo(ref e) => write_err!(f, "input funding utxo error"; e),
             Self::MissingWitnessScript => write!(f, "missing witness script"),
-            Self::MismatchedAlgoKey =>
-                write!(f, "signing algorithm and key type does not match"),
+            Self::MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
             Self::NotEcdsa => write!(f, "attempted to ECDSA sign a non-ECDSA input"),
             Self::NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
             Self::SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
