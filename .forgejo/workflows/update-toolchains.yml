@@ -22,6 +22,8 @@ jobs:
           # Use a token associated with a user account, they open the pull request.
           # The ephemeral workflow token is sometimes user-less.
           token: ${{ secrets.RBMT }}
+      - name: Install a default toolchain in tmp
+        run: rustup default stable
       - uses: ./.forgejo/actions/setup-rbmt
       - name: Configure git
         run: |
