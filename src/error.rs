@@ -36,13 +36,12 @@ pub enum FeeError {
 
 impl fmt::Display for FeeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FeeError::*;
-
-        match *self {
-            FundingUtxo(ref e) => write_err!(f, "funding utxo error for input"; e),
-            InputOverflow => f.write_str("integer overflow in fee calculation adding input"),
-            OutputOverflow => f.write_str("integer overflow in fee calculation adding output"),
-            Negative => f.write_str("PSBT has a negative fee which is not allowed"),
+        match self {
+            Self::FundingUtxo(ref e) => write_err!(f, "funding utxo error for input"; e),
+            Self::InputOverflow => f.write_str("integer overflow in fee calculation adding input"),
+            Self::OutputOverflow =>
+                f.write_str("integer overflow in fee calculation adding output"),
+            Self::Negative => f.write_str("PSBT has a negative fee which is not allowed"),
         }
     }
 }
@@ -50,11 +49,9 @@ impl fmt::Display for FeeError {
 #[cfg(feature = "std")]
 impl std::error::Error for FeeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FeeError::*;
-
-        match *self {
-            FundingUtxo(ref e) => Some(e),
-            InputOverflow | OutputOverflow | Negative => None,
+        match self {
+            Self::FundingUtxo(ref e) => Some(e),
+            Self::InputOverflow | Self::OutputOverflow | Self::Negative => None,
         }
     }
 }
@@ -80,12 +77,10 @@ pub enum FundingUtxoError {
 
 impl fmt::Display for FundingUtxoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FundingUtxoError::*;
-
-        match *self {
-            OutOfBounds { vout, len } =>
+        match self {
+            Self::OutOfBounds { vout, len } =>
                 write!(f, "vout {} out of bounds for tx list len: {}", vout, len),
-            MissingUtxo => write!(f, "no funding utxo found"),
+            Self::MissingUtxo => write!(f, "no funding utxo found"),
         }
     }
 }
@@ -93,10 +88,8 @@ impl fmt::Display for FundingUtxoError {
 #[cfg(feature = "std")]
 impl std::error::Error for FundingUtxoError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FundingUtxoError::*;
-
-        match *self {
-            OutOfBounds { .. } | MissingUtxo => None,
+        match self {
+            Self::OutOfBounds { .. } | Self::MissingUtxo => None,
         }
     }
 }

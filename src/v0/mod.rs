@@ -130,19 +130,18 @@ pub enum SignerChecksError {
 
 impl fmt::Display for SignerChecksError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SignerChecksError::*;
-
-        match *self {
-            NonWitnessSig => write!(f, "witness input will produce a non-witness signature"),
-            NonWitnessUtxoTxidMismatch =>
+        match self {
+            Self::NonWitnessSig => write!(f, "witness input will produce a non-witness signature"),
+            Self::NonWitnessUtxoTxidMismatch =>
                 write!(f, "non-witness input has a mismatch between the txid and prevout txid"),
-            WitnessAndNonWitnessUtxo => write!(f, "input has both witness and non-witness utxos"),
-            RedeemScriptMismatch =>
+            Self::WitnessAndNonWitnessUtxo =>
+                write!(f, "input has both witness and non-witness utxos"),
+            Self::RedeemScriptMismatch =>
                 write!(f, "redeem script hash did not match the hash in the script_pubkey"),
-            MissingTxOut => write!(f, "missing witness_utxo"),
-            WitnessScriptMismatchWsh =>
+            Self::MissingTxOut => write!(f, "missing witness_utxo"),
+            Self::WitnessScriptMismatchWsh =>
                 write!(f, "native segwit p2wsh script_pubkey did not match witness script hash"),
-            WitnessScriptMismatchShWsh =>
+            Self::WitnessScriptMismatchShWsh =>
                 write!(f, "nested segwit p2wsh script_pubkey did not match redeem script hash"),
         }
     }

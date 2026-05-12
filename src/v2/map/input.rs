@@ -884,14 +884,12 @@ pub enum DecodeError {
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => write_err!(f, "error inserting a key-value pair"; e),
-            DeserPair(ref e) => write_err!(f, "error decoding pair"; e),
-            MissingPreviousTxid => write!(f, "input must contain a previous txid"),
-            MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
-            FieldMismatch => {
+        match self {
+            Self::InsertPair(ref e) => write_err!(f, "error inserting a key-value pair"; e),
+            Self::DeserPair(ref e) => write_err!(f, "error decoding pair"; e),
+            Self::MissingPreviousTxid => write!(f, "input must contain a previous txid"),
+            Self::MissingSpentOutputIndex => write!(f, "input must contain a spent output index"),
+            Self::FieldMismatch => {
                 write!(f, "ECDH shares and DLEQ proofs must both be present or both absent")
             }
         }
@@ -901,13 +899,11 @@ impl fmt::Display for DecodeError {
 #[cfg(feature = "std")]
 impl std::error::Error for DecodeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => Some(e),
-            DeserPair(ref e) => Some(e),
-            MissingPreviousTxid | MissingSpentOutputIndex => None,
-            FieldMismatch => None,
+        match self {
+            Self::InsertPair(ref e) => Some(e),
+            Self::DeserPair(ref e) => Some(e),
+            Self::MissingPreviousTxid | Self::MissingSpentOutputIndex => None,
+            Self::FieldMismatch => None,
         }
     }
 }
@@ -937,18 +933,17 @@ pub enum InsertPairError {
 
 impl fmt::Display for InsertPairError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use InsertPairError::*;
-
-        match *self {
-            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
-            Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
-            InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
-            InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
-            HashPreimage(ref e) => write_err!(f, "invalid hash preimage"; e),
-            KeyWrongLength(got, expected) => {
+        match self {
+            Self::DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            Self::Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
+            Self::InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
+            Self::InvalidKeyDataNotEmpty(ref key) =>
+                write!(f, "key should not contain data: {}", key),
+            Self::HashPreimage(ref e) => write_err!(f, "invalid hash preimage"; e),
+            Self::KeyWrongLength(got, expected) => {
                 write!(f, "key wrong length (got: {}, expected: {})", got, expected)
             }
-            ValueWrongLength(got, expected) => {
+            Self::ValueWrongLength(got, expected) => {
                 write!(f, "value wrong length (got: {}, expected: {})", got, expected)
             }
         }
@@ -958,16 +953,14 @@ impl fmt::Display for InsertPairError {
 #[cfg(feature = "std")]
 impl std::error::Error for InsertPairError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InsertPairError::*;
-
-        match *self {
-            Deser(ref e) => Some(e),
-            HashPreimage(ref e) => Some(e),
-            DuplicateKey(_)
-            | InvalidKeyDataEmpty(_)
-            | InvalidKeyDataNotEmpty(_)
-            | KeyWrongLength(..)
-            | ValueWrongLength(..) => None,
+        match self {
+            Self::Deser(ref e) => Some(e),
+            Self::HashPreimage(ref e) => Some(e),
+            Self::DuplicateKey(_)
+            | Self::InvalidKeyDataEmpty(_)
+            | Self::InvalidKeyDataNotEmpty(_)
+            | Self::KeyWrongLength(..)
+            | Self::ValueWrongLength(..) => None,
         }
     }
 }
@@ -1039,11 +1032,9 @@ pub enum FinalizeError {
 #[cfg(feature = "miniscript")]
 impl fmt::Display for FinalizeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FinalizeError::*;
-
-        match *self {
-            EmptyWitness => write!(f, "failed to create a final witness"),
-            UnexpectedWitness => write!(f, "unexpected witness data"),
+        match self {
+            Self::EmptyWitness => write!(f, "failed to create a final witness"),
+            Self::UnexpectedWitness => write!(f, "unexpected witness data"),
         }
     }
 }
@@ -1075,13 +1066,11 @@ pub enum CombineError {
 }
 impl fmt::Display for CombineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use CombineError::*;
-
-        match *self {
-            PreviousTxidMismatch { ref this, ref that } => {
+        match self {
+            Self::PreviousTxidMismatch { ref this, ref that } => {
                 write!(f, "combine two PSBTs with different previous txids: {:?} {:?}", this, that)
             }
-            SpentOutputIndexMismatch { ref this, ref that } => write!(
+            Self::SpentOutputIndexMismatch { ref this, ref that } => write!(
                 f,
                 "combine two PSBTs with different spent output indecies: {:?} {:?}",
                 this, that
@@ -1093,10 +1082,8 @@ impl fmt::Display for CombineError {
 #[cfg(feature = "std")]
 impl std::error::Error for CombineError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use CombineError::*;
-
-        match *self {
-            PreviousTxidMismatch { .. } | SpentOutputIndexMismatch { .. } => None,
+        match self {
+            Self::PreviousTxidMismatch { .. } | Self::SpentOutputIndexMismatch { .. } => None,
         }
     }
 }

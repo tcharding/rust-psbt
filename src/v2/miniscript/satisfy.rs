@@ -69,14 +69,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'_> {
 
     // TODO: Verify this is correct.
     fn check_after(&self, n: absolute::LockTime) -> bool {
-        use absolute::LockTime::*;
-
         match n {
-            Blocks(height) =>
+            absolute::LockTime::Blocks(height) =>
                 if let Some(lock_time) = self.input.min_height {
                     return height <= lock_time;
                 },
-            Seconds(time) =>
+            absolute::LockTime::Seconds(time) =>
                 if let Some(lock_time) = self.input.min_time {
                     return time <= lock_time;
                 },

@@ -373,14 +373,12 @@ pub enum DecodeError {
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
-            DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
-            MissingValue => write!(f, "encoded output is missing a value"),
-            MissingScriptPubkey => write!(f, "encoded output is missing a script pubkey"),
-            LabelWithoutInfo => write!(f, "output has a sp_v0_label without a sp_v0_info"),
+        match self {
+            Self::InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
+            Self::DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
+            Self::MissingValue => write!(f, "encoded output is missing a value"),
+            Self::MissingScriptPubkey => write!(f, "encoded output is missing a script pubkey"),
+            Self::LabelWithoutInfo => write!(f, "output has a sp_v0_label without a sp_v0_info"),
         }
     }
 }
@@ -388,12 +386,10 @@ impl fmt::Display for DecodeError {
 #[cfg(feature = "std")]
 impl std::error::Error for DecodeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => Some(e),
-            DeserPair(ref e) => Some(e),
-            MissingValue | MissingScriptPubkey | LabelWithoutInfo => None,
+        match self {
+            Self::InsertPair(ref e) => Some(e),
+            Self::DeserPair(ref e) => Some(e),
+            Self::MissingValue | Self::MissingScriptPubkey | Self::LabelWithoutInfo => None,
         }
     }
 }
@@ -419,14 +415,13 @@ pub enum InsertPairError {
 
 impl fmt::Display for InsertPairError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use InsertPairError::*;
-
-        match *self {
-            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
-            Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
-            InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
-            InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
-            ValueWrongLength(got, expected) => {
+        match self {
+            Self::DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            Self::Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
+            Self::InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
+            Self::InvalidKeyDataNotEmpty(ref key) =>
+                write!(f, "key should not contain data: {}", key),
+            Self::ValueWrongLength(got, expected) => {
                 write!(f, "value wrong length (got: {}, expected: {})", got, expected)
             }
         }
@@ -436,14 +431,12 @@ impl fmt::Display for InsertPairError {
 #[cfg(feature = "std")]
 impl std::error::Error for InsertPairError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InsertPairError::*;
-
-        match *self {
-            Deser(ref e) => Some(e),
-            DuplicateKey(_)
-            | InvalidKeyDataEmpty(_)
-            | InvalidKeyDataNotEmpty(_)
-            | ValueWrongLength(..) => None,
+        match self {
+            Self::Deser(ref e) => Some(e),
+            Self::DuplicateKey(_)
+            | Self::InvalidKeyDataEmpty(_)
+            | Self::InvalidKeyDataNotEmpty(_)
+            | Self::ValueWrongLength(..) => None,
         }
     }
 }
@@ -474,13 +467,11 @@ pub enum CombineError {
 
 impl fmt::Display for CombineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use CombineError::*;
-
-        match *self {
-            AmountMismatch { ref this, ref that } => {
+        match self {
+            Self::AmountMismatch { ref this, ref that } => {
                 write!(f, "combine two PSBTs with different amounts: {} {}", this, that)
             }
-            ScriptPubkeyMismatch { ref this, ref that } => {
+            Self::ScriptPubkeyMismatch { ref this, ref that } => {
                 write!(f, "combine two PSBTs with different script_pubkeys: {:x} {:x}", this, that)
             }
         }
@@ -490,10 +481,8 @@ impl fmt::Display for CombineError {
 #[cfg(feature = "std")]
 impl std::error::Error for CombineError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use CombineError::*;
-
-        match *self {
-            AmountMismatch { .. } | ScriptPubkeyMismatch { .. } => None,
+        match self {
+            Self::AmountMismatch { .. } | Self::ScriptPubkeyMismatch { .. } => None,
         }
     }
 }

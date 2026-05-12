@@ -151,11 +151,9 @@ pub enum InvalidSighashTypeError {
 
 impl fmt::Display for InvalidSighashTypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use InvalidSighashTypeError::*;
-
-        match *self {
-            Bitcoin(ref e) => write_err!(f, "bitcoin"; e),
-            Invalid(invalid) => write!(f, "invalid sighash type {}", invalid),
+        match self {
+            Self::Bitcoin(ref e) => write_err!(f, "bitcoin"; e),
+            Self::Invalid(invalid) => write!(f, "invalid sighash type {}", invalid),
         }
     }
 }
@@ -163,11 +161,9 @@ impl fmt::Display for InvalidSighashTypeError {
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidSighashTypeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InvalidSighashTypeError::*;
-
-        match *self {
-            Bitcoin(ref e) => Some(e),
-            Invalid(_) => None,
+        match self {
+            Self::Bitcoin(ref e) => Some(e),
+            Self::Invalid(_) => None,
         }
     }
 }

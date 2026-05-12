@@ -275,12 +275,13 @@ impl Serialize for taproot::Signature {
 
 impl Deserialize for taproot::Signature {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        use crate::bitcoin::taproot::SigFromSliceError::*;
-
         Self::from_slice(bytes).map_err(|e| match e {
-            SighashType(err) => Error::NonStandardSighashType(err.0),
-            InvalidSignatureSize(_) => Error::InvalidTaprootSignature(e),
-            Secp256k1(..) => Error::InvalidTaprootSignature(e),
+            crate::bitcoin::taproot::SigFromSliceError::SighashType(err) =>
+                Error::NonStandardSighashType(err.0),
+            crate::bitcoin::taproot::SigFromSliceError::InvalidSignatureSize(_) =>
+                Error::InvalidTaprootSignature(e),
+            crate::bitcoin::taproot::SigFromSliceError::Secp256k1(..) =>
+                Error::InvalidTaprootSignature(e),
             _ => unreachable!("in rust-bitcoin v0.32.2"),
         })
     }

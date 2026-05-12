@@ -504,8 +504,6 @@ impl Psbt {
         input_index: usize,
         cache: &mut SighashCache<T>,
     ) -> Result<(Message, EcdsaSighashType), SignError> {
-        use OutputType::*;
-
         if self.signing_algorithm(input_index)? != SigningAlgorithm::Ecdsa {
             return Err(SignError::WrongSigningAlgorithm);
         }
@@ -517,13 +515,13 @@ impl Psbt {
         let hash_ty = input.ecdsa_hash_ty().map_err(|_| SignError::InvalidSighashType)?; // Only support standard sighash types.
 
         match self.output_type(input_index)? {
-            Bare => {
+            OutputType::Bare => {
                 let sighash = cache
                     .legacy_signature_hash(input_index, spk, hash_ty.to_u32())
                     .expect("input checked above");
                 Ok((Message::from(sighash), hash_ty))
             }
-            Sh => {
+            OutputType::Sh => {
                 let script_code =
                     input.redeem_script.as_ref().ok_or(SignError::MissingRedeemScript)?;
                 let sighash = cache
@@ -531,17 +529,17 @@ impl Psbt {
                     .expect("input checked above");
                 Ok((Message::from(sighash), hash_ty))
             }
-            Wpkh => {
+            OutputType::Wpkh => {
                 let sighash = cache.p2wpkh_signature_hash(input_index, spk, utxo.value, hash_ty)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            ShWpkh => {
+            OutputType::ShWpkh => {
                 let redeem_script = input.redeem_script.as_ref().expect("checked above");
                 let sighash =
                     cache.p2wpkh_signature_hash(input_index, redeem_script, utxo.value, hash_ty)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            Wsh | ShWsh => {
+            OutputType::Wsh | OutputType::ShWsh => {
                 let witness_script =
                     input.witness_script.as_ref().ok_or(SignError::MissingWitnessScript)?;
                 let sighash = cache
@@ -549,7 +547,7 @@ impl Psbt {
                     .map_err(SignError::SegwitV0Sighash)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            Tr => {
+            OutputType::Tr => {
                 // This PSBT signing API is WIP, taproot to come shortly.
                 Err(SignError::Unsupported)
             }
@@ -566,8 +564,6 @@ impl Psbt {
         cache: &mut SighashCache<T>,
         leaf_hash: Option<TapLeafHash>,
     ) -> Result<(Message, TapSighashType), SignError> {
-        use OutputType::*;
-
         if self.signing_algorithm(input_index)? != SigningAlgorithm::Schnorr {
             return Err(SignError::WrongSigningAlgorithm);
         }
@@ -575,7 +571,7 @@ impl Psbt {
         let input = self.checked_input(input_index)?;
 
         match self.output_type(input_index)? {
-            Tr => {
+            OutputType::Tr => {
                 let hash_ty = input
                     .sighash_type
                     .unwrap_or_else(|| TapSighashType::Default.into())
@@ -921,11 +917,9 @@ impl From<core::convert::Infallible> for GetKeyError {
 
 impl fmt::Display for GetKeyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use GetKeyError::*;
-
-        match *self {
-            Bip32(ref e) => write_err!(f, "a bip23 error"; e),
-            NotSupported =>
+        match self {
+            Self::Bip32(ref e) => write_err!(f, "a bip32 error"; e),
+            Self::NotSupported =>
                 f.write_str("the GetKey operation is not supported for this key request"),
         }
     }
@@ -934,11 +928,9 @@ impl fmt::Display for GetKeyError {
 #[cfg(feature = "std")]
 impl std::error::Error for GetKeyError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use GetKeyError::*;
-
-        match *self {
-            NotSupported => None,
-            Bip32(ref e) => Some(e),
+        match self {
+            Self::NotSupported => None,
+            Self::Bip32(ref e) => Some(e),
         }
     }
 }
@@ -970,11 +962,10 @@ pub enum OutputType {
 impl OutputType {
     /// The signing algorithm used to sign this output type.
     pub fn signing_algorithm(&self) -> SigningAlgorithm {
-        use OutputType::*;
-
         match self {
-            Bare | Wpkh | Wsh | ShWpkh | ShWsh | Sh => SigningAlgorithm::Ecdsa,
-            Tr => SigningAlgorithm::Schnorr,
+            Self::Bare | Self::Wpkh | Self::Wsh | Self::ShWpkh | Self::ShWsh | Self::Sh =>
+                SigningAlgorithm::Ecdsa,
+            Self::Tr => SigningAlgorithm::Schnorr,
         }
     }
 }
@@ -1036,26 +1027,24 @@ impl From<core::convert::Infallible> for SignError {
 
 impl fmt::Display for SignError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SignError::*;
-
-        match *self {
-            IndexOutOfBounds(ref e) => write_err!(f, "index out of bounds"; e),
-            InvalidSighashType => write!(f, "invalid sighash type"),
-            MissingInputUtxo => write!(f, "missing input utxo in PBST"),
-            MissingRedeemScript => write!(f, "missing redeem script"),
-            MissingSpendUtxo => write!(f, "missing spend utxo in PSBT"),
-            MissingWitnessScript => write!(f, "missing witness script"),
-            MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
-            NotEcdsa => write!(f, "attempted to ECDSA sign an non-ECDSA input"),
-            NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
-            SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
-            P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
-            TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
-            UnknownOutputType => write!(f, "unable to determine the output type"),
-            KeyNotFound => write!(f, "unable to find key"),
-            WrongSigningAlgorithm =>
+        match self {
+            Self::IndexOutOfBounds(ref e) => write_err!(f, "index out of bounds"; e),
+            Self::InvalidSighashType => write!(f, "invalid sighash type"),
+            Self::MissingInputUtxo => write!(f, "missing input utxo in PSBT"),
+            Self::MissingRedeemScript => write!(f, "missing redeem script"),
+            Self::MissingSpendUtxo => write!(f, "missing spend utxo in PSBT"),
+            Self::MissingWitnessScript => write!(f, "missing witness script"),
+            Self::MismatchedAlgoKey => write!(f, "signing algorithm and key type does not match"),
+            Self::NotEcdsa => write!(f, "attempted to ECDSA sign a non-ECDSA input"),
+            Self::NotWpkh => write!(f, "the scriptPubkey is not a P2WPKH script"),
+            Self::SegwitV0Sighash(ref e) => write_err!(f, "segwit v0 sighash"; e),
+            Self::P2wpkhSighash(ref e) => write_err!(f, "p2wpkh sighash"; e),
+            Self::TaprootError(ref e) => write_err!(f, "taproot sighash"; e),
+            Self::UnknownOutputType => write!(f, "unable to determine the output type"),
+            Self::KeyNotFound => write!(f, "unable to find key"),
+            Self::WrongSigningAlgorithm =>
                 write!(f, "attempt to sign an input with the wrong signing algorithm"),
-            Unsupported => write!(f, "signing request currently unsupported"),
+            Self::Unsupported => write!(f, "signing request currently unsupported"),
         }
     }
 }
@@ -1063,25 +1052,23 @@ impl fmt::Display for SignError {
 #[cfg(feature = "std")]
 impl std::error::Error for SignError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use SignError::*;
-
-        match *self {
-            SegwitV0Sighash(ref e) => Some(e),
-            P2wpkhSighash(ref e) => Some(e),
-            TaprootError(ref e) => Some(e),
-            IndexOutOfBounds(ref e) => Some(e),
-            InvalidSighashType
-            | MissingInputUtxo
-            | MissingRedeemScript
-            | MissingSpendUtxo
-            | MissingWitnessScript
-            | MismatchedAlgoKey
-            | NotEcdsa
-            | NotWpkh
-            | UnknownOutputType
-            | KeyNotFound
-            | WrongSigningAlgorithm
-            | Unsupported => None,
+        match self {
+            Self::SegwitV0Sighash(ref e) => Some(e),
+            Self::P2wpkhSighash(ref e) => Some(e),
+            Self::TaprootError(ref e) => Some(e),
+            Self::IndexOutOfBounds(ref e) => Some(e),
+            Self::InvalidSighashType
+            | Self::MissingInputUtxo
+            | Self::MissingRedeemScript
+            | Self::MissingSpendUtxo
+            | Self::MissingWitnessScript
+            | Self::MismatchedAlgoKey
+            | Self::NotEcdsa
+            | Self::NotWpkh
+            | Self::UnknownOutputType
+            | Self::KeyNotFound
+            | Self::WrongSigningAlgorithm
+            | Self::Unsupported => None,
         }
     }
 }
@@ -1180,15 +1167,13 @@ impl From<core::convert::Infallible> for IndexOutOfBoundsError {
 
 impl fmt::Display for IndexOutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use IndexOutOfBoundsError::*;
-
-        match *self {
-            Inputs { ref index, ref length } => write!(
+        match self {
+            Self::Inputs { ref index, ref length } => write!(
                 f,
                 "index {} is out-of-bounds for PSBT inputs vector length {}",
                 index, length
             ),
-            TxInput { ref index, ref length } => write!(
+            Self::TxInput { ref index, ref length } => write!(
                 f,
                 "index {} is out-of-bounds for PSBT unsigned tx input vector length {}",
                 index, length
@@ -1200,10 +1185,8 @@ impl fmt::Display for IndexOutOfBoundsError {
 #[cfg(feature = "std")]
 impl std::error::Error for IndexOutOfBoundsError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use IndexOutOfBoundsError::*;
-
-        match *self {
-            Inputs { .. } | TxInput { .. } => None,
+        match self {
+            Self::Inputs { .. } | Self::TxInput { .. } => None,
         }
     }
 }
@@ -1235,11 +1218,10 @@ mod display_from_str {
 
     impl Display for PsbtParseError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            use self::PsbtParseError::*;
-
-            match *self {
-                PsbtEncoding(ref e) => write_err!(f, "error in internal PSBT data structure"; e),
-                Base64Encoding(ref e) => write_err!(f, "error in PSBT base64 encoding"; e),
+            match self {
+                Self::PsbtEncoding(ref e) =>
+                    write_err!(f, "error in internal PSBT data structure"; e),
+                Self::Base64Encoding(ref e) => write_err!(f, "error in PSBT base64 encoding"; e),
             }
         }
     }
@@ -1247,11 +1229,9 @@ mod display_from_str {
     #[cfg(feature = "std")]
     impl std::error::Error for PsbtParseError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-            use self::PsbtParseError::*;
-
             match self {
-                PsbtEncoding(e) => Some(e),
-                Base64Encoding(e) => Some(e),
+                Self::PsbtEncoding(e) => Some(e),
+                Self::Base64Encoding(e) => Some(e),
             }
         }
     }
