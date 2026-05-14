@@ -16,7 +16,6 @@ nightly = "nightly-2026-04-04"
 
 [dependencies]
 libfuzzer-sys = "0.4"
-arbitrary = { version = "1.4" }
 psbt-v2 = { path = "..", features = ["arbitrary"] }
 
 [[bin]]
