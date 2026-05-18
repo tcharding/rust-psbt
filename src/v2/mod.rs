@@ -639,19 +639,17 @@ impl Psbt {
 
     /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
-        use DeserializeError::*;
-
         const MAGIC_BYTES: &[u8] = b"psbt";
         if bytes.get(0..MAGIC_BYTES.len()) != Some(MAGIC_BYTES) {
-            return Err(InvalidMagic);
+            return Err(DeserializeError::InvalidMagic);
         }
 
         const PSBT_SEPARATOR: u8 = 0xff_u8;
         if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
-            return Err(InvalidSeparator);
+            return Err(DeserializeError::InvalidSeparator);
         }
 
-        let mut d = bytes.get(5..).ok_or(NoMorePairs)?;
+        let mut d = bytes.get(5..).ok_or(DeserializeError::NoMorePairs)?;
 
         let global = Global::decode(&mut d)?;
 
@@ -853,8 +851,6 @@ impl Psbt {
         input_index: usize,
         cache: &mut SighashCache<T>,
     ) -> Result<(Message, EcdsaSighashType), SignError> {
-        use OutputType::*;
-
         if self.signing_algorithm(input_index)? != SigningAlgorithm::Ecdsa {
             return Err(SignError::WrongSigningAlgorithm);
         }
@@ -866,13 +862,13 @@ impl Psbt {
         let hash_ty = input.ecdsa_hash_ty().map_err(|_| SignError::InvalidSighashType)?; // Only support standard sighash types.
 
         match self.output_type(input_index)? {
-            Bare => {
+            OutputType::Bare => {
                 let sighash = cache
                     .legacy_signature_hash(input_index, spk, hash_ty.to_u32())
                     .expect("input checked above");
                 Ok((Message::from(sighash), hash_ty))
             }
-            Sh => {
+            OutputType::Sh => {
                 let script_code =
                     input.redeem_script.as_ref().ok_or(SignError::MissingRedeemScript)?;
                 let sighash = cache
@@ -880,17 +876,17 @@ impl Psbt {
                     .expect("input checked above");
                 Ok((Message::from(sighash), hash_ty))
             }
-            Wpkh => {
+            OutputType::Wpkh => {
                 let sighash = cache.p2wpkh_signature_hash(input_index, spk, utxo.value, hash_ty)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            ShWpkh => {
+            OutputType::ShWpkh => {
                 let redeem_script = input.redeem_script.as_ref().expect("checked above");
                 let sighash =
                     cache.p2wpkh_signature_hash(input_index, redeem_script, utxo.value, hash_ty)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            Wsh | ShWsh => {
+            OutputType::Wsh | OutputType::ShWsh => {
                 let witness_script =
                     input.witness_script.as_ref().ok_or(SignError::MissingWitnessScript)?;
                 let sighash = cache
@@ -898,7 +894,7 @@ impl Psbt {
                     .map_err(SignError::SegwitV0Sighash)?;
                 Ok((Message::from(sighash), hash_ty))
             }
-            Tr => {
+            OutputType::Tr => {
                 // This PSBT signing API is WIP, taproot to come shortly.
                 Err(SignError::Unsupported)
             }
@@ -976,21 +972,20 @@ impl Psbt {
     /// 'Fee' being the amount that will be paid for mining a transaction with the current inputs
     /// and outputs i.e., the difference in value of the total inputs and the total outputs.
     pub fn fee(&self) -> Result<Amount, FeeError> {
-        use FeeError::*;
-
         // For the inputs we have to get the value from the input UTXOs.
         let mut input_value: u64 = 0;
         for input in self.iter_funding_utxos() {
-            input_value = input_value.checked_add(input?.value.to_sat()).ok_or(InputOverflow)?;
+            input_value =
+                input_value.checked_add(input?.value.to_sat()).ok_or(FeeError::InputOverflow)?;
         }
         // For the outputs we have the value directly in the `Output`.
         let mut output_value: u64 = 0;
         for output in &self.outputs {
             output_value =
-                output_value.checked_add(output.amount.to_sat()).ok_or(OutputOverflow)?;
+                output_value.checked_add(output.amount.to_sat()).ok_or(FeeError::OutputOverflow)?;
         }
 
-        input_value.checked_sub(output_value).map(Amount::from_sat).ok_or(Negative)
+        input_value.checked_sub(output_value).map(Amount::from_sat).ok_or(FeeError::Negative)
     }
 
     /// Checks the sighash types of input partial sigs (ECDSA).
@@ -1000,21 +995,23 @@ impl Psbt {
     pub(crate) fn check_partial_sigs_sighash_type(
         &self,
     ) -> Result<(), PartialSigsSighashTypeError> {
-        use PartialSigsSighashTypeError::*;
-
         for (input_index, input) in self.inputs.iter().enumerate() {
             let target_ecdsa_sighash_ty = match input.sighash_type {
-                Some(psbt_hash_ty) => psbt_hash_ty
-                    .ecdsa_hash_ty()
-                    .map_err(|error| NonStandardInputSighashType { input_index, error })?,
+                Some(psbt_hash_ty) => psbt_hash_ty.ecdsa_hash_ty().map_err(|error| {
+                    PartialSigsSighashTypeError::NonStandardInputSighashType { input_index, error }
+                })?,
                 None => EcdsaSighashType::All,
             };
 
             for (key, ecdsa_sig) in &input.partial_sigs {
-                let flag = EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32)
-                    .map_err(|error| NonStandardPartialSigsSighashType { input_index, error })?;
+                let flag = EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32).map_err(
+                    |error| PartialSigsSighashTypeError::NonStandardPartialSigsSighashType {
+                        input_index,
+                        error,
+                    },
+                )?;
                 if target_ecdsa_sighash_ty != flag {
-                    return Err(WrongSighashFlag {
+                    return Err(PartialSigsSighashTypeError::WrongSighashFlag {
                         input_index,
                         required: target_ecdsa_sighash_ty,
                         got: flag,
@@ -1149,11 +1146,9 @@ pub enum GetKeyError {
 
 impl fmt::Display for GetKeyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use GetKeyError::*;
-
-        match *self {
-            Bip32(ref e) => write_err!(f, "a bip23 error"; e),
-            NotSupported =>
+        match self {
+            Self::Bip32(ref e) => write_err!(f, "a bip32 error"; e),
+            Self::NotSupported =>
                 f.write_str("the GetKey operation is not supported for this key request"),
         }
     }
@@ -1162,11 +1157,9 @@ impl fmt::Display for GetKeyError {
 #[cfg(feature = "std")]
 impl std::error::Error for GetKeyError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use GetKeyError::*;
-
-        match *self {
-            NotSupported => None,
-            Bip32(ref e) => Some(e),
+        match self {
+            Self::NotSupported => None,
+            Self::Bip32(ref e) => Some(e),
         }
     }
 }
@@ -1198,11 +1191,10 @@ pub enum OutputType {
 impl OutputType {
     /// The signing algorithm used to sign this output type.
     pub fn signing_algorithm(&self) -> SigningAlgorithm {
-        use OutputType::*;
-
         match self {
-            Bare | Wpkh | Wsh | ShWpkh | ShWsh | Sh => SigningAlgorithm::Ecdsa,
-            Tr => SigningAlgorithm::Schnorr,
+            Self::Bare | Self::Wpkh | Self::Wsh | Self::ShWpkh | Self::ShWsh | Self::Sh =>
+                SigningAlgorithm::Ecdsa,
+            Self::Tr => SigningAlgorithm::Schnorr,
         }
     }
 }
@@ -1241,15 +1233,13 @@ pub enum DecodeError {
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DecodeError::*;
-
-        match *self {
-            InvalidMagic => f.write_str("invalid magic"),
-            InvalidSeparator => f.write_str("invalid separator"),
-            NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
-            Global(ref e) => write_err!(f, "global map decode error"; e),
-            Input(ref e) => write_err!(f, "input map decode error"; e),
-            Output(ref e) => write_err!(f, "output map decode error"; e),
+        match self {
+            Self::InvalidMagic => f.write_str("invalid magic"),
+            Self::InvalidSeparator => f.write_str("invalid separator"),
+            Self::NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
+            Self::Global(ref e) => write_err!(f, "global map decode error"; e),
+            Self::Input(ref e) => write_err!(f, "input map decode error"; e),
+            Self::Output(ref e) => write_err!(f, "output map decode error"; e),
         }
     }
 }
@@ -1257,13 +1247,11 @@ impl fmt::Display for DecodeError {
 #[cfg(feature = "std")]
 impl std::error::Error for DecodeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use DecodeError::*;
-
-        match *self {
-            InvalidMagic | InvalidSeparator | NoMorePairs => None,
-            Global(ref e) => Some(e),
-            Input(ref e) => Some(e),
-            Output(ref e) => Some(e),
+        match self {
+            Self::InvalidMagic | Self::InvalidSeparator | Self::NoMorePairs => None,
+            Self::Global(ref e) => Some(e),
+            Self::Input(ref e) => Some(e),
+            Self::Output(ref e) => Some(e),
         }
     }
 }
@@ -1318,11 +1306,10 @@ mod display_from_str {
 
     impl Display for ParsePsbtError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            use self::ParsePsbtError::*;
-
-            match *self {
-                PsbtEncoding(ref e) => write_err!(f, "error in internal PSBT data structure"; e),
-                Base64Encoding(ref e) => write_err!(f, "error in PSBT base64 encoding"; e),
+            match self {
+                Self::PsbtEncoding(ref e) =>
+                    write_err!(f, "error in internal PSBT data structure"; e),
+                Self::Base64Encoding(ref e) => write_err!(f, "error in PSBT base64 encoding"; e),
             }
         }
     }
@@ -1330,11 +1317,9 @@ mod display_from_str {
     #[cfg(feature = "std")]
     impl std::error::Error for ParsePsbtError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-            use self::ParsePsbtError::*;
-
             match self {
-                PsbtEncoding(e) => Some(e),
-                Base64Encoding(e) => Some(e),
+                Self::PsbtEncoding(e) => Some(e),
+                Self::Base64Encoding(e) => Some(e),
             }
         }
     }
@@ -1354,12 +1339,10 @@ pub enum CombineError {
 
 impl fmt::Display for CombineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use CombineError::*;
-
-        match *self {
-            Global(ref e) => write_err!(f, "error while combining the global maps"; e),
-            Input(ref e) => write_err!(f, "error while combining the input maps"; e),
-            Output(ref e) => write_err!(f, "error while combining the output maps"; e),
+        match self {
+            Self::Global(ref e) => write_err!(f, "error while combining the global maps"; e),
+            Self::Input(ref e) => write_err!(f, "error while combining the input maps"; e),
+            Self::Output(ref e) => write_err!(f, "error while combining the output maps"; e),
         }
     }
 }
@@ -1367,12 +1350,10 @@ impl fmt::Display for CombineError {
 #[cfg(feature = "std")]
 impl std::error::Error for CombineError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use CombineError::*;
-
-        match *self {
-            Global(ref e) => Some(e),
-            Input(ref e) => Some(e),
-            Output(ref e) => Some(e),
+        match self {
+            Self::Global(ref e) => Some(e),
+            Self::Input(ref e) => Some(e),
+            Self::Output(ref e) => Some(e),
         }
     }
 }

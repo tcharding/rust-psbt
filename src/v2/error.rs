@@ -76,15 +76,13 @@ pub enum IndexOutOfBoundsError {
 
 impl fmt::Display for IndexOutOfBoundsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use IndexOutOfBoundsError::*;
-
-        match *self {
-            Inputs { ref index, ref length } => write!(
+        match self {
+            Self::Inputs { ref index, ref length } => write!(
                 f,
                 "index {} is out-of-bounds for PSBT inputs vector length {}",
                 index, length
             ),
-            Count { ref index, ref count } =>
+            Self::Count { ref index, ref count } =>
                 write!(f, "index {} is greater global.input_count {}", index, count),
         }
     }
@@ -93,10 +91,8 @@ impl fmt::Display for IndexOutOfBoundsError {
 #[cfg(feature = "std")]
 impl std::error::Error for IndexOutOfBoundsError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use IndexOutOfBoundsError::*;
-
-        match *self {
-            Inputs { .. } | Count { .. } => None,
+        match self {
+            Self::Inputs { .. } | Self::Count { .. } => None,
         }
     }
 }
@@ -144,7 +140,7 @@ impl fmt::Display for SignError {
         match self {
             Self::IndexOutOfBounds(ref e) => write_err!(f, "index out of bounds"; e),
             Self::InvalidSighashType => write!(f, "invalid sighash type"),
-            Self::MissingInputUtxo => write!(f, "missing input utxo in PBST"),
+            Self::MissingInputUtxo => write!(f, "missing input utxo in PSBT"),
             Self::MissingRedeemScript => write!(f, "missing redeem script"),
             Self::FundingUtxo(ref e) => write_err!(f, "input funding utxo error"; e),
             Self::MissingWitnessScript => write!(f, "missing witness script"),
@@ -166,25 +162,23 @@ impl fmt::Display for SignError {
 #[cfg(feature = "std")]
 impl std::error::Error for SignError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use SignError::*;
-
-        match *self {
-            SegwitV0Sighash(ref e) => Some(e),
-            P2wpkhSighash(ref e) => Some(e),
-            TaprootError(ref e) => Some(e),
-            IndexOutOfBounds(ref e) => Some(e),
-            FundingUtxo(ref e) => Some(e),
-            InvalidSighashType
-            | MissingInputUtxo
-            | MissingRedeemScript
-            | MissingWitnessScript
-            | MismatchedAlgoKey
-            | NotEcdsa
-            | NotWpkh
-            | UnknownOutputType
-            | KeyNotFound
-            | WrongSigningAlgorithm
-            | Unsupported => None,
+        match self {
+            Self::SegwitV0Sighash(ref e) => Some(e),
+            Self::P2wpkhSighash(ref e) => Some(e),
+            Self::TaprootError(ref e) => Some(e),
+            Self::IndexOutOfBounds(ref e) => Some(e),
+            Self::FundingUtxo(ref e) => Some(e),
+            Self::InvalidSighashType
+            | Self::MissingInputUtxo
+            | Self::MissingRedeemScript
+            | Self::MissingWitnessScript
+            | Self::MismatchedAlgoKey
+            | Self::NotEcdsa
+            | Self::NotWpkh
+            | Self::UnknownOutputType
+            | Self::KeyNotFound
+            | Self::WrongSigningAlgorithm
+            | Self::Unsupported => None,
         }
     }
 }
@@ -217,11 +211,9 @@ pub enum PsbtNotModifiableError {
 
 impl fmt::Display for PsbtNotModifiableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use PsbtNotModifiableError::*;
-
-        match *self {
-            Outputs(ref e) => write_err!(f, "outputs not modifiable"; e),
-            Inputs(ref e) => write_err!(f, "inputs not modifiable"; e),
+        match self {
+            Self::Outputs(ref e) => write_err!(f, "outputs not modifiable"; e),
+            Self::Inputs(ref e) => write_err!(f, "inputs not modifiable"; e),
         }
     }
 }
@@ -229,11 +221,9 @@ impl fmt::Display for PsbtNotModifiableError {
 #[cfg(feature = "std")]
 impl std::error::Error for PsbtNotModifiableError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use PsbtNotModifiableError::*;
-
-        match *self {
-            Outputs(ref e) => Some(e),
-            Inputs(ref e) => Some(e),
+        match self {
+            Self::Outputs(ref e) => Some(e),
+            Self::Inputs(ref e) => Some(e),
         }
     }
 }
@@ -288,11 +278,9 @@ pub enum NotUnsignedError {
 
 impl fmt::Display for NotUnsignedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use NotUnsignedError::*;
-
-        match *self {
-            Finalized => f.write_str("input has already been finalized"),
-            SigData => f.write_str("input already has signature data"),
+        match self {
+            Self::Finalized => f.write_str("input has already been finalized"),
+            Self::SigData => f.write_str("input already has signature data"),
         }
     }
 }
@@ -353,14 +341,12 @@ pub enum PartialSigsSighashTypeError {
 
 impl fmt::Display for PartialSigsSighashTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use PartialSigsSighashTypeError::*;
-
-        match *self {
-            NonStandardInputSighashType { input_index, ref error } =>
+        match self {
+            Self::NonStandardInputSighashType { input_index, ref error } =>
                 write_err!(f, "non-standard sighash type for input {} in sighash_type field", input_index; error),
-            NonStandardPartialSigsSighashType { input_index, ref error } =>
+            Self::NonStandardPartialSigsSighashType { input_index, ref error } =>
                 write_err!(f, "non-standard sighash type for input {} in partial_sigs", input_index; error),
-            WrongSighashFlag { input_index, got, required, pubkey } => write!(
+            Self::WrongSighashFlag { input_index, got, required, pubkey } => write!(
                 f,
                 "wrong sighash flag for input {} (got: {}, required: {}) pubkey: {}",
                 input_index, got, required, pubkey
@@ -372,13 +358,11 @@ impl fmt::Display for PartialSigsSighashTypeError {
 #[cfg(feature = "std")]
 impl std::error::Error for PartialSigsSighashTypeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use PartialSigsSighashTypeError::*;
-
         // TODO: Is this correct for a struct error fields?
-        match *self {
-            NonStandardInputSighashType { input_index: _, ref error } => Some(error),
-            NonStandardPartialSigsSighashType { input_index: _, ref error } => Some(error),
-            WrongSighashFlag { .. } => None,
+        match self {
+            Self::NonStandardInputSighashType { input_index: _, ref error } => Some(error),
+            Self::NonStandardPartialSigsSighashType { input_index: _, ref error } => Some(error),
+            Self::WrongSighashFlag { .. } => None,
         }
     }
 }

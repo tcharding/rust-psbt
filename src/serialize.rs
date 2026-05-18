@@ -241,12 +241,11 @@ impl Serialize for taproot::Signature {
 
 impl Deserialize for taproot::Signature {
     fn deserialize(bytes: &[u8]) -> Result<Self, Error> {
-        use taproot::SigFromSliceError::*;
-
         Self::from_slice(bytes).map_err(|e| match e {
-            SighashType(err) => Error::NonStandardSighashType(err.0),
-            InvalidSignatureSize(_) => Error::InvalidTaprootSignature(e),
-            Secp256k1(..) => Error::InvalidTaprootSignature(e),
+            taproot::SigFromSliceError::SighashType(err) => Error::NonStandardSighashType(err.0),
+            taproot::SigFromSliceError::InvalidSignatureSize(_) =>
+                Error::InvalidTaprootSignature(e),
+            taproot::SigFromSliceError::Secp256k1(..) => Error::InvalidTaprootSignature(e),
             _ => panic!("TODO: Handle non_exhaustive error"),
         })
     }
@@ -436,37 +435,37 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
-
-        match *self {
-            NotEnoughData => f.write_str("not enough data to deserialize object"),
-            InvalidProprietaryKey =>
+        match self {
+            Self::NotEnoughData => f.write_str("not enough data to deserialize object"),
+            Self::InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
-            NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
-            NonStandardSighashType(ref sht) => write!(f, "non-standard sighash type: {}", sht),
-            InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),
-            ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
-            InvalidPublicKey(ref e) => write_err!(f, "invalid public key"; e),
-            InvalidSecp256k1PublicKey(ref e) => write_err!(f, "invalid secp256k1 public key"; e),
-            InvalidXOnlyPublicKey => f.write_str("invalid xonly public key"),
-            InvalidEcdsaSignature(ref e) => write_err!(f, "invalid ECDSA signature"; e),
-            InvalidTaprootSignature(ref e) => write_err!(f, "invalid taproot signature"; e),
-            InvalidControlBlock => f.write_str("invalid control block"),
-            InvalidLeafVersion => f.write_str("invalid leaf version"),
-            Taproot(s) => write!(f, "taproot error -  {}", s),
-            TapTree(ref e) => write_err!(f, "taproot tree error"; e),
-            PartialDataConsumption =>
+            Self::NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
+            Self::NonStandardSighashType(ref sht) =>
+                write!(f, "non-standard sighash type: {}", sht),
+            Self::InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),
+            Self::ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
+            Self::InvalidPublicKey(ref e) => write_err!(f, "invalid public key"; e),
+            Self::InvalidSecp256k1PublicKey(ref e) =>
+                write_err!(f, "invalid secp256k1 public key"; e),
+            Self::InvalidXOnlyPublicKey => f.write_str("invalid xonly public key"),
+            Self::InvalidEcdsaSignature(ref e) => write_err!(f, "invalid ECDSA signature"; e),
+            Self::InvalidTaprootSignature(ref e) => write_err!(f, "invalid taproot signature"; e),
+            Self::InvalidControlBlock => f.write_str("invalid control block"),
+            Self::InvalidLeafVersion => f.write_str("invalid leaf version"),
+            Self::Taproot(s) => write!(f, "taproot error -  {}", s),
+            Self::TapTree(ref e) => write_err!(f, "taproot tree error"; e),
+            Self::PartialDataConsumption =>
                 f.write_str("data not consumed entirely when explicitly deserializing"),
-            LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
-            UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
-            InvalidScanKey { got, expected } => {
+            Self::LockTime(ref e) => write_err!(f, "parsed locktime invalid"; e),
+            Self::UnsupportedVersion(ref e) => write_err!(f, "unsupported version"; e),
+            Self::InvalidScanKey { got, expected } => {
                 write!(f, "invalid scan key: got {} bytes, expected {}", got, expected)
             }
-            InvalidEcdhShare { got, expected } => {
+            Self::InvalidEcdhShare { got, expected } => {
                 write!(f, "invalid ECDH share: got {} bytes, expected {}", got, expected)
             }
             #[cfg(feature = "silent-payments")]
-            InvalidDleqProof(e) => {
+            Self::InvalidDleqProof(e) => {
                 write!(f, "invalid DLEQ proof: got {} bytes, expected {}", e.got, e.expected)
             }
         }
@@ -476,31 +475,29 @@ impl fmt::Display for Error {
 #[cfg(feature = "std")]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use Error::*;
-
-        match *self {
-            InvalidHash(ref e) => Some(e),
-            ConsensusEncoding(ref e) => Some(e),
-            LockTime(ref e) => Some(e),
-            UnsupportedVersion(ref e) => Some(e),
-            NotEnoughData
-            | InvalidProprietaryKey
-            | NoMorePairs
-            | NonStandardSighashType(_)
-            | InvalidPublicKey(_)
-            | InvalidSecp256k1PublicKey(_)
-            | InvalidXOnlyPublicKey
-            | InvalidEcdsaSignature(_)
-            | InvalidTaprootSignature(_)
-            | InvalidControlBlock
-            | InvalidLeafVersion
-            | Taproot(_)
-            | TapTree(_)
-            | PartialDataConsumption
-            | InvalidScanKey { .. }
-            | InvalidEcdhShare { .. } => None,
+        match self {
+            Self::InvalidHash(ref e) => Some(e),
+            Self::ConsensusEncoding(ref e) => Some(e),
+            Self::LockTime(ref e) => Some(e),
+            Self::UnsupportedVersion(ref e) => Some(e),
+            Self::NotEnoughData
+            | Self::InvalidProprietaryKey
+            | Self::NoMorePairs
+            | Self::NonStandardSighashType(_)
+            | Self::InvalidPublicKey(_)
+            | Self::InvalidSecp256k1PublicKey(_)
+            | Self::InvalidXOnlyPublicKey
+            | Self::InvalidEcdsaSignature(_)
+            | Self::InvalidTaprootSignature(_)
+            | Self::InvalidControlBlock
+            | Self::InvalidLeafVersion
+            | Self::Taproot(_)
+            | Self::TapTree(_)
+            | Self::PartialDataConsumption
+            | Self::InvalidScanKey { .. }
+            | Self::InvalidEcdhShare { .. } => None,
             #[cfg(feature = "silent-payments")]
-            InvalidDleqProof { .. } => None,
+            Self::InvalidDleqProof { .. } => None,
         }
     }
 }

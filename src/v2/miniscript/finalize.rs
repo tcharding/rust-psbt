@@ -383,14 +383,12 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Error::*;
-
-        match *self {
+        match self {
             // TODO: Loads of error messages are capitalized, they should not be.
-            FundingUtxo(ref e) => write_err!(f, "Finalizer missing funding UTXO"; e),
-            DetermineLockTime(ref e) =>
+            Self::FundingUtxo(ref e) => write_err!(f, "Finalizer missing funding UTXO"; e),
+            Self::DetermineLockTime(ref e) =>
                 write_err!(f, "finalizer must be able to determine the lock time"; e),
-            PartialSigsSighashType(ref e) => write_err!(f, "Finalizer sighash type error"; e),
+            Self::PartialSigsSighashType(ref e) => write_err!(f, "Finalizer sighash type error"; e),
         }
     }
 }
@@ -398,12 +396,10 @@ impl fmt::Display for Error {
 #[cfg(feature = "std")]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use Error::*;
-
-        match *self {
-            FundingUtxo(ref e) => Some(e),
-            DetermineLockTime(ref e) => Some(e),
-            PartialSigsSighashType(ref e) => Some(e),
+        match self {
+            Self::FundingUtxo(ref e) => Some(e),
+            Self::DetermineLockTime(ref e) => Some(e),
+            Self::PartialSigsSighashType(ref e) => Some(e),
         }
     }
 }
@@ -436,12 +432,11 @@ pub enum FinalizeError {
 
 impl fmt::Display for FinalizeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FinalizeError::*;
-
-        match *self {
-            FinalizeInput { input_index, ref error } =>
+        match self {
+            Self::FinalizeInput { input_index, ref error } =>
                 write_err!(f, "failed to finalize input at index {}", input_index; error),
-            InterpreterCheck(ref e) => write_err!(f, "error running the interpreter checks"; e),
+            Self::InterpreterCheck(ref e) =>
+                write_err!(f, "error running the interpreter checks"; e),
         }
     }
 }
@@ -449,11 +444,9 @@ impl fmt::Display for FinalizeError {
 #[cfg(feature = "std")]
 impl std::error::Error for FinalizeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FinalizeError::*;
-
-        match *self {
-            FinalizeInput { input_index: _, ref error } => Some(error),
-            InterpreterCheck(ref error) => Some(error),
+        match self {
+            Self::FinalizeInput { input_index: _, ref error } => Some(error),
+            Self::InterpreterCheck(ref error) => Some(error),
         }
     }
 }
@@ -473,11 +466,9 @@ pub enum FinalizeInputError {
 
 impl fmt::Display for FinalizeInputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FinalizeInputError::*;
-
-        match *self {
-            Final(ref e) => write_err!(f, "final"; e),
-            Input(ref e) => write_err!(f, "input"; e),
+        match self {
+            Self::Final(ref e) => write_err!(f, "final"; e),
+            Self::Input(ref e) => write_err!(f, "input"; e),
         }
     }
 }
@@ -485,11 +476,9 @@ impl fmt::Display for FinalizeInputError {
 #[cfg(feature = "std")]
 impl std::error::Error for FinalizeInputError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use FinalizeInputError::*;
-
-        match *self {
-            Final(ref e) => Some(e),
-            Input(ref e) => Some(e),
+        match self {
+            Self::Final(ref e) => Some(e),
+            Self::Input(ref e) => Some(e),
         }
     }
 }
@@ -569,33 +558,31 @@ pub enum InputError {
 #[cfg(feature = "std")]
 impl std::error::Error for InputError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use self::InputError::*;
-
         match self {
-            CouldNotSatisfyTr
-            | InvalidRedeemScript { .. }
-            | InvalidWitnessScript { .. }
-            | InvalidSignature { .. }
-            | MissingRedeemScript
-            | MissingWitness
-            | MissingPubkey
-            | MissingWitnessScript
-            | MissingUtxo
-            | NonEmptyWitnessScript
-            | NonEmptyRedeemScript
-            | NonStandardSighashType(_)
-            | WrongSighashFlag { .. } => None,
-            SecpErr(e) => Some(e),
-            KeyErr(e) => Some(e),
-            Interpreter(e) => Some(e),
-            MiniscriptError(e) => Some(e),
+            Self::CouldNotSatisfyTr
+            | Self::InvalidRedeemScript { .. }
+            | Self::InvalidWitnessScript { .. }
+            | Self::InvalidSignature { .. }
+            | Self::MissingRedeemScript
+            | Self::MissingWitness
+            | Self::MissingPubkey
+            | Self::MissingWitnessScript
+            | Self::MissingUtxo
+            | Self::NonEmptyWitnessScript
+            | Self::NonEmptyRedeemScript
+            | Self::NonStandardSighashType(_)
+            | Self::WrongSighashFlag { .. } => None,
+            Self::SecpErr(e) => Some(e),
+            Self::KeyErr(e) => Some(e),
+            Self::Interpreter(e) => Some(e),
+            Self::MiniscriptError(e) => Some(e),
         }
     }
 }
 
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Self::InvalidSignature { ref pubkey, ref sig } => {
                 write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
             }

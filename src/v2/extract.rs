@@ -136,11 +136,9 @@ pub enum ExtractError {
 
 impl fmt::Display for ExtractError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExtractError::*;
-
-        match *self {
-            PsbtNotFinalized => write!(f, "attempted to extract tx from an unfinalized PSBT"),
-            DetermineLockTime(ref e) =>
+        match self {
+            Self::PsbtNotFinalized => write!(f, "attempted to extract tx from an unfinalized PSBT"),
+            Self::DetermineLockTime(ref e) =>
                 write_err!(f, "extractor must be able to determine the lock time"; e),
         }
     }
@@ -149,11 +147,9 @@ impl fmt::Display for ExtractError {
 #[cfg(feature = "std")]
 impl std::error::Error for ExtractError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ExtractError::*;
-
-        match *self {
-            DetermineLockTime(ref e) => Some(e),
-            PsbtNotFinalized => None,
+        match self {
+            Self::DetermineLockTime(ref e) => Some(e),
+            Self::PsbtNotFinalized => None,
         }
     }
 }
@@ -181,12 +177,10 @@ pub enum ExtractTxFeeRateError {
 
 impl fmt::Display for ExtractTxFeeRateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExtractTxFeeRateError::*;
-
-        match *self {
-            Fee(ref e) => write_err!(f, "fee calculation"; e),
-            FeeTooHigh { fee, max } => write!(f, "fee {} is greater than max {}", fee, max),
-            ExtractTx(ref e) => write_err!(f, "extract"; e),
+        match self {
+            Self::Fee(ref e) => write_err!(f, "fee calculation"; e),
+            Self::FeeTooHigh { fee, max } => write!(f, "fee {} is greater than max {}", fee, max),
+            Self::ExtractTx(ref e) => write_err!(f, "extract"; e),
         }
     }
 }
@@ -194,12 +188,10 @@ impl fmt::Display for ExtractTxFeeRateError {
 #[cfg(feature = "std")]
 impl std::error::Error for ExtractTxFeeRateError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use ExtractTxFeeRateError::*;
-
-        match *self {
-            Fee(ref e) => Some(e),
-            ExtractTx(ref e) => Some(e),
-            FeeTooHigh { .. } => None,
+        match self {
+            Self::Fee(ref e) => Some(e),
+            Self::ExtractTx(ref e) => Some(e),
+            Self::FeeTooHigh { .. } => None,
         }
     }
 }

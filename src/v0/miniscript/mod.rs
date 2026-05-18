@@ -56,7 +56,7 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Self::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
             Self::WrongInputCount { in_tx, in_map } => {
                 write!(f, "PSBT had {} inputs in transaction but {} inputs in map", in_tx, in_map)
@@ -73,11 +73,9 @@ impl fmt::Display for Error {
 #[cfg(feature = "std")]
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::Error::*;
-
         match self {
-            InputError(e, _) => Some(e),
-            WrongInputCount { .. } | InputIdxOutofBounds { .. } => None,
+            Self::InputError(e, _) => Some(e),
+            Self::WrongInputCount { .. } | Self::InputIdxOutofBounds { .. } => None,
         }
     }
 }
@@ -149,33 +147,31 @@ pub enum InputError {
 #[cfg(feature = "std")]
 impl error::Error for InputError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::InputError::*;
-
         match self {
-            CouldNotSatisfyTr
-            | InvalidRedeemScript { .. }
-            | InvalidWitnessScript { .. }
-            | InvalidSignature { .. }
-            | MissingRedeemScript
-            | MissingWitness
-            | MissingPubkey
-            | MissingWitnessScript
-            | MissingUtxo
-            | NonEmptyWitnessScript
-            | NonEmptyRedeemScript
-            | NonStandardSighashType(_)
-            | WrongSighashFlag { .. } => None,
-            SecpErr(e) => Some(e),
-            KeyErr(e) => Some(e),
-            Interpreter(e) => Some(e),
-            MiniscriptError(e) => Some(e),
+            Self::CouldNotSatisfyTr
+            | Self::InvalidRedeemScript { .. }
+            | Self::InvalidWitnessScript { .. }
+            | Self::InvalidSignature { .. }
+            | Self::MissingRedeemScript
+            | Self::MissingWitness
+            | Self::MissingPubkey
+            | Self::MissingWitnessScript
+            | Self::MissingUtxo
+            | Self::NonEmptyWitnessScript
+            | Self::NonEmptyRedeemScript
+            | Self::NonStandardSighashType(_)
+            | Self::WrongSighashFlag { .. } => None,
+            Self::SecpErr(e) => Some(e),
+            Self::KeyErr(e) => Some(e),
+            Self::Interpreter(e) => Some(e),
+            Self::MiniscriptError(e) => Some(e),
         }
     }
 }
 
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Self::InvalidSignature { ref pubkey, ref sig } => {
                 write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
             }
@@ -1252,11 +1248,9 @@ impl fmt::Display for UtxoUpdateError {
 #[cfg(feature = "std")]
 impl error::Error for UtxoUpdateError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::UtxoUpdateError::*;
-
         match self {
-            IndexOutOfBounds(_, _) | MissingInputUtxo | UtxoCheck | MismatchedScriptPubkey => None,
-            DerivationError(e) => Some(e),
+            Self::IndexOutOfBounds(_, _) | Self::MissingInputUtxo | Self::UtxoCheck | Self::MismatchedScriptPubkey => None,
+            Self::DerivationError(e) => Some(e),
         }
     }
 }
@@ -1294,11 +1288,9 @@ impl fmt::Display for OutputUpdateError {
 #[cfg(feature = "std")]
 impl error::Error for OutputUpdateError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::OutputUpdateError::*;
-
         match self {
-            IndexOutOfBounds(_, _) | MissingTxOut | MismatchedScriptPubkey => None,
-            DerivationError(e) => Some(e),
+            Self::IndexOutOfBounds(_, _) | Self::MissingTxOut | Self::MismatchedScriptPubkey => None,
+            Self::DerivationError(e) => Some(e),
         }
     }
 }
@@ -1347,18 +1339,16 @@ impl fmt::Display for SighashError {
 #[cfg(feature = "std")]
 impl error::Error for SighashError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        use self::SighashError::*;
-
         match self {
-            IndexOutOfBounds(_, _)
-            | MissingInputUtxo
-            | MissingSpendUtxos
-            | InvalidSighashType
-            | MissingWitnessScript
-            | MissingRedeemScript => None,
-            SighashTaproot(ref e) => Some(e),
-            SighashP2wpkh(ref e) => Some(e),
-            TransactionInputsIndex(ref e) => Some(e),
+            Self::IndexOutOfBounds(_, _)
+            | Self::MissingInputUtxo
+            | Self::MissingSpendUtxos
+            | Self::InvalidSighashType
+            | Self::MissingWitnessScript
+            | Self::MissingRedeemScript => None,
+            Self::SighashTaproot(ref e) => Some(e),
+            Self::SighashP2wpkh(ref e) => Some(e),
+            Self::TransactionInputsIndex(ref e) => Some(e),
         }
     }
 }
@@ -1389,7 +1379,7 @@ pub enum PsbtSighashMsg {
 impl PsbtSighashMsg {
     /// Convert the message to a [`secp256k1::Message`].
     pub fn to_secp_msg(&self) -> secp256k1::Message {
-        match *self {
+        match self {
             Self::TapSighash(msg) => secp256k1::Message::from_digest(msg.to_byte_array()),
             Self::LegacySighash(msg) => {
                 secp256k1::Message::from_digest(msg.to_byte_array())

@@ -84,8 +84,6 @@ impl Psbt {
         witness: &Witness,
         script_sig: &Script,
     ) -> Result<(), InterpreterCheckInputError> {
-        use InterpreterCheckInputError::*;
-
         let spk = &input.funding_utxo().expect("have funding utxo").script_pubkey;
 
         // TODO: Check that this is correct?
@@ -93,13 +91,15 @@ impl Psbt {
         // TODO: is this usage of MAX correct?
         let csv = input.sequence.unwrap_or(Sequence::MAX);
 
-        let interpreter = Interpreter::from_txdata(spk, script_sig, witness, csv, cltv)
-            .map_err(|error| Constructor { input_index: index, error })?;
+        let interpreter =
+            Interpreter::from_txdata(spk, script_sig, witness, csv, cltv).map_err(|error| {
+                InterpreterCheckInputError::Constructor { input_index: index, error }
+            })?;
 
         let iter = interpreter.iter(secp, unsigned_tx, index, utxos);
         // TODO: Ok to just return the first satisfaction error?
         if let Some(error) = iter.filter_map(Result::err).next() {
-            return Err(Satisfaction { input_index: index, error });
+            return Err(InterpreterCheckInputError::Satisfaction { input_index: index, error });
         };
 
         Ok(())
@@ -152,11 +152,11 @@ pub enum InterpreterCheckError {
 
 impl fmt::Display for InterpreterCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use InterpreterCheckError::*;
-
-        match *self {
-            DetermineLockTime(ref e) => write_err!(f, "interpreter check determine locktime"; e),
-            InterpreterCheckInput(ref e) => write_err!(f, "interpreter check failed for input"; e),
+        match self {
+            Self::DetermineLockTime(ref e) =>
+                write_err!(f, "interpreter check determine locktime"; e),
+            Self::InterpreterCheckInput(ref e) =>
+                write_err!(f, "interpreter check failed for input"; e),
         }
     }
 }
@@ -164,11 +164,9 @@ impl fmt::Display for InterpreterCheckError {
 #[cfg(feature = "std")]
 impl std::error::Error for InterpreterCheckError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InterpreterCheckError::*;
-
-        match *self {
-            DetermineLockTime(ref e) => Some(e),
-            InterpreterCheckInput(ref e) => Some(e),
+        match self {
+            Self::DetermineLockTime(ref e) => Some(e),
+            Self::InterpreterCheckInput(ref e) => Some(e),
         }
     }
 }
@@ -202,12 +200,10 @@ pub enum InterpreterCheckInputError {
 
 impl fmt::Display for InterpreterCheckInputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use InterpreterCheckInputError::*;
-
-        match *self {
-            Constructor { input_index, ref error } =>
+        match self {
+            Self::Constructor { input_index, ref error } =>
                 write_err!(f, "Interpreter constructor failed for input {}", input_index; error),
-            Satisfaction { input_index, ref error } =>
+            Self::Satisfaction { input_index, ref error } =>
                 write_err!(f, "Interpreter satisfaction failed for input {}", input_index; error),
         }
     }
@@ -216,11 +212,9 @@ impl fmt::Display for InterpreterCheckInputError {
 #[cfg(feature = "std")]
 impl std::error::Error for InterpreterCheckInputError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InterpreterCheckInputError::*;
-
-        match *self {
-            Constructor { input_index: _, ref error } => Some(error),
-            Satisfaction { input_index: _, ref error } => Some(error),
+        match self {
+            Self::Constructor { input_index: _, ref error } => Some(error),
+            Self::Satisfaction { input_index: _, ref error } => Some(error),
         }
     }
 }

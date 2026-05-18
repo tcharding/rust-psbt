@@ -566,24 +566,22 @@ pub enum DecodeError {
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
-            DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
-            MissingVersion => write!(f, "serialized PSBT is missing the version number"),
-            MissingTxVersion => {
+        match self {
+            Self::InsertPair(ref e) => write_err!(f, "error inserting a pair"; e),
+            Self::DeserPair(ref e) => write_err!(f, "error deserializing a pair"; e),
+            Self::MissingVersion => write!(f, "serialized PSBT is missing the version number"),
+            Self::MissingTxVersion => {
                 write!(f, "serialized PSBT is missing the transaction version number")
             }
-            MissingInputCount => write!(f, "serialized PSBT is missing the input count"),
-            InputCountOverflow(count) => {
+            Self::MissingInputCount => write!(f, "serialized PSBT is missing the input count"),
+            Self::InputCountOverflow(count) => {
                 write!(f, "input count overflows word size for current architecture: {}", count)
             }
-            MissingOutputCount => write!(f, "serialized PSBT is missing the output count"),
-            OutputCountOverflow(count) => {
+            Self::MissingOutputCount => write!(f, "serialized PSBT is missing the output count"),
+            Self::OutputCountOverflow(count) => {
                 write!(f, "output count overflows word size for current architecture: {}", count)
             }
-            FieldMismatch => {
+            Self::FieldMismatch => {
                 write!(f, "ECDH shares and DLEQ proofs must both be present or both absent")
             }
         }
@@ -593,18 +591,16 @@ impl fmt::Display for DecodeError {
 #[cfg(feature = "std")]
 impl std::error::Error for DecodeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use DecodeError::*;
-
-        match *self {
-            InsertPair(ref e) => Some(e),
-            DeserPair(ref e) => Some(e),
-            MissingVersion
-            | MissingTxVersion
-            | MissingInputCount
-            | InputCountOverflow(_)
-            | MissingOutputCount
-            | OutputCountOverflow(_)
-            | FieldMismatch => None,
+        match self {
+            Self::InsertPair(ref e) => Some(e),
+            Self::DeserPair(ref e) => Some(e),
+            Self::MissingVersion
+            | Self::MissingTxVersion
+            | Self::MissingInputCount
+            | Self::InputCountOverflow(_)
+            | Self::MissingOutputCount
+            | Self::OutputCountOverflow(_)
+            | Self::FieldMismatch => None,
         }
     }
 }
@@ -652,41 +648,42 @@ pub enum InsertPairError {
 
 impl fmt::Display for InsertPairError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use InsertPairError::*;
-
-        match *self {
-            DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
-            InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
-            InvalidKeyDataNotEmpty(ref key) => write!(f, "key should not contain data: {}", key),
-            Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
-            Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
-            ValueWrongLength(got, want) => {
+        match self {
+            Self::DuplicateKey(ref key) => write!(f, "duplicate key: {}", key),
+            Self::InvalidKeyDataEmpty(ref key) => write!(f, "key should contain data: {}", key),
+            Self::InvalidKeyDataNotEmpty(ref key) =>
+                write!(f, "key should not contain data: {}", key),
+            Self::Deser(ref e) => write_err!(f, "error deserializing raw value"; e),
+            Self::Consensus(ref e) => write_err!(f, "error consensus deserializing type"; e),
+            Self::ValueWrongLength(got, want) => {
                 write!(f, "value (keyvalue pair) wrong length (got, want) {} {}", got, want)
             }
-            WrongVersion(v) => {
+            Self::WrongVersion(v) => {
                 write!(f, "PSBT_GLOBAL_VERSION: PSBT v2 expects the version to be 2, found: {}", v)
             }
-            XpubInvalidFingerprint => {
+            Self::XpubInvalidFingerprint => {
                 write!(f, "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints")
             }
-            XpubInvalidPath(len) => write!(
+            Self::XpubInvalidPath(len) => write!(
                 f,
                 "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints: {}",
                 len
             ),
-            Bip32(ref e) => write_err!(f, "PSBT_GLOBAL_XPUB: Failed to decode a BIP-32 type"; e),
-            DuplicateXpub((fingerprint, ref derivation_path)) => write!(
+            Self::Bip32(ref e) =>
+                write_err!(f, "PSBT_GLOBAL_XPUB: Failed to decode a BIP-32 type"; e),
+            Self::DuplicateXpub((fingerprint, ref derivation_path)) => write!(
                 f,
                 "PSBT_GLOBAL_XPUB: xpubs must be unique ({}, {})",
                 fingerprint, derivation_path
             ),
-            InvalidProprietaryKey => write!(f, "PSBT_GLOBAL_PROPRIETARY: Invalid proprietary key"),
-            ExcludedKey { key_type_value } => write!(
+            Self::InvalidProprietaryKey =>
+                write!(f, "PSBT_GLOBAL_PROPRIETARY: Invalid proprietary key"),
+            Self::ExcludedKey { key_type_value } => write!(
                 f,
                 "found a keypair type that is explicitly excluded: {}",
-                consts::psbt_global_key_type_value_to_str(key_type_value)
+                consts::psbt_global_key_type_value_to_str(*key_type_value)
             ),
-            KeyWrongLength(got, expected) => {
+            Self::KeyWrongLength(got, expected) => {
                 write!(f, "key wrong length (got: {}, expected: {})", got, expected)
             }
         }
@@ -696,23 +693,21 @@ impl fmt::Display for InsertPairError {
 #[cfg(feature = "std")]
 impl std::error::Error for InsertPairError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use InsertPairError::*;
-
-        match *self {
-            Deser(ref e) => Some(e),
-            Consensus(ref e) => Some(e),
-            Bip32(ref e) => Some(e),
-            DuplicateKey(_)
-            | InvalidKeyDataEmpty(_)
-            | InvalidKeyDataNotEmpty(_)
-            | ValueWrongLength(..)
-            | WrongVersion(_)
-            | XpubInvalidFingerprint
-            | XpubInvalidPath(_)
-            | DuplicateXpub(_)
-            | InvalidProprietaryKey
-            | ExcludedKey { .. }
-            | KeyWrongLength(..) => None,
+        match self {
+            Self::Deser(ref e) => Some(e),
+            Self::Consensus(ref e) => Some(e),
+            Self::Bip32(ref e) => Some(e),
+            Self::DuplicateKey(_)
+            | Self::InvalidKeyDataEmpty(_)
+            | Self::InvalidKeyDataNotEmpty(_)
+            | Self::ValueWrongLength(..)
+            | Self::WrongVersion(_)
+            | Self::XpubInvalidFingerprint
+            | Self::XpubInvalidPath(_)
+            | Self::DuplicateXpub(_)
+            | Self::InvalidProprietaryKey
+            | Self::ExcludedKey { .. }
+            | Self::KeyWrongLength(..) => None,
         }
     }
 }
@@ -753,16 +748,14 @@ pub enum CombineError {
 
 impl fmt::Display for CombineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use CombineError::*;
-
-        match *self {
-            VersionMismatch { ref this, ref that } => {
+        match self {
+            Self::VersionMismatch { ref this, ref that } => {
                 write!(f, "combine two PSBTs with different versions: {:?} {:?}", this, that)
             }
-            TxVersionMismatch { ref this, ref that } => {
+            Self::TxVersionMismatch { ref this, ref that } => {
                 write!(f, "combine two PSBTs with different tx versions: {:?} {:?}", this, that)
             }
-            InconsistentKeySources(ref e) => {
+            Self::InconsistentKeySources(ref e) => {
                 write_err!(f, "combine with inconsistent key sources"; e)
             }
         }
@@ -772,11 +765,9 @@ impl fmt::Display for CombineError {
 #[cfg(feature = "std")]
 impl std::error::Error for CombineError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use CombineError::*;
-
-        match *self {
-            InconsistentKeySources(ref e) => Some(e),
-            VersionMismatch { .. } | TxVersionMismatch { .. } => None,
+        match self {
+            Self::InconsistentKeySources(ref e) => Some(e),
+            Self::VersionMismatch { .. } | Self::TxVersionMismatch { .. } => None,
         }
     }
 }
