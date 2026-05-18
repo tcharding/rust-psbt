@@ -13,8 +13,8 @@ rust-version = "1.74.0"
 exclude = ["api", "tests", "contrib"]
 
 [package.metadata.rbmt.toolchains]
-nightly = "nightly-2026-04-04"
-stable = "1.94.1"
+nightly = "nightly-2026-05-12"
+stable = "1.95.0"
 
 [package.metadata.rbmt.test]
 examples = [
