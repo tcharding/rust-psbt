@@ -1992,6 +1992,33 @@ mod tests {
             assert_eq!(err.to_string(), "invalid control block");
         }
 
+        #[test]
+        fn incorrect_non_witness_utxo_txid() {
+            let err = hex_psbt("70736274ff01007374ff0103010000000000000000002e2873007374ff0107736205000000000000000000000000000000000006060005feffffff74ff01000a000000000000002cc760008530b38dac0100030500000074ff01070100000000000000000000000000c0316888e006000600050000736274ff00d90001007374ff41030100000000000a0a06002e2873007374ff01070100000000000000000000000000000000ff0000060600050000736274ff01000a0080000000000024c7600005193b1e400700030500000074ff0107010000000000a9c7df3f07000570ed62c76004c3ca95c5f90200010742420a0a000000000000").unwrap_err();
+            match err {
+                crate::v0::bitcoin::error::Error::IncorrectNonWitnessUtxo {
+                    index,
+                    input_outpoint,
+                    non_witness_utxo_txid,
+                } => {
+                    assert_eq!(index, 0);
+                    assert_eq!(
+                        input_outpoint,
+                        "00000000000000000000000562730701ff74730073282e000000000000000000:0"
+                            .parse()
+                            .unwrap(),
+                    );
+                    assert_eq!(
+                        non_witness_utxo_txid,
+                        "9ed45fd3f73b038649bee6e763dbd70868745c48a0d2b0299f42c68f957995f4"
+                            .parse()
+                            .unwrap(),
+                    );
+                }
+                _ => panic!("expected IncorrectNonWitnessUtxo error, got {}", err),
+            }
+        }
+
         fn rtt_psbt(psbt: Psbt) {
             let enc = Psbt::serialize(&psbt);
             let psbt2 = Psbt::deserialize(&enc).unwrap();

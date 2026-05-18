@@ -657,8 +657,19 @@ impl Psbt {
             let inputs_len: usize = global.input_count;
             let mut inputs: Vec<Input> = Vec::with_capacity(inputs_len);
 
-            for _ in 0..inputs_len {
-                inputs.push(Input::decode(&mut d)?);
+            for i in 0..inputs_len {
+                let input = Input::decode(&mut d)?;
+                if let Some(ref tx) = input.non_witness_utxo {
+                    let txid = tx.compute_txid();
+                    if txid != input.previous_txid {
+                        return Err(DeserializeError::IncorrectNonWitnessUtxo {
+                            index: i,
+                            previous_txid: input.previous_txid,
+                            non_witness_utxo_txid: txid,
+                        });
+                    }
+                }
+                inputs.push(input);
             }
 
             inputs
