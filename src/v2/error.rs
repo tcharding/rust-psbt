@@ -34,12 +34,30 @@ pub enum DeserializeError {
 }
 
 impl fmt::Display for DeserializeError {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidMagic => f.write_str("invalid magic bytes"),
+            Self::InvalidSeparator => f.write_str("invalid separator"),
+            Self::NoMorePairs => f.write_str("no more key-value pairs"),
+            Self::DecodeGlobal(e) => write!(f, "error decoding global map: {}", e),
+            Self::DecodeInput(e) => write!(f, "error decoding input map: {}", e),
+            Self::DecodeOutput(e) => write!(f, "error decoding output map: {}", e),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
 impl std::error::Error for DeserializeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DecodeGlobal(e) => Some(e),
+            Self::DecodeInput(e) => Some(e),
+            Self::DecodeOutput(e) => Some(e),
+            Self::InvalidMagic
+            | Self::InvalidSeparator
+            | Self::NoMorePairs => None,
+        }
+    }
 }
 
 impl From<global::DecodeError> for DeserializeError {
