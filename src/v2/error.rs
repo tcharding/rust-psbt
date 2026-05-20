@@ -5,7 +5,7 @@
 use core::fmt;
 
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
-use bitcoin::{transaction, PublicKey};
+use bitcoin::{transaction, PublicKey, Txid};
 
 use crate::error::{write_err, FundingUtxoError};
 use crate::v2::map::{global, input, output};
@@ -31,15 +31,49 @@ pub enum DeserializeError {
     DecodeInput(input::DecodeError),
     /// Error decoding an output map.
     DecodeOutput(output::DecodeError),
+    /// Non-witness UTXO (which is a complete transaction) has a txid that
+    /// does not match the transaction input.
+    IncorrectNonWitnessUtxo {
+        /// The index of the input in question.
+        index: usize,
+        /// The txid of the input being spent.
+        previous_txid: Txid,
+        /// The txid of the non-witness UTXO.
+        non_witness_utxo_txid: Txid,
+    },
 }
 
 impl fmt::Display for DeserializeError {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { todo!() }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidMagic => f.write_str("invalid magic bytes"),
+            Self::InvalidSeparator => f.write_str("invalid separator"),
+            Self::NoMorePairs => f.write_str("no more key-value pairs"),
+            Self::DecodeGlobal(e) => write!(f, "error decoding global map: {}", e),
+            Self::DecodeInput(e) => write!(f, "error decoding input map: {}", e),
+            Self::DecodeOutput(e) => write!(f, "error decoding output map: {}", e),
+            Self::IncorrectNonWitnessUtxo { index, previous_txid, non_witness_utxo_txid } => {
+                write!(
+                    f,
+                    "non-witness utxo txid is {}, which does not match input {}'s previous txid {}",
+                    non_witness_utxo_txid, index, previous_txid
+                )
+            }
+        }
+    }
 }
 
 #[cfg(feature = "std")]
 impl std::error::Error for DeserializeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { todo!() }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DecodeGlobal(e) => Some(e),
+            Self::DecodeInput(e) => Some(e),
+            Self::DecodeOutput(e) => Some(e),
+            Self::InvalidMagic | Self::InvalidSeparator | Self::NoMorePairs => None,
+            Self::IncorrectNonWitnessUtxo { .. } => None,
+        }
+    }
 }
 
 impl From<global::DecodeError> for DeserializeError {

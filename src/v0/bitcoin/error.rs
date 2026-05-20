@@ -5,7 +5,7 @@ use core::fmt;
 use bitcoin::bip32::Xpub;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::consensus::encode;
-use bitcoin::{hashes, secp256k1};
+use bitcoin::{hashes, secp256k1, OutPoint, Txid};
 
 use crate::error::write_err;
 use crate::io;
@@ -77,6 +77,16 @@ pub enum Error {
     NegativeFee,
     /// Integer overflow in fee calculation
     FeeOverflow,
+    /// Non-witness UTXO (which is a complete transaction) has a txid that
+    /// does not match the transaction input.
+    IncorrectNonWitnessUtxo {
+        /// The index of the input in question.
+        index: usize,
+        /// The outpoint of the input, as it appears in the unsigned transaction.
+        input_outpoint: OutPoint,
+        /// The txid of the non-witness UTXO.
+        non_witness_utxo_txid: Txid,
+    },
     /// Parsing error indicating invalid public keys
     InvalidPublicKey(bitcoin::key::FromSliceError),
     /// Parsing error indicating invalid secp256k1 public keys
@@ -148,6 +158,13 @@ impl fmt::Display for Error {
             Self::ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
             Self::NegativeFee => f.write_str("PSBT has a negative fee which is not allowed"),
             Self::FeeOverflow => f.write_str("integer overflow in fee calculation"),
+            Self::IncorrectNonWitnessUtxo { index, input_outpoint, non_witness_utxo_txid } => {
+                write!(
+                    f,
+                    "non-witness utxo txid is {}, which does not match input {}'s outpoint {}",
+                    non_witness_utxo_txid, index, input_outpoint
+                )
+            }
             Self::InvalidPublicKey(ref e) => write_err!(f, "invalid public key"; e),
             Self::InvalidSecp256k1PublicKey(ref e) =>
                 write_err!(f, "invalid secp256k1 public key"; e),
@@ -196,6 +213,7 @@ impl std::error::Error for Error {
             | Self::CombineInconsistentKeySources(_)
             | Self::NegativeFee
             | Self::FeeOverflow
+            | Self::IncorrectNonWitnessUtxo { .. }
             | Self::InvalidPublicKey(_)
             | Self::InvalidSecp256k1PublicKey(_)
             | Self::InvalidXOnlyPublicKey
