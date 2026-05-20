@@ -11,7 +11,7 @@ use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, Witness};
 
 use crate::prelude::*;
-use crate::sighash_type::*;
+use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 use crate::v0::bitcoin::map::Map;
 use crate::v0::bitcoin::{error, raw, Error};
 
