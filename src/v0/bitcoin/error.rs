@@ -3,9 +3,8 @@
 use core::fmt;
 
 use bitcoin::bip32::Xpub;
-use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::consensus::encode;
-use bitcoin::{hashes, secp256k1, OutPoint, Txid};
+use bitcoin::{hashes, secp256k1, OutPoint, Transaction, Txid};
 
 use crate::error::write_err;
 use crate::io;

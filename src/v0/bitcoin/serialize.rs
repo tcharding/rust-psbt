@@ -8,9 +8,6 @@
 use core::convert::{TryFrom, TryInto};
 
 use bitcoin::bip32::{ChildNumber, Fingerprint, KeySource};
-use bitcoin::blockdata::script::ScriptBuf;
-use bitcoin::blockdata::transaction::{Transaction, TxOut};
-use bitcoin::blockdata::witness::Witness;
 use bitcoin::consensus::encode::{self, deserialize_partial, serialize, Decodable, Encodable};
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::hex::DisplayHex;
@@ -19,7 +16,7 @@ use bitcoin::secp256k1::{self, XOnlyPublicKey};
 use bitcoin::taproot::{
     ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TapTree, TaprootBuilder,
 };
-use bitcoin::{ecdsa, taproot, VarInt};
+use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
 use super::map::{Input, Map, Output};
 use crate::io::{self, Write};

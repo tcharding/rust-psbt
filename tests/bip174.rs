@@ -415,9 +415,8 @@ fn sigs_in_script_order<'a>(
 fn finalize_input(input: &mut psbt_v2::v0::Input, spk: &ScriptBuf) {
     use std::convert::TryFrom;
 
-    use psbt_v2::bitcoin::blockdata::opcodes::all::OP_PUSHBYTES_0;
-    use psbt_v2::bitcoin::blockdata::script::Builder;
-    use psbt_v2::bitcoin::script::PushBytes;
+    use psbt_v2::bitcoin::opcodes::all::OP_PUSHBYTES_0;
+    use psbt_v2::bitcoin::script::{Builder, PushBytes};
 
     if spk.is_p2pkh() {
         // P2PKH: one sig, one pubkey.
