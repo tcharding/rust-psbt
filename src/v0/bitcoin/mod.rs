@@ -1193,7 +1193,7 @@ impl std::error::Error for IndexOutOfBoundsError {
 
 #[cfg(feature = "base64")]
 mod display_from_str {
-    use core::fmt::{self, Display, Formatter};
+    use core::fmt;
     use core::str::FromStr;
 
     use bitcoin::base64::display::Base64Display;
@@ -1216,8 +1216,8 @@ mod display_from_str {
         fn from(never: core::convert::Infallible) -> Self { match never {} }
     }
 
-    impl Display for PsbtParseError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    impl fmt::Display for PsbtParseError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Self::PsbtEncoding(ref e) =>
                     write_err!(f, "error in internal PSBT data structure"; e),
@@ -1236,8 +1236,8 @@ mod display_from_str {
         }
     }
 
-    impl Display for Psbt {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    impl fmt::Display for Psbt {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "{}", Base64Display::new(&self.serialize(), &BASE64_STANDARD))
         }
     }
