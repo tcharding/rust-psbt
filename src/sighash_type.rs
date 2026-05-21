@@ -21,8 +21,8 @@ use crate::prelude::*;
 /// use bitcoin::{EcdsaSighashType, TapSighashType};
 /// use psbt_v2::PsbtSighashType;
 ///
-/// let ecdsa_sighash_all: PsbtSighashType = EcdsaSighashType::All.into();
-/// let tap_sighash_all: PsbtSighashType = TapSighashType::All.into();
+/// let _ecdsa_sighash_all: PsbtSighashType = EcdsaSighashType::All.into();
+/// let _tap_sighash_all: PsbtSighashType = TapSighashType::All.into();
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -82,8 +82,8 @@ impl PsbtSighashType {
     /// use bitcoin::EcdsaSighashType;
     /// use bitcoin::TapSighashType;
     /// use psbt_v2::PsbtSighashType;
-    /// let ecdsa_sighash_anyone_can_pay: PsbtSighashType = EcdsaSighashType::AllPlusAnyoneCanPay.into();
-    /// let tap_sighash_anyone_can_pay: PsbtSighashType = TapSighashType::AllPlusAnyoneCanPay.into();
+    /// let _ecdsa_sighash_anyone_can_pay: PsbtSighashType = EcdsaSighashType::AllPlusAnyoneCanPay.into();
+    /// let _tap_sighash_anyone_can_pay: PsbtSighashType = TapSighashType::AllPlusAnyoneCanPay.into();
     /// ```
     pub const ALL: Self = Self { inner: 0x01 };
 
