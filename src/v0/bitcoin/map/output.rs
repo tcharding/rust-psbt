@@ -3,10 +3,10 @@
 use core::convert::TryFrom;
 
 use bitcoin::bip32::KeySource;
-use bitcoin::blockdata::script::ScriptBuf;
 use bitcoin::key::PublicKey;
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
+use bitcoin::ScriptBuf;
 
 use crate::prelude::*;
 use crate::v0::bitcoin::map::Map;

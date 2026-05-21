@@ -3,15 +3,12 @@
 use core::convert::TryFrom;
 
 use bitcoin::bip32::KeySource;
-use bitcoin::blockdata::script::ScriptBuf;
-use bitcoin::blockdata::transaction::{Transaction, TxOut};
-use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::key::PublicKey;
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
-use bitcoin::{ecdsa, taproot};
+use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, Witness};
 
 use crate::prelude::*;
 use crate::sighash_type::*;

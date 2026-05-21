@@ -18,12 +18,11 @@ use core::{cmp, fmt};
 use std::collections::{HashMap, HashSet};
 
 use bitcoin::bip32::{self, DerivationPath, KeySource, Xpriv, Xpub};
-use bitcoin::blockdata::transaction::{self, Transaction, TxOut};
 use bitcoin::key::{Keypair, Parity, PrivateKey, PublicKey, TapTweak, XOnlyPublicKey};
 use bitcoin::secp256k1::{Message, Secp256k1, Signing, Verification};
 use bitcoin::sighash::{self, EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::taproot::TapLeafHash;
-use bitcoin::{ecdsa, taproot, Amount, FeeRate};
+use bitcoin::{ecdsa, taproot, transaction, Amount, FeeRate, Transaction, TxOut};
 
 use crate::error::write_err;
 use crate::prelude::*;
@@ -821,6 +820,7 @@ impl GetKey for $set<Xpriv> {
             .transpose()
     }
 }}}
+impl_get_key_for_set!(Vec);
 impl_get_key_for_set!(BTreeSet);
 #[cfg(feature = "std")]
 impl_get_key_for_set!(HashSet);
@@ -1259,14 +1259,13 @@ mod tests {
     use std::collections::BTreeMap;
 
     use bitcoin::bip32::{ChildNumber, KeySource, Xpriv, Xpub};
-    use bitcoin::blockdata::locktime::absolute;
-    use bitcoin::blockdata::script::ScriptBuf;
-    use bitcoin::blockdata::transaction::{self, OutPoint, Sequence, Transaction, TxIn, TxOut};
-    use bitcoin::blockdata::witness::Witness;
     use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
     use bitcoin::hex::{test_hex_unwrap as hex, FromHex};
+    use bitcoin::locktime::absolute;
     use bitcoin::secp256k1::Secp256k1;
-    use bitcoin::NetworkKind;
+    use bitcoin::{
+        transaction, NetworkKind, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
+    };
     #[cfg(feature = "rand")]
     use {
         bitcoin::bip32::{DerivationPath, Fingerprint},
@@ -1643,11 +1642,9 @@ mod tests {
         #[cfg(feature = "base64")]
         use std::str::FromStr;
 
-        use bitcoin::blockdata::locktime::absolute;
-        use bitcoin::blockdata::script::ScriptBuf;
-        use bitcoin::blockdata::transaction::{OutPoint, Sequence, Transaction, TxIn, TxOut};
-        use bitcoin::blockdata::witness::Witness;
+        use bitcoin::locktime::absolute;
         use bitcoin::sighash::EcdsaSighashType;
+        use bitcoin::{OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness};
 
         use super::*;
         use crate::v0::bitcoin::map::{Input, Map, Output};
