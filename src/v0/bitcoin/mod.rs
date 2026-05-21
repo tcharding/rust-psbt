@@ -1531,7 +1531,7 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn test_serde_psbt() {
+    fn serde_psbt() {
         //! Create a full PSBT value with various fields filled and make sure it can be JSONized.
         use bitcoin::hashes::sha256d;
 
