@@ -93,9 +93,8 @@ impl Alice {
     /// Creates a new Alice.
     pub fn new() -> Self {
         // An arbitrary public key, assume the secret key is held by another entity.
-        let public_key = CompressedPublicKey::from_str(
-            "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af",
-        )
+        let public_key = "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af"
+            .parse::<CompressedPublicKey>()
         .unwrap();
 
         Alice { public_key }

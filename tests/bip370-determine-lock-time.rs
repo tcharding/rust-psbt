@@ -4,15 +4,13 @@
 
 mod util;
 
-use core::str::FromStr;
-
 use psbt_v2::bitcoin::locktime::absolute;
 use psbt_v2::v2;
 
 #[track_caller]
 fn assert_determine_lock_time(hex: &str, base64: &str, want: absolute::LockTime) {
     let psbt = util::hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
-    assert_eq!(psbt, v2::Psbt::from_str(base64).expect("failed to deserialize PSBT from base64"));
+    assert_eq!(psbt, base64.parse::<v2::Psbt>().expect("failed to deserialize PSBT from base64"));
 
     let got = psbt.determine_lock_time().expect("valid lock time");
     assert_eq!(got, want);
@@ -80,7 +78,7 @@ fn bip370_time_lock_indeterminate() {
     let hex = "70736274ff0102040200000001030400000000010401020105010101fb040200000000010e200f758dbfbd4da7c16c8a3309c3c81e1100f561ea646db5b01752c485e1bdde9f010f04010000000112041027000000010e203a1b3b3c837d6489ea7a31d8e6c7dd503c001bef3e06958e7574808d68ca78a5010f04000000000111048c8dc462000103084f9335770000000001041600140b1352cacd03cf6aa1b7f3c8d6388671b34a5e1100";
     let base64 = "cHNidP8BAgQCAAAAAQMEAAAAAAEEAQIBBQEBAfsEAgAAAAABDiAPdY2/vU2nwWyKMwnDyB4RAPVh6mRttbAXUsSF4b3enwEPBAEAAAABEgQQJwAAAAEOIDobOzyDfWSJ6nox2ObH3VA8ABvvPgaVjnV0gI1oynilAQ8EAAAAAAERBIyNxGIAAQMIT5M1dwAAAAABBBYAFAsTUsrNA89qobfzyNY4hnGzSl4RAA==";
     let psbt = util::hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
-    assert_eq!(psbt, v2::Psbt::from_str(base64).expect("failed to deserialize PSBT from base64"));
+    assert_eq!(psbt, base64.parse::<v2::Psbt>().expect("failed to deserialize PSBT from base64"));
 
     assert!(psbt.determine_lock_time().is_err());
 }
