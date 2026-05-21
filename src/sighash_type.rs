@@ -175,7 +175,6 @@ impl From<sighash::InvalidSighashTypeError> for InvalidSighashTypeError {
 #[cfg(test)]
 mod tests {
 
-
     use super::*;
     use crate::sighash_type::InvalidSighashTypeError;
 
