@@ -6,6 +6,9 @@ license = "CC0-1.0"
 edition = "2021"
 publish = false
 
+[package.metadata.rbmt.toolchains]
+stable = "1.95.0"
+
 [dependencies]
 anyhow = "1"
 bitcoind = { version = "0.38.0", features = ["download"] }
