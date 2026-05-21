@@ -258,8 +258,7 @@ impl Psbt {
                     {
                         continue;
                     } else if derivation2.len() <= derivation1.len()
-                        && derivation2[..]
-                                == derivation1[derivation1.len() - derivation2.len()..]
+                        && derivation2[..] == derivation1[derivation1.len() - derivation2.len()..]
                     {
                         entry.insert((fingerprint1, derivation1));
                         continue;
@@ -1403,9 +1402,7 @@ mod tests {
                 }),
             Err(ABSURD_FEE_RATE)
         );
-        assert!(psbt
-            .extract_tx_with_fee_rate_limit(ABSURD_FEE_RATE)
-            .is_ok());
+        assert!(psbt.extract_tx_with_fee_rate_limit(ABSURD_FEE_RATE).is_ok());
 
         // Testing that extract_tx will error at 25k sat/vbyte (6250000 sat/kwu)
         assert_eq!(
@@ -2234,7 +2231,7 @@ mod tests {
         // two PSBTs with different xpub key sources where the length check
         // `derivation2.len() <= derivation1.len()` was missing.
         // The fix adds a length check before slicing to prevent panics.
-        
+
         let mut psbt1 = hex_psbt(include_str!("../../../tests/data/psbt1.hex")).unwrap();
         let psbt2 = hex_psbt(include_str!("../../../tests/data/psbt2.hex")).unwrap();
 
