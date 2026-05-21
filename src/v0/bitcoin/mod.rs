@@ -257,8 +257,9 @@ impl Psbt {
                                 == derivation2[derivation2.len() - derivation1.len()..])
                     {
                         continue;
-                    } else if derivation2[..]
-                        == derivation1[derivation1.len() - derivation2.len()..]
+                    } else if derivation2.len() <= derivation1.len()
+                        && derivation2[..]
+                                == derivation1[derivation1.len() - derivation2.len()..]
                     {
                         entry.insert((fingerprint1, derivation1));
                         continue;
@@ -2222,6 +2223,25 @@ mod tests {
         psbt2.combine(psbt1_clone).expect("psbt2 combine to succeed");
 
         assert_eq!(psbt1, psbt2);
+    }
+
+    // https://github.com/rust-bitcoin/rust-bitcoin/issues/3628
+    // Test that combining PSBTs with different xpub key sources handles length checks properly.
+    // This prevents out-of-bounds access when derivation2 is longer than derivation1.
+    #[test]
+    fn combine_psbt_fuzz_3628() {
+        // This test verifies the fix for the crash that occurred when combining
+        // two PSBTs with different xpub key sources where the length check
+        // `derivation2.len() <= derivation1.len()` was missing.
+        // The fix adds a length check before slicing to prevent panics.
+        
+        let mut psbt1 = hex_psbt(include_str!("../../../tests/data/psbt1.hex")).unwrap();
+        let psbt2 = hex_psbt(include_str!("../../../tests/data/psbt2.hex")).unwrap();
+
+        // Both PSBTs should combine successfully or fail gracefully.
+        // The important thing is that it doesn't panic with an out-of-bounds access.
+        let _result = psbt1.combine(psbt2);
+        // If we get here without panicking, the test passes.
     }
 
     #[cfg(feature = "rand")]
