@@ -266,12 +266,10 @@ impl Global {
                     if !pair.key.key.is_empty() {
                         let xpub = Xpub::decode(&pair.key.key)?;
                         if pair.value.is_empty() {
-                            // TODO: keypair value is empty, consider adding a better error type.
-                            return Err(InsertPairError::InvalidKeyDataNotEmpty(pair.key));
+                            return Err(InsertPairError::XpubValueEmpty);
                         }
                         if pair.value.len() < 4 {
-                            // TODO: Add better error here.
-                            return Err(InsertPairError::XpubInvalidFingerprint);
+                            return Err(InsertPairError::XpubValueTooShort(pair.value.len()));
                         }
                         // TODO: Can we restrict the value further?
                         if pair.value.len() % 4 != 0 {
@@ -629,8 +627,12 @@ pub enum InsertPairError {
     WrongVersion(u32),
     /// PSBT_GLOBAL_XPUB: Must contain 4 bytes for the xpub fingerprint.
     XpubInvalidFingerprint,
+    /// PSBT_GLOBAL_XPUB: value must contain at least 4 bytes for the xpub fingerprint.
+    XpubValueTooShort(usize),
     /// PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints.
     XpubInvalidPath(usize),
+    /// PSBT_GLOBAL_XPUB: value must not be empty.
+    XpubValueEmpty,
     /// PSBT_GLOBAL_XPUB: Failed to decode a BIP-32 type.
     Bip32(bip32::Error),
     /// PSBT_GLOBAL_XPUB: xpubs must be unique.
@@ -662,12 +664,17 @@ impl fmt::Display for InsertPairError {
                 write!(f, "PSBT_GLOBAL_VERSION: PSBT v2 expects the version to be 2, found: {}", v)
             }
             Self::XpubInvalidFingerprint => {
-                write!(f, "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints")
+                write!(f, "PSBT_GLOBAL_XPUB: xpub fingerprint must be 4 bytes")
             }
             Self::XpubInvalidPath(len) => write!(
                 f,
                 "PSBT_GLOBAL_XPUB: derivation path must be a list of 32 byte varints: {}",
                 len
+            ),
+            Self::XpubValueTooShort(got) => write!(
+                f,
+                "PSBT_GLOBAL_XPUB: value must contain at least 4 bytes for the xpub fingerprint, got: {}",
+                got
             ),
             Self::Bip32(ref e) =>
                 write_err!(f, "PSBT_GLOBAL_XPUB: Failed to decode a BIP-32 type"; e),
@@ -676,6 +683,7 @@ impl fmt::Display for InsertPairError {
                 "PSBT_GLOBAL_XPUB: xpubs must be unique ({}, {})",
                 fingerprint, derivation_path
             ),
+            Self::XpubValueEmpty => write!(f, "PSBT_GLOBAL_XPUB: keypair value must not be empty"),
             Self::InvalidProprietaryKey =>
                 write!(f, "PSBT_GLOBAL_PROPRIETARY: Invalid proprietary key"),
             Self::ExcludedKey { key_type_value } => write!(
@@ -704,7 +712,9 @@ impl std::error::Error for InsertPairError {
             | Self::WrongVersion(_)
             | Self::XpubInvalidFingerprint
             | Self::XpubInvalidPath(_)
+            | Self::XpubValueTooShort(_)
             | Self::DuplicateXpub(_)
+            | Self::XpubValueEmpty
             | Self::InvalidProprietaryKey
             | Self::ExcludedKey { .. }
             | Self::KeyWrongLength(..) => None,
