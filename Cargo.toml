@@ -26,6 +26,9 @@ exact_features = [
     ["std", "miniscript", "serde"],
 ]
 
+[package.metadata.rbmt.prerelease]
+enabled = true
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
