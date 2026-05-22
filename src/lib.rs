@@ -11,6 +11,7 @@
 #![no_std]
 // Coding conventions
 #![warn(missing_docs)]
+#![doc(test(attr(warn(unused))))]
 
 #[cfg(any(feature = "std", test))]
 extern crate std;
