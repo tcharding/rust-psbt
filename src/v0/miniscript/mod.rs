@@ -1393,8 +1393,6 @@ impl PsbtSighashMsg {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use bitcoin::bip32::{DerivationPath, Xpub};
     use bitcoin::consensus::encode::deserialize;
     use bitcoin::hashes::hex::FromHex;
@@ -1417,22 +1415,21 @@ mod tests {
     #[test]
     fn update_item_tr_no_script() {
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
-        let root_xpub = Xpub::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
+        let root_xpub = "xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8".parse::<Xpub>().unwrap();
         let fingerprint = root_xpub.fingerprint();
         let desc = format!("tr([{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)", fingerprint);
-        let desc = Descriptor::from_str(&desc).unwrap();
+        let desc = desc.parse::<Descriptor<_>>().unwrap();
         let mut psbt_input = Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
         let mut psbt_output = Output::default();
         psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
-        let internal_key = XOnlyPublicKey::from_str(
-            "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
-        )
-        .unwrap();
+        let internal_key = "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115"
+            .parse::<XOnlyPublicKey>()
+            .unwrap();
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
+            Some(&(vec![], (fingerprint, "m/86'/0'/0'/0/0".parse::<DerivationPath>().unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 1);
         assert_eq!(psbt_input.tap_scripts.len(), 0);
@@ -1447,17 +1444,16 @@ mod tests {
     fn update_item_tr_with_tapscript() {
         use miniscript::Tap;
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
-        let root_xpub = Xpub::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
+        let root_xpub = "xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8".parse::<Xpub>().unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
         let desc =
             format!("tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/0/1,{}/1/0)}})", xpub, xpub, xpub, xpub);
 
-        let desc = Descriptor::from_str(&desc).unwrap();
-        let internal_key = XOnlyPublicKey::from_str(
-            "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
-        )
-        .unwrap();
+        let desc = desc.parse::<Descriptor<_>>().unwrap();
+        let internal_key = "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115"
+            .parse::<XOnlyPublicKey>()
+            .unwrap();
         let mut psbt_input = Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
         let mut psbt_output = Output::default();
@@ -1465,7 +1461,7 @@ mod tests {
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
+            Some(&(vec![], (fingerprint, "m/86'/0'/0'/0/0".parse::<DerivationPath>().unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 3);
         assert_eq!(psbt_input.tap_scripts.len(), 2);
@@ -1475,13 +1471,13 @@ mod tests {
         assert_eq!(psbt_output.tap_key_origins, psbt_input.tap_key_origins);
         assert!(psbt_output.tap_tree.is_some());
 
-        let key_0_1 = XOnlyPublicKey::from_str(
-            "83dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145",
-        )
-        .unwrap();
+        let key_0_1 = "83dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145"
+            .parse::<XOnlyPublicKey>()
+            .unwrap();
         let first_leaf_hash = {
-            let ms =
-                Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!("pkh({})", &key_0_1)).unwrap();
+            let ms = format!("pkh({})", &key_0_1)
+                .parse::<Miniscript<XOnlyPublicKey, Tap>>()
+                .unwrap();
             let first_script = ms.encode();
             assert!(psbt_input
                 .tap_scripts
@@ -1502,10 +1498,9 @@ mod tests {
 
         {
             // check 1/0
-            let key_1_0 = XOnlyPublicKey::from_str(
-                "399f1b2f4393f29a18c937859c5dd8a77350103157eb880f02e8c08214277cef",
-            )
-            .unwrap();
+            let key_1_0 = "399f1b2f4393f29a18c937859c5dd8a77350103157eb880f02e8c08214277cef"
+                .parse::<XOnlyPublicKey>()
+                .unwrap();
             let (leaf_hashes, (key_fingerprint, deriv_path)) =
                 psbt_input.tap_key_origins.get(&key_1_0).unwrap();
             assert_eq!(key_fingerprint, &fingerprint);
@@ -1518,7 +1513,7 @@ mod tests {
     #[test]
     fn update_item_non_tr_multi() {
         // values taken from https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki (after removing zpub thingy)
-        let root_xpub = Xpub::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
+        let root_xpub = "xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8".parse::<Xpub>().unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/84'/0'/0']xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V", fingerprint);
         let pubkeys = [
@@ -1532,10 +1527,10 @@ mod tests {
             .zip(["0/0", "0/1", "1/0"].iter())
             .map(|(pubkey, path)| {
                 (
-                    PublicKey::from_str(pubkey).unwrap(),
+                    pubkey.parse::<PublicKey>().unwrap(),
                     (
                         fingerprint,
-                        DerivationPath::from_str(&format!("m/84'/0'/0'/{}", path)).unwrap(),
+                        format!("m/84'/0'/0'/{}", path).parse::<DerivationPath>().unwrap(),
                     ),
                 )
             })
@@ -1544,9 +1539,9 @@ mod tests {
         {
             // test segwit
             let desc = format!("wsh(multi(2,{}/0/0,{}/0/1,{}/1/0))", xpub, xpub, xpub);
-            let desc = Descriptor::from_str(&desc).unwrap();
+            let desc = desc.parse::<Descriptor<_>>().unwrap();
             let derived = format!("wsh(multi(2,{}))", pubkeys.join(","));
-            let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
+            let derived = derived.parse::<Descriptor::<bitcoin::PublicKey>>().unwrap();
 
             let mut psbt_input = Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
@@ -1564,9 +1559,9 @@ mod tests {
         {
             // test non-segwit
             let desc = format!("sh(multi(2,{}/0/0,{}/0/1,{}/1/0))", xpub, xpub, xpub);
-            let desc = Descriptor::from_str(&desc).unwrap();
+            let desc = desc.parse::<Descriptor<_>>().unwrap();
             let derived = format!("sh(multi(2,{}))", pubkeys.join(","));
-            let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
+            let derived = derived.parse::<Descriptor::<bitcoin::PublicKey>>().unwrap();
 
             let mut psbt_input = Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
@@ -1587,7 +1582,7 @@ mod tests {
     #[test]
     fn update_input_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
+        let desc = desc.parse::<Descriptor::<DefiniteDescriptorKey>>().unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: transaction::Version::ONE,
@@ -1649,7 +1644,7 @@ mod tests {
     #[test]
     fn update_output_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
+        let desc = desc.parse::<Descriptor::<DefiniteDescriptorKey>>().unwrap();
 
         let tx = bitcoin::Transaction {
             version: transaction::Version::ONE,

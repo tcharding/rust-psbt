@@ -1,7 +1,5 @@
 //! Tests for the lossy `Updater::into_psbt_v0` conversion (BIP-370 to BIP-174).
 
-use std::str::FromStr;
-
 use psbt_v2::bitcoin::bip32::{IntoDerivationPath, Xpriv, Xpub};
 use psbt_v2::bitcoin::ecdsa::Signature as EcdsaSignature;
 use psbt_v2::bitcoin::secp256k1::{self, Secp256k1};
@@ -27,8 +25,8 @@ fn make_tx_out(sats: u64) -> TxOut {
 /// equivalent then asserts every one survives the conversion.
 #[test]
 fn global_map_preserves_all_v0_compatible_fields() {
-    let xpub = Xpub::from_str(TEST_XPUB).unwrap();
-    let pk = PublicKey::from_str(PUBKEY_HEX).unwrap();
+    let xpub = TEST_XPUB.parse::<Xpub>().unwrap();
+    let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
     let path = "m/0".into_derivation_path().unwrap();
     let fingerprint = xpub.fingerprint();
 
@@ -68,10 +66,10 @@ fn input_map_preserves_all_v0_compatible_fields() {
     let redeem_script = make_script(0xde);
     let witness_script = make_script(0xad);
     let final_script_sig = make_script(0x51);
-    let sighash = PsbtSighashType::from_str("SIGHASH_ALL").unwrap();
-    let pk = PublicKey::from_str(PUBKEY_HEX).unwrap();
+    let sighash = "SIGHASH_ALL".parse::<PsbtSighashType>().unwrap();
+    let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
     let path = "m/0".into_derivation_path().unwrap();
-    let fingerprint = Xpub::from_str(TEST_XPUB).unwrap().fingerprint();
+    let fingerprint = TEST_XPUB.parse::<Xpub>().unwrap().fingerprint();
     let secp = Secp256k1::new();
     let sk = secp256k1::SecretKey::from_slice(&[0x01u8; 32]).unwrap();
     let partial_sig_pk = PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
@@ -112,9 +110,9 @@ fn input_map_preserves_all_v0_compatible_fields() {
 fn signing_v2_then_converting_matches_signing_after_conversion() {
     let prev = OutPoint::null();
     let witness_utxo = make_tx_out(123_456);
-    let pk = PublicKey::from_str(PUBKEY_HEX).unwrap();
+    let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
     let path = "m/0".into_derivation_path().unwrap();
-    let fingerprint = Xpub::from_str(TEST_XPUB).unwrap().fingerprint();
+    let fingerprint = TEST_XPUB.parse::<Xpub>().unwrap().fingerprint();
 
     let mut input = Input::new(&prev);
     input.witness_utxo = Some(witness_utxo);
@@ -128,7 +126,7 @@ fn signing_v2_then_converting_matches_signing_after_conversion() {
         .unwrap();
 
     let secp = Secp256k1::<secp256k1::All>::new();
-    let xpriv = Xpriv::from_str(TEST_XPRIV).unwrap();
+    let xpriv = TEST_XPRIV.parse::<Xpriv>().unwrap();
 
     let (signed_v2, _) = Signer::new(psbt.clone()).unwrap().sign(&xpriv, &secp).unwrap();
     let v2_signed_input = Updater::new(signed_v2).unwrap().into_psbt_v0().inputs.remove(0);
@@ -146,9 +144,9 @@ fn signing_v2_then_converting_matches_signing_after_conversion() {
 fn output_map_preserves_all_v0_compatible_fields() {
     let redeem_script = make_script(0x01);
     let witness_script = make_script(0x02);
-    let pk = PublicKey::from_str(PUBKEY_HEX).unwrap();
+    let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
     let path = "m/1".into_derivation_path().unwrap();
-    let fingerprint = Xpub::from_str(TEST_XPUB).unwrap().fingerprint();
+    let fingerprint = TEST_XPUB.parse::<Xpub>().unwrap().fingerprint();
 
     let mut output = Output::new(make_tx_out(7_000));
     output.redeem_script = Some(redeem_script.clone());

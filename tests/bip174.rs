@@ -11,7 +11,6 @@
 mod util;
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 use std::sync::OnceLock;
 
 use bitcoin::{transaction, Sequence, Transaction, TxIn, Witness};
@@ -57,7 +56,7 @@ fn deserialize_sighash<'de, D: Deserializer<'de>>(
     let opt: Option<String> = Option::deserialize(d)?;
     match opt {
         None => Ok(None),
-        Some(s) => PsbtSighashType::from_str(&s).map(Some).map_err(de::Error::custom),
+        Some(s) => s.parse::<PsbtSighashType>().map(Some).map_err(de::Error::custom),
     }
 }
 
@@ -172,7 +171,7 @@ fn run_fail_sign(supplementary: &Supplementary) {
             let hex = hex.as_deref().expect("fail vector must have hex");
             let base64 = base64.as_deref().expect("fail vector must have base64");
             let hex_psbt = util::hex_psbt_v0(hex).expect("should parse");
-            let base64_psbt = Psbt::from_str(base64).expect("base64 must decode when hex decoded");
+            let base64_psbt = base64.parse::<Psbt>().expect("base64 must decode when hex decoded");
             assert_eq!(hex_psbt, base64_psbt);
             assert!(base64_psbt.signer_checks().is_err(), "expected signer_checks() to fail");
         }

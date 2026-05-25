@@ -4,8 +4,6 @@
 
 mod util;
 
-use core::str::FromStr;
-
 use bitcoin::CompressedPublicKey;
 use psbt_v2::v2::{Creator, DleqProof, Psbt};
 
@@ -156,7 +154,7 @@ fn bip375_test_vector_missing_input_dleq_proof() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAEAAAABBQQBAAAAAQYBAwABDiCrtYht20vGCALx8ZiisSkDZZzJ7nPgIx1FVehBiNyWQAEPBAAAAAABAR+ghgEAAAAAABYAFPja92rYA7DvqV1s/4ruCJHTrxyMARAE/v///yIGA9NX98BxjyR44/2PjMwnKd3YwMyusfArGBpvRNQ7n42NBAAAAAAiHQLQKf+W3iy894K+Q1nEhiDqkrzda+8DK5UVi5GhaT+0+CECVRZOeSbVDVKgn/mQZHpelcHbG/xophb7wtohOSf5i/8BAwQBAAAAAAEDCBhzAQAAAAAAAQQiUSAXu7qlEuAw+8o+5RT3sjgH4RGDGkdFRHCRNMn5v0a2xAEJQgLQKf+W3iy894K+Q1nEhiDqkrzda+8DK5UVi5GhaT+0+AJNUYNT9L0Y12nPaP9i7xBmm3CGJGsKZAP+V73kkhFEiwA=";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_err(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_err(),
         "should fail: input has ECDH share but no DLEQ proof"
     );
 }
@@ -168,7 +166,7 @@ fn bip375_test_vector_global_ecdh_without_dleq() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAEAAAABBQQBAAAAAQYBAyIHAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4IQJVFk55JtUNUqCf+ZBkel6Vwdsb/GimFvvC2iE5J/mL/wABDiD2W3/BmfoPsrzNsfoGEte1D2K0+PqV1WXEoB9MWC6SpAEPBAAAAAABAR+ghgEAAAAAABYAFPja92rYA7DvqV1s/4ruCJHTrxyMARAE/v///yIGA9NX98BxjyR44/2PjMwnKd3YwMyusfArGBpvRNQ7n42NBAAAAAABAwQBAAAAAAEDCBhzAQAAAAAAAQQiUSCBAAI55HC7UjfZ+r6wGeJ5j8RXLnnJOQtdHV42G7fgIAEJQgLQKf+W3iy894K+Q1nEhiDqkrzda+8DK5UVi5GhaT+0+AJNUYNT9L0Y12nPaP9i7xBmm3CGJGsKZAP+V73kkhFEiwA=";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_err(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_err(),
         "should fail: global ECDH share present but no DLEQ proof"
     );
 }

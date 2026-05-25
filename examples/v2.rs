@@ -8,8 +8,6 @@
 //!
 //! This code is similar to `v0.rs` on purpose to show the differences between the APIs.
 
-use std::str::FromStr;
-
 use psbt_v2::bitcoin::bip32::{DerivationPath, KeySource, Xpriv, Xpub};
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::locktime::absolute;
@@ -250,7 +248,7 @@ impl Entity {
 
     /// Returns the pubkey for this entity at `derivation_path`.
     fn public_key(&self, derivation_path: &str) -> anyhow::Result<bitcoin::PublicKey> {
-        let path = DerivationPath::from_str(derivation_path)?;
+        let path = derivation_path.parse::<DerivationPath>()?;
         let xpriv = self.master.derive_priv(&self.secp, &path)?;
         let pk = Xpub::from_priv(&self.secp, &xpriv);
         Ok(pk.to_pub().into())
@@ -267,7 +265,7 @@ impl Entity {
 
     /// Returns the BOP-32 stuff needed to sign an ECDSA input using the [`v2::Psbt`] BIP-32 signing API.
     fn bip32_derivation(&self, derivation_path: &str) -> anyhow::Result<(PublicKey, KeySource)> {
-        let path = DerivationPath::from_str(derivation_path)?;
+        let path = derivation_path.parse::<DerivationPath>()?;
         let xpriv = self.master.derive_priv(&self.secp, &path).expect("failed to derive xpriv");
         let fingerprint = xpriv.fingerprint(&self.secp);
         let sk = xpriv.to_priv();
@@ -277,7 +275,7 @@ impl Entity {
     /// Signs any ECDSA inputs for which we have keys.
     pub fn sign_ecdsa(&self, psbt: Psbt, derivation_path: &str) -> anyhow::Result<Psbt> {
         // Usually we'd have to check this was our input and provide the correct key.
-        let path = DerivationPath::from_str(derivation_path)?;
+        let path = derivation_path.parse::<DerivationPath>()?;
         let xpriv = self.master.derive_priv(&self.secp, &path)?;
 
         let signer = Signer::new(psbt)?;

@@ -4,8 +4,6 @@
 
 mod util;
 
-use core::str::FromStr;
-
 use bitcoin::CompressedPublicKey;
 use psbt_v2::v2::{Creator, DleqProof, Psbt};
 
@@ -13,14 +11,12 @@ use psbt_v2::v2::{Creator, DleqProof, Psbt};
 fn valid_psbt_with_bip375_global_fields() -> Psbt {
     let mut psbt = Creator::new().psbt();
     // Use real valid compressed public keys (from secp256k1 generator point and a modified one)
-    let scan_key = CompressedPublicKey::from_str(
-        "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-    )
-    .unwrap();
-    let ecdh_share = CompressedPublicKey::from_str(
-        "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-    )
-    .unwrap();
+    let scan_key = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        .parse::<CompressedPublicKey>()
+        .unwrap();
+    let ecdh_share = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        .parse::<CompressedPublicKey>()
+        .unwrap();
     let dleq_proof = DleqProof::from([0xAAu8; 64]);
 
     psbt.global.sp_ecdh_shares.insert(scan_key, ecdh_share);
@@ -53,7 +49,7 @@ fn bip375_test_vector_single_signer_global_shares_should_parse() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAEAAAABBQQBAAAAAQYBAyIHAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4IQJVFk55JtUNUqCf+ZBkel6Vwdsb/GimFvvC2iE5J/mL/yIIAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4QMHWfzh4gr+BeRXqFYIdZNWzg1wfwFxVjOPYJJKhfZCMEEh9u5vdwQgMjC2cGXGyZgg8aQVOIhk/JEEorGZzfmAAAQ4gbprLPJXWyu5NSnIlAmnrjz0Fcu1PhPS3/DOpmr4+OgUBDwQAAAAAAQEfoIYBAAAAAAAWABT42vdq2AOw76ldbP+K7giR068cjAEQBP7///8iBgPTV/fAcY8keOP9j4zMJynd2MDMrrHwKxgab0TUO5+NjQQAAAAAAQMEAQAAAAABAwgYcwEAAAAAAAEEIlEgrhn77icwoalS19JZjMcD/d87lyslFIse0aea6HOdXgcBCUIC0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPgCTVGDU/S9GNdpz2j/Yu8QZptwhiRrCmQD/le95JIRRIsA";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_ok(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_ok(),
         "should parse: single signer global shares"
     );
 }
@@ -65,7 +61,7 @@ fn bip375_test_vector_per_input_shares_should_parse() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAIAAAABBQQBAAAAAQYBAwABDiBc+IxEpEzVImNhvtEHUZRvn4cJUikR4HeBX19/B4WvaQEPBAAAAAABAR9QwwAAAAAAABYAFPja92rYA7DvqV1s/4ruCJHTrxyMARAE/v///yIGA9NX98BxjyR44/2PjMwnKd3YwMyusfArGBpvRNQ7n42NBAAAAAABAwQBAAAAIh0C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPghAlUWTnkm1Q1SoJ/5kGR6XpXB2xv8aKYW+8LaITkn+Yv/Ih4C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPhAwdZ/OHiCv4F5FeoVgh1k1bODXB/AXFWM49gkkqF9kIwQSH27m93BCAyMLZwZcbJmCDxpBU4iGT8kQSisZnN+YAABDiAT0u662aEJkUdBDIam/gsg7p23WdpBz9Tul5LNUBI3FQEPBAAAAAABAR9QwwAAAAAAABYAFEIccVrt+YOvDjtnb/fElNEFT826ARAE/v///yIGAo8dCC1gAfpLqJmkA9r5sdsBvpJcIlM69jDuZJOwvp95BAAAAAABAwQBAAAAIh0C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPghA1voNBApxyR/ork41dS4Wzpp+9kxe62Fr2V5knHctCgBIh4C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPhAwP4szFLfu5Jb0/9lS3qW2OwOAxpn0EG0+Zyw6BFJ4oeoK9PVG8D/czrOfTKrY9YSGGVFd4CPssf7BtK+Bv86tgABAwgYcwEAAAAAAAEEIlEgC9xqHau4dRdnjCtffc3/KXbcXRE1xN2T9mcj6++5jiUBCUIC0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPgCTVGDU/S9GNdpz2j/Yu8QZptwhiRrCmQD/le95JIRRIsA";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_ok(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_ok(),
         "should parse: multi party per input shares"
     );
 }
@@ -77,7 +73,7 @@ fn bip375_test_vector_output_with_change_should_parse() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAEAAAABBQQCAAAAAQYBAwABDiAlbK6m2hWAb7hW7a50mI1EDHqxtcCGHsgR0ZCSdHudHAEPBAAAAAABAR+ghgEAAAAAABYAFPja92rYA7DvqV1s/4ruCJHTrxyMARAE/v///yIGA9NX98BxjyR44/2PjMwnKd3YwMyusfArGBpvRNQ7n42NBAAAAAABAwQBAAAAIh0C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPghAlUWTnkm1Q1SoJ/5kGR6XpXB2xv8aKYW+8LaITkn+Yv/Ih4C0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPhAwdZ/OHiCv4F5FeoVgh1k1bODXB/AXFWM49gkkqF9kIwQSH27m93BCAyMLZwZcbJmCDxpBU4iGT8kQSisZnN+YAABAwhQwwAAAAAAAAEEIlEgVbkWS8N9yG9biTYWgqowiLWz+lPa20PpXxvRE5uxwDUBCUIC0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPgD9SRDSFIBZWa8RdH6alxaGGLN2TPxXIQ7QnI4IvUlMjcBCgQBAAAAAAEDCMivAAAAAAAAAQQWABTjwxDMKvOsbmLK5L0j4+5SueHJWSICA9NX98BxjyR44/2PjMwnKd3YwMyusfArGBpvRNQ7n42NDAAAAAAAAAAAAAAAAQA=";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_ok(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_ok(),
         "should parse: silent payment with change detection"
     );
 }
@@ -89,7 +85,7 @@ fn bip375_test_vector_multiple_outputs_same_key_should_parse() {
     let base64 = "cHNidP8B+wQCAAAAAQIEAgAAAAEEBAEAAAABBQQCAAAAAQYBAyIHAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4IQJVFk55JtUNUqCf+ZBkel6Vwdsb/GimFvvC2iE5J/mL/yIIAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4QMHWfzh4gr+BeRXqFYIdZNWzg1wfwFxVjOPYJJKhfZCMEEh9u5vdwQgMjC2cGXGyZgg8aQVOIhk/JEEorGZzfmAAAQ4gLHvTL/FQccCuAyc4ZKFDbIpWITVp4RMtz46nPsjDMiIBDwQAAAAAAQEfoIYBAAAAAAAWABT42vdq2AOw76ldbP+K7giR068cjAEQBP7///8iBgPTV/fAcY8keOP9j4zMJynd2MDMrrHwKxgab0TUO5+NjQQAAAAAAQMEAQAAAAABAwhAnAAAAAAAAAEEIlEg+ytxOv1SuiRxgbmYQapPLIhVut99rOLrLjBV2hPuK4wBCUIC0Cn/lt4svPeCvkNZxIYg6pK83WvvAyuVFYuRoWk/tPgCTVGDU/S9GNdpz2j/Yu8QZptwhiRrCmQD/le95JIRRIsAAQMI2NYAAAAAAAABBCJRIFmgqeG9mJh0IBNVOGDtC0S3JvvFIOnFcbxGSV8kefYYAQlCAtAp/5beLLz3gr5DWcSGIOqSvN1r7wMrlRWLkaFpP7T4Ak1Rg1P0vRjXac9o/2LvEGabcIYkawpkA/5XveSSEUSLAA==";
 
     assert!(
-        psbt_v2::v2::Psbt::from_str(base64).is_ok(),
+        base64.parse::<psbt_v2::v2::Psbt>().is_ok(),
         "should parse: multiple outputs to same scan key"
     );
 }

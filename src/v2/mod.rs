@@ -1286,7 +1286,7 @@ impl From<output::DecodeError> for DecodeError {
 /// If the "base64" feature is enabled we implement `Display` and `FromStr` using base64 encoding.
 #[cfg(feature = "base64")]
 mod display_from_str {
-    use core::fmt::{self, Display, Formatter};
+    use core::fmt;
     use core::str::FromStr;
 
     use bitcoin::base64::display::Base64Display;
@@ -1294,8 +1294,8 @@ mod display_from_str {
 
     use super::*;
 
-    impl Display for Psbt {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    impl fmt::Display for Psbt {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "{}", Base64Display::new(&self.serialize(), &BASE64_STANDARD))
         }
     }
@@ -1319,8 +1319,8 @@ mod display_from_str {
         Base64Encoding(bitcoin::base64::DecodeError),
     }
 
-    impl Display for ParsePsbtError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    impl fmt::Display for ParsePsbtError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Self::PsbtEncoding(ref e) =>
                     write_err!(f, "error in internal PSBT data structure"; e),

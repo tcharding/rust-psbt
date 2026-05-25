@@ -2,8 +2,6 @@
 // Functions in this file are all used but clippy complains still.
 #![allow(dead_code)]
 
-use core::str::FromStr;
-
 use psbt_v2::bitcoin::hex::{self, FromHex};
 use psbt_v2::{v0, v2};
 
@@ -32,7 +30,7 @@ pub fn assert_valid_v0(hex: &str, base64: &str) {
         panic!()
     }
     // If we got this far decoding works so this is basically just a sanity check.
-    assert!(v0::Psbt::from_str(base64).is_ok());
+    assert!(base64.parse::<v0::Psbt>().is_ok());
 }
 
 #[track_caller]
@@ -42,17 +40,17 @@ pub fn assert_valid_v2(hex: &str, base64: &str) {
         panic!()
     }
     // If we got this far decoding works so this is basically just a sanity check.
-    assert!(v2::Psbt::from_str(base64).is_ok());
+    assert!(base64.parse::<v2::Psbt>().is_ok());
 }
 
 #[track_caller]
 pub fn assert_invalid_v0(hex: &str, base64: &str) {
     assert!(hex_psbt_v0(hex).is_err());
-    assert!(v0::Psbt::from_str(base64).is_err());
+    assert!(base64.parse::<v0::Psbt>().is_err());
 }
 
 #[track_caller]
 pub fn assert_invalid_v2(hex: &str, base64: &str) {
     assert!(hex_psbt_v2(hex).is_err());
-    assert!(v2::Psbt::from_str(base64).is_err());
+    assert!(base64.parse::<v2::Psbt>().is_err());
 }
