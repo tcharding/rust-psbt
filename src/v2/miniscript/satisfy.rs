@@ -19,7 +19,14 @@ pub(crate) struct InputSatisfier<'a> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for InputSatisfier<'_> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<taproot::Signature> { self.input.tap_key_sig }
+    fn lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<taproot::Signature> {
+        if let Some(key) = self.input.tap_internal_key {
+            if pk.to_x_only_pubkey() == key {
+                return self.input.tap_key_sig;
+            }
+        }
+        None
+    }
 
     fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<taproot::Signature> {
         self.input.tap_script_sigs.get(&(pk.to_x_only_pubkey(), *lh)).copied()

@@ -29,6 +29,11 @@ exact_features = [
 [package.metadata.rbmt.prerelease]
 enabled = true
 
+[package.metadata.rbmt.lint]
+allowed_duplicates = [
+  "hex-conservative",
+]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -39,14 +44,13 @@ std = ["bitcoin/std", "miniscript?/std"]
 rand = ["std", "bitcoin/rand-std"]
 serde = ["dep:serde", "bitcoin/serde"]
 base64 = ["bitcoin/base64"]
-miniscript = ["dep:miniscript", "miniscript?/no-std"]
 silent-payments = [] # Silent Payments support
 
 [dependencies]
 bitcoin = { version = "0.32.8", default-features = false }
 
 arbitrary = { version = "1.0.1", optional = true }
-miniscript = { version = "12.3.5", default-features = false, optional = true }
+miniscript = { version = "13.0.0", default-features = false, optional = true }
 serde = { version = "1.0.195", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [dev-dependencies]

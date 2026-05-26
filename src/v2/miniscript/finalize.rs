@@ -12,8 +12,8 @@ use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::taproot::LeafVersion;
 use bitcoin::{sighash, Address, Network, Script, ScriptBuf, Txid, Witness, XOnlyPublicKey};
 use miniscript::{
-    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, Satisfier, Segwitv0, SigType,
-    Tap, ToPublicKey,
+    interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Segwitv0, SigType, Tap,
+    ToPublicKey,
 };
 
 use crate::error::{write_err, FundingUtxoError};
@@ -205,10 +205,8 @@ impl Finalizer {
                         p2wsh_expected: script_pubkey.clone(),
                     });
                 }
-                let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
-                    witness_script,
-                    &ExtParams::allow_all(),
-                )?;
+                let ms =
+                    Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(witness_script)?;
                 Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
             } else {
                 Err(InputError::MissingWitnessScript)
@@ -232,9 +230,8 @@ impl Finalizer {
                                     p2wsh_expected: redeem_script.clone(),
                                 });
                             }
-                            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+                            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
                                 witness_script,
-                                &ExtParams::allow_all(),
                             )?;
                             Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
                         } else {
@@ -265,9 +262,8 @@ impl Finalizer {
                             return Err(InputError::NonEmptyWitnessScript);
                         }
                         if let Some(ref redeem_script) = input.redeem_script {
-                            let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse_with_ext(
+                            let ms = Miniscript::<bitcoin::PublicKey, Legacy>::decode_consensus(
                                 redeem_script,
-                                &ExtParams::allow_all(),
                             )?;
                             Ok(Descriptor::new_sh(ms)?)
                         } else {
@@ -284,10 +280,7 @@ impl Finalizer {
             if input.redeem_script.is_some() {
                 return Err(InputError::NonEmptyRedeemScript);
             }
-            let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
-                script_pubkey,
-                &ExtParams::allow_all(),
-            )?;
+            let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::decode_consensus(script_pubkey)?;
             Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map))?)
         }
     }
@@ -320,9 +313,12 @@ fn construct_tap_witness(
     }
 
     // try the key spend path first
-    if let Some(sig) = <InputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(&sat)
-    {
-        return Ok(vec![sig.to_vec()]);
+    if let Some(ref key) = sat.input.tap_internal_key {
+        if let Some(sig) =
+            <InputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(&sat, key)
+        {
+            return Ok(vec![sig.to_vec()]);
+        }
     }
     // Next script spends
     let (mut min_wit, mut min_wit_len) = (None, None);
@@ -334,10 +330,7 @@ fn construct_tap_witness(
                 // We don't know how to satisfy non default version scripts yet
                 continue;
             }
-            let ms = match Miniscript::<XOnlyPublicKey, Tap>::parse_with_ext(
-                script,
-                &ExtParams::allow_all(),
-            ) {
+            let ms = match Miniscript::<XOnlyPublicKey, Tap>::decode_consensus(script) {
                 Ok(ms) => ms.substitute_raw_pkh(&map),
                 Err(..) => continue, // try another script
             };
