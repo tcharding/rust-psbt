@@ -1476,7 +1476,7 @@ mod tests {
             .parse::<XOnlyPublicKey>()
             .unwrap();
         let first_leaf_hash = {
-            let ms = format!("pkh({})", &key_0_1)
+            let ms = format!("pkh({})", key_0_1)
                 .parse::<Miniscript<XOnlyPublicKey, Tap>>()
                 .unwrap();
             let first_script = ms.encode();
