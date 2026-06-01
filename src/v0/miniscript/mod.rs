@@ -32,6 +32,8 @@ mod updater;
 mod finalizer;
 mod util;
 
+pub use updater::PlanExt;
+
 #[allow(deprecated)]
 pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 
