@@ -28,6 +28,7 @@ use miniscript::{
 use crate::v0::bitcoin::{raw, Input, Output, Psbt};
 use crate::prelude::*;
 
+mod updater;
 mod finalizer;
 mod util;
 
