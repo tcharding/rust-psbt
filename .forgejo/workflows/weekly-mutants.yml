@@ -1,0 +1,55 @@
+---
+name: Weekly cargo-mutants
+
+on:   # yamllint disable-line rule:truthy
+  schedule:
+    - cron: "0 0 * * 0"  # Sunday 00:00 UTC.
+  workflow_dispatch:     # Allow manual triggering.
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cargo-mutants:
+    runs-on: debian-trixie
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.forgejo/actions/setup-rbmt
+      - name: Install cargo-mutants
+        run: cargo install --locked cargo-mutants
+      - name: Run cargo mutants
+        run: cargo mutants --in-place --no-shuffle
+        continue-on-error: true
+      - name: Upload mutants.out artifact
+        if: always()
+        uses: https://data.forgejo.org/actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: mutants.out
+          path: mutants.out
+      - name: Open issue when new mutants are found
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -s mutants.out/missed.txt ]; then
+            echo "No missed mutants."
+            exit 0
+          fi
+          MUTANTS_VERSION=$(cargo mutants --version)
+          BODY=$(cat <<EOF
+          Displaying up to the first 10 mutants:
+          \`\`\`
+          $(head -n 10 mutants.out/missed.txt)
+          \`\`\`
+          Running cargo mutants version: ${MUTANTS_VERSION}
+          For the complete list, please check the mutants.out artifact: ${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}
+          EOF
+          )
+          curl -sSf \
+            -X POST \
+            -H "Authorization: token ${FORGEJO_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary '{title: "New mutants found", body: ${BODY}}' \
+            "${FORGEJO_SERVER_URL}/api/v1/repos/${FORGEJO_REPOSITORY}/issues"
