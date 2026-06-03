@@ -24,12 +24,6 @@ jobs:
       - name: Run cargo mutants
         run: cargo mutants --in-place --no-shuffle
         continue-on-error: true
-      - name: Upload mutants.out artifact
-        if: always()
-        uses: https://data.forgejo.org/actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: mutants.out
-          path: mutants.out
       - name: Open issue when new mutants are found
         if: always()
         run: |
