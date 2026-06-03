@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: ./.forgejo/actions/setup-rbmt
       - name: Install cargo-mutants
-        run: cargo install --locked cargo-mutants
+        run: cargo install cargo-mutants --version 27.1.0 --locked
       - name: Run cargo mutants
         run: cargo mutants --in-place --no-shuffle
         continue-on-error: true
