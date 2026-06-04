@@ -1,4 +1,4 @@
-# BIP-174 test vectors
+# Test Vectors
 
 The test vectors live in `tests/data/bip174.json` as plain data. The runner in
 `tests/bip174.rs` reads them and does the work. Keeping the two separate means
@@ -28,10 +28,10 @@ invalid vectors and don't want the rest of the suite in the way.
 
 ```sh
 # Run a single case
-cargo test --test bip174 missing_outputs
+cargo test --all-features --test bip174 missing_outputs
 
 # Run every invalid case
-cargo test --test bip174 bip174::invalid
+cargo test --all-features --test bip174 invalid
 ```
 
 ## Looking things up with `jq`

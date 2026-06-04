@@ -20,7 +20,7 @@ use serde::{de, Deserialize, Deserializer};
 
 pub mod util;
 
-use util::{assert_invalid_v0, assert_valid_v0, hex_psbt_v0};
+use util::{assert_invalid_v0, assert_invalid_v2, assert_valid_v0, assert_valid_v2, hex_psbt_v0};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,6 +67,8 @@ struct TestFile {
 pub struct TestCase {
     #[serde(default, alias = "description")]
     _description: String,
+    #[serde(default)]
+    version: u8,
     #[serde(default)]
     expected: PsbtData,
     supplementary: Supplementary,
@@ -153,12 +155,16 @@ struct Supplementary {
     output_updates: Option<Vec<OutputUpdate>>,
 }
 
-fn run_fail_deserialize(supplementary: &Supplementary) {
+fn run_fail_deserialize(case: &TestCase, supplementary: &Supplementary) {
     if let Some(psbts) = &supplementary.psbts {
         for PsbtData { hex, base64 } in psbts {
             let hex = hex.as_deref().expect("fail vector must have hex");
             let base64 = base64.as_deref().expect("fail vector must have base64");
-            assert_invalid_v0(hex, base64);
+            match case.version {
+                0 => assert_invalid_v0(hex, base64),
+                2 => assert_invalid_v2(hex, base64),
+                _ => panic!("unknown PSBT version: {}", case.version),
+            }
         }
     }
 }
@@ -176,12 +182,16 @@ fn run_fail_sign(supplementary: &Supplementary) {
     }
 }
 
-fn run_deserialize(supplementary: &Supplementary) {
+fn run_deserialize(case: &TestCase, supplementary: &Supplementary) {
     if let Some(psbts) = &supplementary.psbts {
         for PsbtData { hex, base64 } in psbts {
             let hex = hex.as_deref().expect("pass vector must have hex");
             let base64 = base64.as_deref().expect("pass vector must have base64");
-            assert_valid_v0(hex, base64);
+            match case.version {
+                0 => assert_valid_v0(hex, base64),
+                2 => assert_valid_v2(hex, base64),
+                _ => panic!("unknown PSBT version: {}", case.version),
+            }
         }
     }
 }
@@ -564,9 +574,9 @@ fn run_extract(supplementary: &Supplementary) {
 
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
-        Task::FailDeserialize => run_fail_deserialize(&case.supplementary),
+        Task::FailDeserialize => run_fail_deserialize(case, &case.supplementary),
         Task::FailSign => run_fail_sign(&case.supplementary),
-        Task::Deserialize => run_deserialize(&case.supplementary),
+        Task::Deserialize => run_deserialize(case, &case.supplementary),
         Task::Create => run_create(&case.expected, &case.supplementary),
         Task::Update => run_update(&case.expected, &case.supplementary),
         Task::Sign => run_sign(&case.expected, &case.supplementary),
@@ -576,11 +586,21 @@ fn execute_case(case: &TestCase) {
     }
 }
 
-pub fn check_case(idx: usize) {
-    static VECTORS: OnceLock<TestFile> = OnceLock::new();
-    let file = VECTORS.get_or_init(|| {
-        let data: &str = include_str!("../data/bip174.json");
-        serde_json::from_str(data).expect("failed to deserialise bip174.json")
-    });
-    execute_case(&file.cases[idx]);
+fn load_test_file(json_data: &str) -> TestFile {
+    serde_json::from_str(json_data).expect("failed to deserialize test vectors")
 }
+
+macro_rules! make_check_case {
+    ($spec:ident) => {
+        pub fn $spec(idx: usize) {
+            static VECTORS: OnceLock<TestFile> = OnceLock::new();
+            let file = VECTORS.get_or_init(|| {
+                load_test_file(include_str!(concat!("../data/", stringify!($spec), ".json")))
+            });
+            execute_case(&file.cases[idx]);
+        }
+    };
+}
+
+make_check_case!(bip174);
+make_check_case!(bip370);
