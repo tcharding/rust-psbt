@@ -42,10 +42,12 @@ jobs:
           For the complete list, please check the mutants.out artifact: ${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}
           EOF
           )
+          jq -n --arg title "New Mutants Found" --arg body "$BODY" \
+            '{title: $title, body: $body}' | \
           curl -sSf \
             -X POST \
             -H "Authorization: token ${FORGEJO_TOKEN}" \
             -H "User-Agent: curl/8.5.0" \
             -H "Content-Type: application/json" \
-            --data-binary '{title: "New mutants found", body: ${BODY}}' \
+            --data-binary @- \
             "${FORGEJO_SERVER_URL}/api/v1/repos/${FORGEJO_REPOSITORY}/issues"
