@@ -1,6 +1,4 @@
-#![cfg(all(feature = "std", feature = "base64"))]
-// Functions in this file are all used but clippy complains still.
-#![allow(dead_code)]
+//! Test utility functions.
 
 use psbt_v2::bitcoin::hex::{self, FromHex};
 use psbt_v2::{v0, v2};

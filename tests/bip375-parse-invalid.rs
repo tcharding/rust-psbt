@@ -1,11 +1,12 @@
 //! BIP-375 Silent Payments Parse Invalid Tests
 
-#![cfg(all(feature = "std", feature = "base64", feature = "silent-payments"))]
+#![cfg(all(feature = "std", feature = "base64", feature = "silent-payments", feature = "serde"))]
 
-mod util;
+mod vectors;
 
 use bitcoin::CompressedPublicKey;
 use psbt_v2::v2::{Creator, DleqProof, Psbt};
+use vectors::util::*;
 
 /// Test: Global field mismatch - DLEQ proofs present but no ECDH shares
 /// Expected error: DecodeError::FieldMismatch
@@ -60,7 +61,7 @@ fn bip375_global_duplicate_scan_key_ecdh() {
         "00", // global terminator
     );
 
-    assert!(util::hex_psbt_v2(hex).is_err(), "should fail due to duplicate scan key in global");
+    assert!(hex_psbt_v2(hex).is_err(), "should fail due to duplicate scan key in global");
 }
 
 /// Test: Per-input field mismatch - DLEQ proofs present but no ECDH shares
@@ -95,7 +96,7 @@ fn bip375_input_field_mismatch_dleq_only() {
         "00", // input terminator
     );
 
-    assert!(util::hex_psbt_v2(hex).is_err(), "should fail: input has DLEQ proof but no ECDH share");
+    assert!(hex_psbt_v2(hex).is_err(), "should fail: input has DLEQ proof but no ECDH share");
 }
 
 /// Test: Duplicate scan key in per-input ECDH shares
@@ -140,7 +141,7 @@ fn bip375_input_duplicate_scan_key_ecdh() {
         "00", // input terminator
     );
 
-    assert!(util::hex_psbt_v2(hex).is_err(), "should fail due to duplicate scan key in input");
+    assert!(hex_psbt_v2(hex).is_err(), "should fail due to duplicate scan key in input");
 }
 
 // =============================================================================

@@ -1,8 +1,6 @@
 //! BIP-375 Silent Payments Parse Valid Tests
 
-#![cfg(all(feature = "std", feature = "base64", feature = "silent-payments"))]
-
-mod util;
+#![cfg(all(feature = "std", feature = "base64", feature = "silent-payments", feature = "serde"))]
 
 use bitcoin::CompressedPublicKey;
 use psbt_v2::v2::{Creator, DleqProof, Psbt};
