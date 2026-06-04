@@ -32,12 +32,10 @@ pub fn assert_valid_v0(hex: &str, base64: &str) {
 }
 
 #[track_caller]
-pub fn assert_valid_v2(hex: &str, base64: &str) {
-    if let Err(e) = hex_psbt_v2(hex) {
-        println!("Parse PSBT v2 (from hex) error: {:?}\n\n{}\n", e, hex);
-        panic!()
+pub fn assert_valid_v2(hex: Option<&str>, base64: &str) {
+    if let Some(h) = hex.filter(|h| !h.is_empty()) {
+        assert!(hex_psbt_v2(h).is_ok());
     }
-    // If we got this far decoding works so this is basically just a sanity check.
     assert!(base64.parse::<v2::Psbt>().is_ok());
 }
 
@@ -48,7 +46,9 @@ pub fn assert_invalid_v0(hex: &str, base64: &str) {
 }
 
 #[track_caller]
-pub fn assert_invalid_v2(hex: &str, base64: &str) {
-    assert!(hex_psbt_v2(hex).is_err());
+pub fn assert_invalid_v2(hex: Option<&str>, base64: &str) {
+    if let Some(h) = hex.filter(|h| !h.is_empty()) {
+        assert!(hex_psbt_v2(h).is_err());
+    }
     assert!(base64.parse::<v2::Psbt>().is_err());
 }

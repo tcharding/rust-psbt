@@ -167,11 +167,15 @@ struct Supplementary {
 fn run_fail_deserialize(case: &TestCase, supplementary: &Supplementary) {
     if let Some(psbts) = &supplementary.psbts {
         for PsbtData { hex, base64 } in psbts {
-            let hex = hex.as_deref().expect("fail vector must have hex");
             let base64 = base64.as_deref().expect("fail vector must have base64");
             match case.version {
-                0 => assert_invalid_v0(hex, base64),
-                2 => assert_invalid_v2(hex, base64),
+                0 => {
+                    let hex = hex.as_deref().expect("v0 fail vector must have hex");
+                    assert_invalid_v0(hex, base64);
+                }
+                2 => {
+                    assert_invalid_v2(hex.as_deref(), base64);
+                }
                 _ => panic!("unknown PSBT version: {}", case.version),
             }
         }
@@ -194,11 +198,15 @@ fn run_fail_sign(supplementary: &Supplementary) {
 fn run_deserialize(case: &TestCase, supplementary: &Supplementary) {
     if let Some(psbts) = &supplementary.psbts {
         for PsbtData { hex, base64 } in psbts {
-            let hex = hex.as_deref().expect("pass vector must have hex");
             let base64 = base64.as_deref().expect("pass vector must have base64");
             match case.version {
-                0 => assert_valid_v0(hex, base64),
-                2 => assert_valid_v2(hex, base64),
+                0 => {
+                    let hex = hex.as_deref().expect("v0 pass vector must have hex");
+                    assert_valid_v0(hex, base64);
+                }
+                2 => {
+                    assert_valid_v2(hex.as_deref(), base64);
+                }
                 _ => panic!("unknown PSBT version: {}", case.version),
             }
         }
@@ -659,3 +667,4 @@ macro_rules! make_check_case {
 
 make_check_case!(bip174);
 make_check_case!(bip370);
+make_check_case!(bip375);
