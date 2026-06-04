@@ -20,7 +20,10 @@ use serde::{de, Deserialize, Deserializer};
 
 pub mod util;
 
-use util::{assert_invalid_v0, assert_invalid_v2, assert_valid_v0, assert_valid_v2, hex_psbt_v0};
+use util::{
+    assert_invalid_v0, assert_invalid_v2, assert_valid_v0, assert_valid_v2, hex_psbt_v0,
+    hex_psbt_v2,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -34,6 +37,8 @@ enum Task {
     Combine,
     Finalize,
     Extract,
+    DetermineLockTime,
+    FailDetermineLockTime,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,6 +158,10 @@ struct Supplementary {
     /// Per-output update directives for the updater task (positional).
     #[serde(default)]
     output_updates: Option<Vec<OutputUpdate>>,
+
+    /// Expected lock time result (determine_lock_time task).
+    #[serde(default)]
+    expected_lock_time: Option<u32>,
 }
 
 fn run_fail_deserialize(case: &TestCase, supplementary: &Supplementary) {
@@ -572,6 +581,50 @@ fn run_extract(supplementary: &Supplementary) {
     assert_eq!(serialize_hex(&tx), expected_tx_hex);
 }
 
+/// Lock Time Determiner: deserialize a v2 PSBT and verify that the lock time
+/// determination algorithm produces the expected lock time value.
+fn run_determine_lock_time(supplementary: &Supplementary) {
+    if let Some(psbts) = &supplementary.psbts {
+        for PsbtData { hex, base64 } in psbts {
+            let hex = hex.as_deref().expect("determine_lock_time vector must have hex");
+            let base64 = base64.as_deref().expect("determine_lock_time vector must have base64");
+            let expected_consensus = supplementary
+                .expected_lock_time
+                .expect("determine_lock_time case must have expected_lock_time");
+
+            let psbt = hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
+            assert_eq!(
+                psbt,
+                base64.parse::<psbt_v2::v2::Psbt>().expect("failed to deserialize from base64")
+            );
+
+            let got = psbt.determine_lock_time().expect("valid lock time");
+            let want = bitcoin::absolute::LockTime::from_consensus(expected_consensus);
+            assert_eq!(got, want);
+        }
+    }
+}
+
+/// Lock Time Determiner (Fail Case): deserialize a v2 PSBT and verify that the
+/// lock time determination algorithm fails as expected.
+fn run_fail_determine_lock_time(supplementary: &Supplementary) {
+    if let Some(psbts) = &supplementary.psbts {
+        for PsbtData { hex, base64 } in psbts {
+            let hex = hex.as_deref().expect("fail_determine_lock_time vector must have hex");
+            let base64 =
+                base64.as_deref().expect("fail_determine_lock_time vector must have base64");
+
+            let psbt = hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
+            assert_eq!(
+                psbt,
+                base64.parse::<psbt_v2::v2::Psbt>().expect("failed to deserialize from base64")
+            );
+
+            assert!(psbt.determine_lock_time().is_err(), "expected determine_lock_time to fail");
+        }
+    }
+}
+
 fn execute_case(case: &TestCase) {
     match case.supplementary.task {
         Task::FailDeserialize => run_fail_deserialize(case, &case.supplementary),
@@ -583,6 +636,8 @@ fn execute_case(case: &TestCase) {
         Task::Combine => run_combine(&case.expected, &case.supplementary),
         Task::Finalize => run_finalize(&case.expected, &case.supplementary),
         Task::Extract => run_extract(&case.supplementary),
+        Task::DetermineLockTime => run_determine_lock_time(&case.supplementary),
+        Task::FailDetermineLockTime => run_fail_determine_lock_time(&case.supplementary),
     }
 }
 

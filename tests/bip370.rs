@@ -118,3 +118,36 @@ mod invalid {
     #[test]
     fn psbtv2_with_required_height_locktime_greater_than_or_equal_to_500000000() { bip370(34); }
 }
+
+mod determine_lock_time {
+    use super::bip370;
+
+    #[test]
+    fn no_locktimes_specified() { bip370(35); }
+
+    #[test]
+    fn fallback_locktime_of_0() { bip370(36); }
+
+    #[test]
+    fn input_1_has_height_locktime_of_10000_input_2_has_no_locktime_fields() { bip370(37); }
+
+    #[test]
+    fn input_1_has_height_locktime_of_10000_input_2_has_height_locktime_of_9000() { bip370(38); }
+
+    #[test]
+    fn input_1_has_height_locktime_of_10000_input_2_has_both_time_and_height_locktime() {
+        bip370(39);
+    }
+
+    #[test]
+    fn both_inputs_have_time_and_height_locktime() { bip370(40); }
+
+    #[test]
+    fn input_1_time_locktime_input_2_both_time_and_height_locktime() { bip370(41); }
+
+    #[test]
+    fn input_1_both_time_and_height_locktime_input_2_time_locktime() { bip370(42); }
+
+    #[test]
+    fn cannot_be_determined() { bip370(43); }
+}
