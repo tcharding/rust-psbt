@@ -22,20 +22,14 @@ jobs:
         run: cargo rbmt run -- mutants --in-place --no-shuffle
         continue-on-error: true
       - name: Open issue when new mutants are found
-        if: always()
+        if: hashFiles('mutants.out/missed.txt') != ''
         run: |
           set -euo pipefail
-          if [ ! -s mutants.out/missed.txt ]; then
-            echo "No missed mutants."
-            exit 0
-          fi
-          MUTANTS_VERSION=$(cargo mutants --version)
           BODY=$(cat <<EOF
           Displaying up to the first 10 mutants:
           \`\`\`
           $(head -n 10 mutants.out/missed.txt)
           \`\`\`
-          Running cargo mutants version: ${MUTANTS_VERSION}
           For the complete list, please check the mutants.out artifact: ${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}
           EOF
           )
