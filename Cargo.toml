@@ -16,6 +16,9 @@ exclude = ["api", "tests", "contrib"]
 nightly = "nightly-2026-05-29"
 stable = "1.96.0"
 
+[package.metadata.rbmt.tools]
+cargo-mutants = "27.1.0"
+
 [package.metadata.rbmt.test]
 examples = [
     "v0:std rand",

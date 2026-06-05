@@ -13,3 +13,7 @@ runs:
     - name: Install toolchains
       shell: bash
       run: cargo rbmt toolchains
+
+    - name: Install tools
+      shell: bash
+      run: cargo rbmt tools
