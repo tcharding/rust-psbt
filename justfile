@@ -16,9 +16,11 @@ _default:
 @rbmt *args: tools
   cargo rbmt {{args}}
 
-# Update the recent and minimal lock files.
+# Update lock files.
 [group('ci')]
 @update-lock-files: (rbmt "lock")
+  cargo check --manifest-path {{justfile_directory()}}/bitcoind-tests/Cargo.toml
+  cargo check --manifest-path {{justfile_directory()}}/fuzz/Cargo.toml
 
 # Format workspace.
 [group('ci')]
