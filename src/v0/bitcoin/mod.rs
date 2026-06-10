@@ -2237,8 +2237,8 @@ mod tests {
         // `derivation2.len() <= derivation1.len()` was missing.
         // The fix adds a length check before slicing to prevent panics.
 
-        let mut psbt1 = hex_psbt(include_str!("../../../tests/data/psbt1.hex")).unwrap();
-        let psbt2 = hex_psbt(include_str!("../../../tests/data/psbt2.hex")).unwrap();
+        let mut psbt1 = hex_psbt(include_str!("../../../tests/data/psbt_fuzz1.hex").trim_end()).unwrap();
+        let psbt2 = hex_psbt(include_str!("../../../tests/data/psbt_fuzz2.hex").trim_end()).unwrap();
 
         // Both PSBTs should combine successfully or fail gracefully.
         // The important thing is that it doesn't panic with an out-of-bounds access.
