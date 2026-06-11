@@ -424,7 +424,6 @@
       "supplementary": {
         "xpriv": "tprv8ZgxMBicQKsPd9TeAdPADNnSyH9SSUUbTVeFszDE23Ki6TBB5nCefAdHkK8Fm3qMQR6sHwA56zqRmKmxnHk37JkiFzvncDqoKmPWubu7hDF",
         "seed": "cUkG8i1RFfWGWy5ziR11zJ5V4U4W3viSFCfyJmZnvQaUsd1xuF3T",
-        "role": "creator",
         "outputs": [
           {
             "script_pubkey": "0014d85c2b71d0060b09c9886aeb815e50991dda124d",
