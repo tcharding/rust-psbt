@@ -4,7 +4,7 @@
 //! keyed on the `task` field. One `#[test]` per vector, named after its
 //! `description`, so `cargo test` output maps 1-to-1 with the JSON document.
 
-#![cfg(all(feature = "std", feature = "base64", feature = "serde"))]
+#![cfg(all(feature = "std", feature = "base64", feature = "serde", feature = "miniscript"))]
 
 mod vectors;
 

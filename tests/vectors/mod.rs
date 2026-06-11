@@ -1,6 +1,6 @@
 //! Data driven test vector framework and utilities for BIP standard compliance testing.
 
-#![cfg(all(feature = "std", feature = "base64", feature = "serde"))]
+#![cfg(all(feature = "std", feature = "base64", feature = "serde", feature = "miniscript"))]
 // Intergration test code always appears dead to the compiler, more [information in the Rust Book.](https://doc.rust-lang.org/book/ch11-03-test-organization.html)
 #![allow(dead_code)]
 
@@ -14,6 +14,7 @@ use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt_v2::bitcoin::hex::FromHex;
 use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
+use psbt_v2::v0::miniscript::PsbtExt;
 use psbt_v2::v0::Psbt;
 use psbt_v2::PsbtSighashType;
 use serde::{de, Deserialize, Deserializer};
@@ -423,116 +424,6 @@ fn sigs_in_script_order<'a>(
     key_order.iter().filter_map(|pk| partial_sigs.get(pk)).collect()
 }
 
-/// Classify and finalize a single PSBT input in-place.
-///
-/// Supported script types:
-///   - P2PKH  (non-witness, bare):  final_script_sig = <sig> <pubkey>
-///   - P2SH multisig (non-witness): final_script_sig = OP_0 <sig…> <redeemScript>
-///   - P2SH-P2WPKH:  final_script_sig = <redeemScript>,
-///     final_script_witness = <sig> <pubkey>
-///   - P2SH-P2WSH multisig: final_script_sig = <redeemScript>,
-///     final_script_witness = OP_0 <sig…> <witnessScript>
-///   - Native P2WPKH: final_script_witness = <sig> <pubkey>
-///   - Native P2WSH multisig: final_script_witness = OP_0 <sig…> <witnessScript>
-fn finalize_input(input: &mut psbt_v2::v0::Input, spk: &ScriptBuf) {
-    use std::convert::TryFrom;
-
-    use psbt_v2::bitcoin::opcodes::all::OP_PUSHBYTES_0;
-    use psbt_v2::bitcoin::script::{Builder, PushBytes};
-
-    if spk.is_p2pkh() {
-        // P2PKH: one sig, one pubkey.
-        assert_eq!(input.partial_sigs.len(), 1, "P2PKH input must have exactly one partial sig");
-        let (pk, sig) = input.partial_sigs.iter().next().unwrap();
-        let script_sig = Builder::new().push_slice(sig.serialize()).push_key(pk).into_script();
-        input.final_script_sig = Some(script_sig);
-    } else if spk.is_p2sh() {
-        let redeem_script =
-            input.redeem_script.as_ref().expect("P2SH input must have a redeemScript");
-
-        if redeem_script.is_p2wpkh() {
-            // P2SH-P2WPKH: push the redeemScript as scriptSig; sig+pubkey go into witness.
-            assert_eq!(
-                input.partial_sigs.len(),
-                1,
-                "P2SH-P2WPKH input must have exactly one partial sig"
-            );
-            let (pk, sig) = input.partial_sigs.iter().next().unwrap();
-            let script_sig = Builder::new()
-                .push_slice(
-                    <&PushBytes>::try_from(redeem_script.as_bytes())
-                        .expect("redeemScript fits PushBytes"),
-                )
-                .into_script();
-            let mut witness = psbt_v2::bitcoin::Witness::new();
-            witness.push(sig.serialize());
-            witness.push(pk.to_bytes());
-            input.final_script_sig = Some(script_sig);
-            input.final_script_witness = Some(witness);
-        } else if redeem_script.is_p2wsh() {
-            // P2SH-P2WSH multisig.
-            let witness_script =
-                input.witness_script.as_ref().expect("P2SH-P2WSH input must have a witnessScript");
-            let ordered_sigs = sigs_in_script_order(&input.partial_sigs, witness_script);
-            let script_sig = Builder::new()
-                .push_slice(
-                    <&PushBytes>::try_from(redeem_script.as_bytes())
-                        .expect("redeemScript fits PushBytes"),
-                )
-                .into_script();
-            let mut witness = psbt_v2::bitcoin::Witness::new();
-            witness.push([]); // OP_CHECKMULTISIG dummy
-            for sig in &ordered_sigs {
-                witness.push(sig.serialize());
-            }
-            witness.push(witness_script.as_bytes());
-            input.final_script_sig = Some(script_sig);
-            input.final_script_witness = Some(witness);
-        } else {
-            // Bare P2SH multisig (legacy).
-            let ordered_sigs = sigs_in_script_order(&input.partial_sigs, redeem_script);
-            let mut builder = Builder::new().push_opcode(OP_PUSHBYTES_0);
-            for sig in &ordered_sigs {
-                builder = builder.push_slice(sig.serialize());
-            }
-            builder = builder.push_slice(
-                <&PushBytes>::try_from(redeem_script.as_bytes())
-                    .expect("redeemScript fits PushBytes"),
-            );
-            input.final_script_sig = Some(builder.into_script());
-        }
-    } else if spk.is_p2wpkh() {
-        // Native P2WPKH.
-        assert_eq!(input.partial_sigs.len(), 1, "P2WPKH input must have exactly one partial sig");
-        let (pk, sig) = input.partial_sigs.iter().next().unwrap();
-        let mut witness = psbt_v2::bitcoin::Witness::new();
-        witness.push(sig.serialize());
-        witness.push(pk.to_bytes());
-        input.final_script_witness = Some(witness);
-    } else if spk.is_p2wsh() {
-        // Native P2WSH multisig.
-        let witness_script =
-            input.witness_script.as_ref().expect("P2WSH input must have a witnessScript");
-        let ordered_sigs = sigs_in_script_order(&input.partial_sigs, witness_script);
-        let mut witness = psbt_v2::bitcoin::Witness::new();
-        witness.push([]); // OP_CHECKMULTISIG dummy
-        for sig in &ordered_sigs {
-            witness.push(sig.serialize());
-        }
-        witness.push(witness_script.as_bytes());
-        input.final_script_witness = Some(witness);
-    } else {
-        panic!("finalize_input: unsupported scriptPubKey type: {}", spk);
-    }
-
-    // Clear per-input signing data per BIP 174 Finalizer role.
-    input.partial_sigs.clear();
-    input.sighash_type = None;
-    input.redeem_script = None;
-    input.witness_script = None;
-    input.bip32_derivation.clear();
-}
-
 /// Finalizer: apply the generic finalizer to each input, then compare
 /// the resulting PSBT against the expected.
 fn run_finalize(expected: &PsbtData, supplementary: &Supplementary) {
@@ -545,30 +436,8 @@ fn run_finalize(expected: &PsbtData, supplementary: &Supplementary) {
     let expected_hex = expected.hex.as_deref().expect("finalize expected must have hex");
     let expected_psbt = hex_psbt_v0(expected_hex).expect("finalize expected PSBT must be valid");
 
-    // Collect the spending scriptPubKeys before mutably borrowing inputs.
-    let spks: Vec<ScriptBuf> = (0..psbt.inputs.len())
-        .map(|i| {
-            let input = &psbt.inputs[i];
-            if let Some(witness_utxo) = &input.witness_utxo {
-                witness_utxo.script_pubkey.clone()
-            } else if let Some(non_witness_utxo) = &input.non_witness_utxo {
-                let vout = psbt.unsigned_tx.input[i].previous_output.vout as usize;
-                non_witness_utxo.output[vout].script_pubkey.clone()
-            } else {
-                panic!("finalize: input {} has no UTXO data", i);
-            }
-        })
-        .collect();
-
-    for (i, spk) in spks.iter().enumerate() {
-        // Skip inputs that are already finalized.
-        if psbt.inputs[i].final_script_sig.is_some()
-            || psbt.inputs[i].final_script_witness.is_some()
-        {
-            continue;
-        }
-        finalize_input(&mut psbt.inputs[i], spk);
-    }
+    let secp = Secp256k1::verification_only();
+    psbt.finalize_mut(&secp).expect("input psbt must be finalizable");
 
     assert_eq!(psbt, expected_psbt);
 }

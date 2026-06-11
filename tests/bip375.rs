@@ -1,6 +1,12 @@
 //! [BIP-375 Test Vectors](https://github.com/bitcoin/bips/blob/master/bip-0375/bip375_test_vectors.json).
 
-#![cfg(all(feature = "std", feature = "base64", feature = "serde", feature = "silent-payments"))]
+#![cfg(all(
+    feature = "std",
+    feature = "base64",
+    feature = "serde",
+    feature = "miniscript",
+    feature = "silent-payments"
+))]
 
 mod vectors;
 

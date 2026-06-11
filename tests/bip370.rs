@@ -1,6 +1,6 @@
 //! BIP-370 Test Vectors.
 
-#![cfg(all(feature = "std", feature = "base64", feature = "serde"))]
+#![cfg(all(feature = "std", feature = "base64", feature = "serde", feature = "miniscript"))]
 
 mod vectors;
 
