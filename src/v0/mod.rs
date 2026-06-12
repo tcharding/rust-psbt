@@ -43,18 +43,18 @@ impl Psbt {
     /// - If a non-witness UTXO is provided, its hash must match the hash specified in the prevout
     /// - If a witness UTXO is provided, no non-witness signature may be created
     /// - If a redeemScript is provided, the scriptPubKey must be for that redeemScript
-    /// - If a witnessScript is provided, the scriptPubKey or the redeemScript must be for that witnessScript
+    /// - If a witnessScript is provided the redeemScript must be for that witnessScript
+    /// - If a witnessScript is provided, the scriptPubKey must be for that witnessScript
     /// - If a sighash type is provided, the signer must check that the sighash is acceptable. If unacceptable, they must fail.
     /// - If a sighash type is not provided, the signer should sign using SIGHASH_ALL, but may use any sighash type they wish.
     pub fn signer_checks(&self) -> Result<(), SignerChecksError> {
         let unsigned_tx = &self.unsigned_tx;
         for (i, input) in self.inputs.iter().enumerate() {
             let prevout_type = self.output_type(i);
+            let prevout = self.spend_utxo(i).map_err(|_| SignerChecksError::MissingTxOut)?;
             if input.witness_utxo.is_some() {
-                match self.output_type(i) {
-                    Ok(OutputType::Bare) => return Err(SignerChecksError::NonWitnessSig),
-                    Ok(_) => {}
-                    Err(_) => {} // TODO: Is this correct?
+                if let Ok(OutputType::Bare) = prevout_type {
+                    return Err(SignerChecksError::NonWitnessSig);
                 }
             }
 
@@ -65,42 +65,31 @@ impl Psbt {
             }
 
             if let Some(ref redeem_script) = input.redeem_script {
-                match input.witness_utxo {
-                    Some(ref tx_out) => {
-                        let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
-                        if tx_out.script_pubkey != script_pubkey {
-                            return Err(SignerChecksError::RedeemScriptMismatch);
-                        }
-                    }
-                    None => return Err(SignerChecksError::MissingTxOut),
+                let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
+                if prevout.script_pubkey != script_pubkey {
+                    return Err(SignerChecksError::RedeemScriptMismatch);
                 }
             }
 
             if let Some(ref witness_script) = input.witness_script {
-                match input.witness_utxo {
-                    Some(ref utxo) => {
-                        let script_pubkey = &utxo.script_pubkey;
-                        if script_pubkey.is_p2wsh() {
-                            if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
-                                != *script_pubkey
-                            {
-                                return Err(SignerChecksError::WitnessScriptMismatchWsh);
-                            }
-                        } else if script_pubkey.is_p2sh() {
-                            if let Some(ref redeem_script) = input.redeem_script {
-                                if ScriptBuf::new_p2sh(&redeem_script.script_hash())
-                                    != *script_pubkey
-                                    || ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
-                                        != *redeem_script
-                                {
-                                    return Err(SignerChecksError::WitnessScriptMismatchShWsh);
-                                }
-                            }
-                        } else {
-                            // BIP does not specifically say there should not be a witness script here?
-                        }
+                match prevout_type {
+                    Ok(OutputType::Wsh)
+                        if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
+                            != *prevout.script_pubkey =>
+                    {
+                        return Err(SignerChecksError::WitnessScriptMismatchWsh);
                     }
-                    None => return Err(SignerChecksError::MissingTxOut),
+                    Ok(OutputType::ShWsh) =>
+                        if let Some(ref redeem_script) = input.redeem_script {
+                            if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
+                                != *redeem_script
+                                || ScriptBuf::new_p2sh(&redeem_script.script_hash())
+                                    != *prevout.script_pubkey
+                            {
+                                return Err(SignerChecksError::WitnessScriptMismatchShWsh);
+                            }
+                        },
+                    _ => (),
                 }
             }
 
