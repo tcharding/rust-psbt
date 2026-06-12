@@ -22,9 +22,11 @@ pub mod miniscript;
 
 use core::fmt;
 
+use ::bitcoin::sighash::TapSighashType;
 use ::bitcoin::ScriptBuf;
 
 use crate::v0::bitcoin::OutputType;
+use crate::PsbtSighashType;
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
@@ -47,6 +49,7 @@ impl Psbt {
     pub fn signer_checks(&self) -> Result<(), SignerChecksError> {
         let unsigned_tx = &self.unsigned_tx;
         for (i, input) in self.inputs.iter().enumerate() {
+            let prevout_type = self.output_type(i);
             if input.witness_utxo.is_some() {
                 match self.output_type(i) {
                     Ok(OutputType::Bare) => return Err(SignerChecksError::NonWitnessSig),
@@ -99,11 +102,32 @@ impl Psbt {
                 }
             }
 
-            if let Some(_sighash_type) = input.sighash_type {
-                // TODO: Check that sighash is accetable, what does that mean?
-                {}
+            // Use provided sighash or DEFAULT for taproot output and ALL for non-taproot outputs
+            let expected_sighash_type = match (input.sighash_type, prevout_type) {
+                (None, Ok(OutputType::Tr)) => PsbtSighashType::from(TapSighashType::Default),
+                (None, _) => PsbtSighashType::ALL,
+                (Some(sighash_type), _) => sighash_type,
+            };
+
+            let sighash_mismatches = |sighash: PsbtSighashType| sighash != expected_sighash_type;
+
+            let has_mismatch = input
+                .tap_key_sig
+                .is_some_and(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
+                || input
+                    .tap_script_sigs
+                    .values()
+                    .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
+                || input
+                    .partial_sigs
+                    .values()
+                    .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)));
+
+            if has_mismatch {
+                return Err(SignerChecksError::SighashMismatch);
             }
         }
+
         Ok(())
     }
 }
@@ -126,6 +150,10 @@ pub enum SignerChecksError {
     WitnessScriptMismatchWsh,
     /// Nested segwit p2wsh script_pubkey did not match redeem script hash.
     WitnessScriptMismatchShWsh,
+    /// The signature sighash did not match the sighash provided in the input.
+    SighashMismatch,
+    /// Unable to determine the output type.
+    UnknownOutputType,
 }
 
 impl fmt::Display for SignerChecksError {
@@ -143,6 +171,9 @@ impl fmt::Display for SignerChecksError {
                 write!(f, "native segwit p2wsh script_pubkey did not match witness script hash"),
             Self::WitnessScriptMismatchShWsh =>
                 write!(f, "nested segwit p2wsh script_pubkey did not match redeem script hash"),
+            Self::SighashMismatch =>
+                write!(f, "signature sighash type did not match the input sighash type"),
+            Self::UnknownOutputType => write!(f, "unable to determine the output type"),
         }
     }
 }
@@ -157,7 +188,9 @@ impl std::error::Error for SignerChecksError {
             | Self::RedeemScriptMismatch
             | Self::MissingTxOut
             | Self::WitnessScriptMismatchWsh
-            | Self::WitnessScriptMismatchShWsh => None,
+            | Self::WitnessScriptMismatchShWsh
+            | Self::UnknownOutputType
+            | Self::SighashMismatch => None,
         }
     }
 }
