@@ -48,7 +48,6 @@ impl Psbt {
     /// - If a sighash type is provided, the signer must check that the sighash is acceptable. If unacceptable, they must fail.
     /// - If a sighash type is not provided, the signer should sign using SIGHASH_ALL, but may use any sighash type they wish.
     pub fn signer_checks(&self) -> Result<(), SignerChecksError> {
-        let unsigned_tx = &self.unsigned_tx;
         for (i, input) in self.inputs.iter().enumerate() {
             let prevout_type = self.output_type(i);
             let prevout = self.spend_utxo(i).map_err(|_| SignerChecksError::MissingTxOut)?;
@@ -59,7 +58,7 @@ impl Psbt {
             }
 
             if let Some(ref tx) = input.non_witness_utxo {
-                if tx.compute_txid() != unsigned_tx.input[i].previous_output.txid {
+                if tx.compute_txid() != self.unsigned_tx.input[i].previous_output.txid {
                     return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
                 }
             }
