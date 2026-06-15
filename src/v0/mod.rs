@@ -47,75 +47,74 @@ impl Psbt {
     /// - If a witnessScript is provided, the scriptPubKey must be for that witnessScript
     /// - If a sighash type is provided, the signer must check that the sighash is acceptable. If unacceptable, they must fail.
     /// - If a sighash type is not provided, the signer should sign using SIGHASH_ALL, but may use any sighash type they wish.
-    pub fn signer_checks(&self) -> Result<(), SignerChecksError> {
-        for (i, input) in self.inputs.iter().enumerate() {
-            let prevout_type = self.output_type(i);
-            let prevout = self.spend_utxo(i).map_err(|_| SignerChecksError::MissingTxOut)?;
-            if input.witness_utxo.is_some() {
-                if let Ok(OutputType::Bare) = prevout_type {
-                    return Err(SignerChecksError::NonWitnessSig);
+    pub fn signer_checks(&self, index: usize) -> Result<(), SignerChecksError> {
+        let input = &self.inputs[index];
+        let tx_input = &self.unsigned_tx.input[index];
+        let prevout_type = self.output_type(index);
+        let prevout = self.spend_utxo(index).map_err(|_| SignerChecksError::MissingTxOut)?;
+        if input.witness_utxo.is_some() {
+            if let Ok(OutputType::Bare) = prevout_type {
+                return Err(SignerChecksError::NonWitnessSig);
+            }
+        }
+
+        if let Some(ref tx) = input.non_witness_utxo {
+            if tx.compute_txid() != tx_input.previous_output.txid {
+                return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
+            }
+        }
+
+        if let Some(ref redeem_script) = input.redeem_script {
+            let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
+            if prevout.script_pubkey != script_pubkey {
+                return Err(SignerChecksError::RedeemScriptMismatch);
+            }
+        }
+
+        if let Some(ref witness_script) = input.witness_script {
+            match prevout_type {
+                Ok(OutputType::Wsh)
+                    if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
+                        != *prevout.script_pubkey =>
+                {
+                    return Err(SignerChecksError::WitnessScriptMismatchWsh);
                 }
+                Ok(OutputType::ShWsh) =>
+                    if let Some(ref redeem_script) = input.redeem_script {
+                        if ScriptBuf::new_p2wsh(&witness_script.wscript_hash()) != *redeem_script
+                            || ScriptBuf::new_p2sh(&redeem_script.script_hash())
+                                != *prevout.script_pubkey
+                        {
+                            return Err(SignerChecksError::WitnessScriptMismatchShWsh);
+                        }
+                    },
+                _ => (),
             }
+        }
 
-            if let Some(ref tx) = input.non_witness_utxo {
-                if tx.compute_txid() != self.unsigned_tx.input[i].previous_output.txid {
-                    return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
-                }
-            }
+        // Use provided sighash or DEFAULT for taproot output and ALL for non-taproot outputs
+        let expected_sighash_type = match (input.sighash_type, prevout_type) {
+            (None, Ok(OutputType::Tr)) => PsbtSighashType::from(TapSighashType::Default),
+            (None, _) => PsbtSighashType::ALL,
+            (Some(sighash_type), _) => sighash_type,
+        };
 
-            if let Some(ref redeem_script) = input.redeem_script {
-                let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
-                if prevout.script_pubkey != script_pubkey {
-                    return Err(SignerChecksError::RedeemScriptMismatch);
-                }
-            }
+        let sighash_mismatches = |sighash: PsbtSighashType| sighash != expected_sighash_type;
 
-            if let Some(ref witness_script) = input.witness_script {
-                match prevout_type {
-                    Ok(OutputType::Wsh)
-                        if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
-                            != *prevout.script_pubkey =>
-                    {
-                        return Err(SignerChecksError::WitnessScriptMismatchWsh);
-                    }
-                    Ok(OutputType::ShWsh) =>
-                        if let Some(ref redeem_script) = input.redeem_script {
-                            if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
-                                != *redeem_script
-                                || ScriptBuf::new_p2sh(&redeem_script.script_hash())
-                                    != *prevout.script_pubkey
-                            {
-                                return Err(SignerChecksError::WitnessScriptMismatchShWsh);
-                            }
-                        },
-                    _ => (),
-                }
-            }
+        let has_mismatch = input
+            .tap_key_sig
+            .is_some_and(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
+            || input
+                .tap_script_sigs
+                .values()
+                .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
+            || input
+                .partial_sigs
+                .values()
+                .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)));
 
-            // Use provided sighash or DEFAULT for taproot output and ALL for non-taproot outputs
-            let expected_sighash_type = match (input.sighash_type, prevout_type) {
-                (None, Ok(OutputType::Tr)) => PsbtSighashType::from(TapSighashType::Default),
-                (None, _) => PsbtSighashType::ALL,
-                (Some(sighash_type), _) => sighash_type,
-            };
-
-            let sighash_mismatches = |sighash: PsbtSighashType| sighash != expected_sighash_type;
-
-            let has_mismatch = input
-                .tap_key_sig
-                .is_some_and(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
-                || input
-                    .tap_script_sigs
-                    .values()
-                    .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)))
-                || input
-                    .partial_sigs
-                    .values()
-                    .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)));
-
-            if has_mismatch {
-                return Err(SignerChecksError::SighashMismatch);
-            }
+        if has_mismatch {
+            return Err(SignerChecksError::SighashMismatch);
         }
 
         Ok(())
@@ -225,7 +224,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(psbt.signer_checks(), Ok(()));
+        assert_eq!(psbt.signer_checks(0), Ok(()));
     }
 
     #[test]
@@ -246,6 +245,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(psbt.signer_checks(), Err(SignerChecksError::WitnessScriptMismatchShWsh));
+        assert_eq!(psbt.signer_checks(0), Err(SignerChecksError::WitnessScriptMismatchShWsh));
     }
 }

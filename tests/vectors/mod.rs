@@ -191,7 +191,10 @@ fn run_fail_sign(supplementary: &Supplementary) {
             let hex_psbt = hex_psbt_v0(hex).expect("should parse");
             let base64_psbt = base64.parse::<Psbt>().expect("base64 must decode when hex decoded");
             assert_eq!(hex_psbt, base64_psbt);
-            assert!(base64_psbt.signer_checks().is_err(), "expected signer_checks() to fail");
+            assert!(
+                (0..base64_psbt.inputs.len()).any(|i| base64_psbt.signer_checks(i).is_err()),
+                "expected signer_checks() to fail"
+            );
         }
     }
 }
