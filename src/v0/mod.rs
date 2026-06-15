@@ -88,8 +88,10 @@ impl Psbt {
                             }
                         } else if script_pubkey.is_p2sh() {
                             if let Some(ref redeem_script) = input.redeem_script {
-                                if ScriptBuf::new_p2wsh(&redeem_script.wscript_hash())
+                                if ScriptBuf::new_p2sh(&redeem_script.script_hash())
                                     != *script_pubkey
+                                    || ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
+                                        != *redeem_script
                                 {
                                     return Err(SignerChecksError::WitnessScriptMismatchShWsh);
                                 }
@@ -222,7 +224,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "code expects the script pubkey to be the P2WSH of the redeem script for a P2SH-P2WSH, which is wrong"]
     fn signer_checks_p2sh_p2wsh_valid() {
         let witness_script = Builder::new().push_opcode(::bitcoin::opcodes::OP_TRUE).into_script();
         let redeem_script = ScriptBuf::new_p2wsh(&witness_script.wscript_hash());
@@ -237,5 +238,26 @@ mod tests {
         };
 
         assert_eq!(psbt.signer_checks(), Ok(()));
+    }
+
+    #[test]
+    fn signer_checks_p2sh_p2wsh_wrong_witness_script_rejected() {
+        let real_witness_script =
+            Builder::new().push_opcode(::bitcoin::opcodes::OP_TRUE).into_script();
+        let wrong_witness_script =
+            Builder::new().push_opcode(::bitcoin::opcodes::OP_FALSE).into_script();
+
+        let redeem_script = ScriptBuf::new_p2wsh(&real_witness_script.wscript_hash());
+        let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
+
+        let mut psbt = single_input_psbt();
+        psbt.inputs[0] = Input {
+            witness_utxo: Some(TxOut { value: Amount::from_sat(1_000), script_pubkey }),
+            redeem_script: Some(redeem_script),
+            witness_script: Some(wrong_witness_script),
+            ..Default::default()
+        };
+
+        assert_eq!(psbt.signer_checks(), Err(SignerChecksError::WitnessScriptMismatchShWsh));
     }
 }
