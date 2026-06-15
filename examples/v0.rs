@@ -158,12 +158,7 @@ impl Alice {
     }
 
     /// Signs `psbt`.
-    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> {
-        // TODO: Should this be called internally in the `v0` module?
-        psbt.signer_checks(0)?;
-
-        self.0.sign_ecdsa(psbt)
-    }
+    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> { self.0.sign_ecdsa(psbt) }
 }
 
 impl Default for Alice {
@@ -196,12 +191,7 @@ impl Bob {
     }
 
     /// Signs `psbt`.
-    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> {
-        // TODO: Should this be called internally in the `v0` module?
-        psbt.signer_checks(1)?;
-
-        self.0.sign_ecdsa(psbt)
-    }
+    pub fn sign(&self, psbt: Psbt) -> anyhow::Result<Psbt> { self.0.sign_ecdsa(psbt) }
 }
 
 impl Default for Bob {

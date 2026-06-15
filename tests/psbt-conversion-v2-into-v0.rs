@@ -109,13 +109,15 @@ fn input_map_preserves_all_v0_compatible_fields() {
 #[test]
 fn signing_v2_then_converting_matches_signing_after_conversion() {
     let prev = OutPoint::null();
-    let witness_utxo = make_tx_out(123_456);
     let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
     let path = "m/0".into_derivation_path().unwrap();
     let fingerprint = TEST_XPUB.parse::<Xpub>().unwrap().fingerprint();
 
     let mut input = Input::new(&prev);
-    input.witness_utxo = Some(witness_utxo);
+    input.witness_utxo = Some(TxOut {
+        value: Amount::from_sat(123_456),
+        script_pubkey: ScriptBuf::new_p2wpkh(&pk.wpubkey_hash().unwrap()),
+    });
     input.bip32_derivations.insert(pk, (fingerprint, path));
 
     let psbt = Creator::new()

@@ -308,6 +308,17 @@ impl Psbt {
         let mut used = BTreeMap::new();
         let mut errors = BTreeMap::new();
 
+        // Check all inputs before providing any signature
+        for i in 0..self.inputs.len() {
+            if let Err(e) = self.signer_checks(i) {
+                errors.insert(i, e);
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err((used, errors));
+        }
+
         for i in 0..self.inputs.len() {
             match self.signing_algorithm(i) {
                 Ok(SigningAlgorithm::Ecdsa) =>
