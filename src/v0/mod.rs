@@ -20,14 +20,10 @@ pub mod bitcoin;
 #[cfg(feature = "miniscript")]
 pub mod miniscript;
 
-use core::fmt;
+use ::bitcoin::{ScriptBuf, TapSighashType};
 
-use ::bitcoin::sighash::TapSighashType;
-use ::bitcoin::ScriptBuf;
-
-use crate::v0::bitcoin::OutputType;
+use self::bitcoin::{OutputType, SignError};
 use crate::PsbtSighashType;
-
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::bitcoin::{Psbt, Input, Output};
@@ -47,27 +43,28 @@ impl Psbt {
     /// - If a witnessScript is provided, the scriptPubKey must be for that witnessScript
     /// - If a sighash type is provided, the signer must check that the sighash is acceptable. If unacceptable, they must fail.
     /// - If a sighash type is not provided, the signer should sign using SIGHASH_ALL, but may use any sighash type they wish.
-    pub fn signer_checks(&self, index: usize) -> Result<(), SignerChecksError> {
+    pub fn signer_checks(&self, index: usize) -> Result<(), SignError> {
+        self.check_index_is_within_bounds(index)?;
         let input = &self.inputs[index];
         let tx_input = &self.unsigned_tx.input[index];
         let prevout_type = self.output_type(index);
-        let prevout = self.spend_utxo(index).map_err(|_| SignerChecksError::MissingTxOut)?;
+        let prevout = self.spend_utxo(index).map_err(|_| SignError::MissingTxOut)?;
         if input.witness_utxo.is_some() {
             if let Ok(OutputType::Bare) = prevout_type {
-                return Err(SignerChecksError::NonWitnessSig);
+                return Err(SignError::NonWitnessSig);
             }
         }
 
         if let Some(ref tx) = input.non_witness_utxo {
             if tx.compute_txid() != tx_input.previous_output.txid {
-                return Err(SignerChecksError::NonWitnessUtxoTxidMismatch);
+                return Err(SignError::NonWitnessUtxoTxidMismatch);
             }
         }
 
         if let Some(ref redeem_script) = input.redeem_script {
             let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
             if prevout.script_pubkey != script_pubkey {
-                return Err(SignerChecksError::RedeemScriptMismatch);
+                return Err(SignError::RedeemScriptMismatch);
             }
         }
 
@@ -77,7 +74,7 @@ impl Psbt {
                     if ScriptBuf::new_p2wsh(&witness_script.wscript_hash())
                         != *prevout.script_pubkey =>
                 {
-                    return Err(SignerChecksError::WitnessScriptMismatchWsh);
+                    return Err(SignError::WitnessScriptMismatchWsh);
                 }
                 Ok(OutputType::ShWsh) =>
                     if let Some(ref redeem_script) = input.redeem_script {
@@ -85,7 +82,7 @@ impl Psbt {
                             || ScriptBuf::new_p2sh(&redeem_script.script_hash())
                                 != *prevout.script_pubkey
                         {
-                            return Err(SignerChecksError::WitnessScriptMismatchShWsh);
+                            return Err(SignError::WitnessScriptMismatchShWsh);
                         }
                     },
                 _ => (),
@@ -114,73 +111,10 @@ impl Psbt {
                 .any(|sig| sighash_mismatches(PsbtSighashType::from(sig.sighash_type)));
 
         if has_mismatch {
-            return Err(SignerChecksError::SighashMismatch);
+            return Err(SignError::SighashMismatch);
         }
 
         Ok(())
-    }
-}
-
-/// Errors encountered while doing the signer checks.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum SignerChecksError {
-    /// Witness input will produce a non-witness signature.
-    NonWitnessSig,
-    /// Non-witness input has a mismatch between the txid and prevout txid.
-    NonWitnessUtxoTxidMismatch,
-    /// Input has both witness and non-witness utxos.
-    WitnessAndNonWitnessUtxo,
-    /// Redeem script hash did not match the hash in the script_pubkey.
-    RedeemScriptMismatch,
-    /// Missing witness_utxo.
-    MissingTxOut,
-    /// Native segwit p2wsh script_pubkey did not match witness script hash.
-    WitnessScriptMismatchWsh,
-    /// Nested segwit p2wsh script_pubkey did not match redeem script hash.
-    WitnessScriptMismatchShWsh,
-    /// The signature sighash did not match the sighash provided in the input.
-    SighashMismatch,
-    /// Unable to determine the output type.
-    UnknownOutputType,
-}
-
-impl fmt::Display for SignerChecksError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NonWitnessSig => write!(f, "witness input will produce a non-witness signature"),
-            Self::NonWitnessUtxoTxidMismatch =>
-                write!(f, "non-witness input has a mismatch between the txid and prevout txid"),
-            Self::WitnessAndNonWitnessUtxo =>
-                write!(f, "input has both witness and non-witness utxos"),
-            Self::RedeemScriptMismatch =>
-                write!(f, "redeem script hash did not match the hash in the script_pubkey"),
-            Self::MissingTxOut => write!(f, "missing witness_utxo"),
-            Self::WitnessScriptMismatchWsh =>
-                write!(f, "native segwit p2wsh script_pubkey did not match witness script hash"),
-            Self::WitnessScriptMismatchShWsh =>
-                write!(f, "nested segwit p2wsh script_pubkey did not match redeem script hash"),
-            Self::SighashMismatch =>
-                write!(f, "signature sighash type did not match the input sighash type"),
-            Self::UnknownOutputType => write!(f, "unable to determine the output type"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for SignerChecksError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::NonWitnessSig
-            | Self::NonWitnessUtxoTxidMismatch
-            | Self::WitnessAndNonWitnessUtxo
-            | Self::RedeemScriptMismatch
-            | Self::MissingTxOut
-            | Self::WitnessScriptMismatchWsh
-            | Self::WitnessScriptMismatchShWsh
-            | Self::UnknownOutputType
-            | Self::SighashMismatch => None,
-        }
     }
 }
 
@@ -245,6 +179,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(psbt.signer_checks(0), Err(SignerChecksError::WitnessScriptMismatchShWsh));
+        assert_eq!(psbt.signer_checks(0), Err(SignError::WitnessScriptMismatchShWsh));
     }
 }
