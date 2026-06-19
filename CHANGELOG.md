@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 - Handle multi-byte `keytype`s [#94](https://github.com/rust-bitcoin/rust-psbt/pull/94).
+- Bump miniscript to `v13.0.0`.
+- Insource psbt related changes from `miniscript@13.0.0` [#163](https://git.rust-bitcoin.org/rust-bitcoin/rust-psbt/pulls/163): 
+    - Fix: skip re-finalizing PSBT inputs that already have `final_script_sig` or `final_script_witness` which could
+    cause a failure if re-finalized [rust-miniscript#960](https://github.com/rust-bitcoin/rust-miniscript/pull/960).
+    - Replace `descriptor::ConversionError` by `descriptor::NonDefiniteKeyError`. The `Error` variant in the return
+    type of the `update_with_descriptor_unchecked` methods from `PsbtInputExt` and `PsbtOutputExt` is
+    `descriptor::NonDefiniteKeyError` from now on.
+    - Remove `PartialOrd, Ord, Hash, Clone, Copy` derivations from `OutputUpdateError` and `UtxoUpdateError`.
+    - `PsbtInputSatisfier` no longer exposes the `psbt` and `index` fields publicly. Now the accessors are the methods
+    `psbt` for the inner PSBT and `psbt_input` for the input the `PsbtInputSatisfier` is applied on.
+    - Update `miniscript::Satisfier.lookup_tap_key_spend_sig` impl for `v0::miniscript::PsbtInputSatisfier` and
+    `v2::miniscript::InputSatisfier`. Now `lookup_tap_key_spend_sig` takes a public key as parameter.
+    - Make `Translator.pk` impl for `KeySourceLookUp` infallible. The output is still wrapped in a `Result`, unwrapping
+    it will always return the successful variant. 
 
 ## [0.3.0] - 2026-03-24
 
