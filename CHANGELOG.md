@@ -20,6 +20,21 @@
 - Bump miniscript to `v13.1.0`.
 - Insource psbt related changes from `miniscript@13.1.0` [#180](https://git.rust-bitcoin.org/rust-bitcoin/rust-psbt/pulls/180): 
     - Create `PlanExt` public trait and implement `update_psbt_input` copying the code from `miniscript::plan::Plan.update_psbt_input`.
+- `Psbt.signer_checks` related changes [#186](https://git.rust-bitcoin.org/rust-bitcoin/rust-psbt/pulls/186):
+    - Fix malformed `P2SH-P2WSH` checks.
+    - Remove `SignerChecksError`.
+    - Add new `SignError` variants:
+        - `NonWitnessSig`.
+        - `NonWitnessUtxoTxidMismatch`.
+        - `WitnessAndNonWitnessUtxo`.
+        - `RedeemScriptMismatch`.
+        - `MissingTxOut`.
+        - `WitnessScriptMismatchWsh`.
+        - `WitnessScriptMismatchShWsh`.
+        - `SigHashMismatch`.
+    - Added `index: usize` parameter to `signer_checks` method. Now it can be executed on individual inputs.
+    - Change `signer_checks` error return type from `SignerChecksError` to `SignError`.
+    - Execute `Psbt.signer_checks` before any `Psbt.sign` operation. The `Psbt.sign` call can now fail with the new `SignError` variants.
 
 ## [0.3.0] - 2026-03-24
 
