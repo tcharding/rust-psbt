@@ -31,6 +31,8 @@ use crate::prelude::*;
 mod updater;
 mod finalizer;
 mod util;
+#[cfg(feature = "miniscript")]
+mod get_key;
 
 pub use updater::PlanExt;
 
