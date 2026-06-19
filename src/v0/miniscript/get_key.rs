@@ -33,29 +33,32 @@ impl GetKey for DescriptorSecretKey {
                     Ok(None)
                 }
             }
-            (
-                Self::XPrv(descriptor_xkey),
-                key_request @ KeyRequest::Bip32(ref key_source),
-            ) => {
+            (Self::XPrv(descriptor_xkey), key_request @ KeyRequest::Bip32(ref key_source)) => {
                 if let Some(key) = descriptor_xkey.xkey.get_key(key_request, secp)? {
                     return Ok(Some(key));
                 }
 
-                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
-                    let (_, full_path) = key_source;
+                // A successful `matches()` already guarantees the requested key source's fingerprint equals our origin
+                // (or, when there is no origin, the xkey's own) fingerprint.
+                //
+                // `xkey` is anchored at the origin, but the request path is master-relative, either:
+                // - origin: strip the origin prefix and use the remaining suffix.
+                // - no origin: use the full request path.
+                let (_, full_path) = key_source;
+                let derivation_path = match descriptor_xkey.matches(key_source, secp) {
+                    Some(_) => match &descriptor_xkey.origin {
+                        Some((_, origin_path)) => &full_path[origin_path.len()..],
+                        None => full_path.as_ref(),
+                    },
+                    None => return Ok(None),
+                };
 
-                    let derivation_path = &full_path[matched_path.len()..];
-
-                    return Ok(Some(
-                        descriptor_xkey
-                            .xkey
-                            .derive_priv(secp, &derivation_path)
-                            .map_err(GetKeyError::Bip32)?
-                            .to_priv(),
-                    ));
-                }
-
-                Ok(None)
+                Ok(Some(
+                    descriptor_xkey
+                        .xkey
+                        .derive_priv(secp, &derivation_path)?
+                        .to_priv(),
+                ))
             }
             (Self::XPrv(_), KeyRequest::XOnlyPubkey(_)) => {
                 Err(GetKeyError::NotSupported)
