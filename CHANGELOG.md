@@ -17,6 +17,9 @@
     `v2::miniscript::InputSatisfier`. Now `lookup_tap_key_spend_sig` takes a public key as parameter.
     - Make `Translator.pk` impl for `KeySourceLookUp` infallible. The output is still wrapped in a `Result`, unwrapping
     it will always return the successful variant. 
+- Bump miniscript to `v13.1.0`.
+- Insource psbt related changes from `miniscript@13.1.0` [#180](https://git.rust-bitcoin.org/rust-bitcoin/rust-psbt/pulls/180): 
+    - Create `PlanExt` public trait and implement `update_psbt_input` copying the code from `miniscript::plan::Plan.update_psbt_input`.
 
 ## [0.3.0] - 2026-03-24
 
