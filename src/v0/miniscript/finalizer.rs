@@ -168,10 +168,6 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
             // Indirect way to check the equivalence of pubkey-hashes.
             // Create a pubkey hash and check if they are the same.
-            // THIS IS A BUG AND *WILL* PRODUCE WRONG SATISFACTIONS FOR UNCOMPRESSED KEYS
-            // Partial sigs loses the compressed flag that is necessary
-            // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
-            // The type checker will fail again after we update to 0.28 and this can be removed
             let addr = bitcoin::Address::p2pkh(pk, bitcoin::Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
