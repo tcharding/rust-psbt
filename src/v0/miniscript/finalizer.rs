@@ -294,13 +294,9 @@ pub fn interpreter_check<C: secp256k1::Verification>(
         let empty_script_sig = ScriptBuf::new();
         let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
-        let witness = input
-            .final_script_witness
-            .as_ref()
-            .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-            .unwrap_or(empty_witness);
+        let witness = input.final_script_witness.as_ref().unwrap_or(&empty_witness);
 
-        interpreter_inp_check(psbt, secp, index, utxos, &witness, script_sig)?;
+        interpreter_inp_check(psbt, secp, index, utxos, witness, script_sig)?;
     }
     Ok(())
 }
