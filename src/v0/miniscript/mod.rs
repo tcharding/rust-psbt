@@ -391,13 +391,9 @@ pub(crate) fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
 
     // Check well-formedness of input data
     for (index, input) in psbt.inputs.iter().enumerate() {
-        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
-        let target_ecdsa_sighash_ty = match input.sighash_type {
-            Some(psbt_hash_ty) => psbt_hash_ty
-                .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
-            None => sighash::EcdsaSighashType::All,
-        };
+        let target_ecdsa_sighash_ty = input
+            .ecdsa_hash_ty()
+            .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?;
         for (key, ecdsa_sig) in &input.partial_sigs {
             let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32)
                 .map_err(|_| {
