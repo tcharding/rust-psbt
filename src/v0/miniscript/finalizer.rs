@@ -168,10 +168,6 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
             // Indirect way to check the equivalence of pubkey-hashes.
             // Create a pubkey hash and check if they are the same.
-            // THIS IS A BUG AND *WILL* PRODUCE WRONG SATISFACTIONS FOR UNCOMPRESSED KEYS
-            // Partial sigs loses the compressed flag that is necessary
-            // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
-            // The type checker will fail again after we update to 0.28 and this can be removed
             let addr = bitcoin::Address::p2pkh(pk, bitcoin::Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
@@ -298,13 +294,9 @@ pub fn interpreter_check<C: secp256k1::Verification>(
         let empty_script_sig = ScriptBuf::new();
         let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
-        let witness = input
-            .final_script_witness
-            .as_ref()
-            .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-            .unwrap_or(empty_witness);
+        let witness = input.final_script_witness.as_ref().unwrap_or(&empty_witness);
 
-        interpreter_inp_check(psbt, secp, index, utxos, &witness, script_sig)?;
+        interpreter_inp_check(psbt, secp, index, utxos, witness, script_sig)?;
     }
     Ok(())
 }
