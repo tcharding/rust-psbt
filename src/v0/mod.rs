@@ -194,3 +194,48 @@ impl std::error::Error for SignerChecksError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ::bitcoin::locktime::absolute;
+    use ::bitcoin::script::Builder;
+    use ::bitcoin::{
+        transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
+    };
+
+    use super::*;
+    use crate::v0::bitcoin::Input;
+
+    fn single_input_psbt() -> Psbt {
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![TxOut { value: Amount::from_sat(1_000), script_pubkey: ScriptBuf::new() }],
+        };
+        Psbt::from_unsigned_tx(tx).unwrap()
+    }
+
+    #[test]
+    #[ignore = "code expects the script pubkey to be the P2WSH of the redeem script for a P2SH-P2WSH, which is wrong"]
+    fn signer_checks_p2sh_p2wsh_valid() {
+        let witness_script = Builder::new().push_opcode(::bitcoin::opcodes::OP_TRUE).into_script();
+        let redeem_script = ScriptBuf::new_p2wsh(&witness_script.wscript_hash());
+        let script_pubkey = ScriptBuf::new_p2sh(&redeem_script.script_hash());
+
+        let mut psbt = single_input_psbt();
+        psbt.inputs[0] = Input {
+            witness_utxo: Some(TxOut { value: Amount::from_sat(1_000), script_pubkey }),
+            redeem_script: Some(redeem_script),
+            witness_script: Some(witness_script),
+            ..Default::default()
+        };
+
+        assert_eq!(psbt.signer_checks(), Ok(()));
+    }
+}
