@@ -308,6 +308,17 @@ impl Psbt {
         let mut used = BTreeMap::new();
         let mut errors = BTreeMap::new();
 
+        // Check all inputs before providing any signature
+        for i in 0..self.inputs.len() {
+            if let Err(e) = self.signer_checks(i) {
+                errors.insert(i, e);
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err((used, errors));
+        }
+
         for i in 0..self.inputs.len() {
             match self.signing_algorithm(i) {
                 Ok(SigningAlgorithm::Ecdsa) =>
@@ -633,7 +644,7 @@ impl Psbt {
 
     /// Checks `input_index` is within bounds for the PSBT `inputs` array and
     /// for the PSBT `unsigned_tx` `input` array.
-    fn check_index_is_within_bounds(
+    pub(crate) fn check_index_is_within_bounds(
         &self,
         input_index: usize,
     ) -> Result<(), IndexOutOfBoundsError> {
@@ -1019,6 +1030,22 @@ pub enum SignError {
     WrongSigningAlgorithm,
     /// Signing request currently unsupported.
     Unsupported,
+    /// Witness input will produce a non-witness signature.
+    NonWitnessSig,
+    /// Non-witness input has a mismatch between the txid and prevout txid.
+    NonWitnessUtxoTxidMismatch,
+    /// Input has both witness and non-witness utxos.
+    WitnessAndNonWitnessUtxo,
+    /// Redeem script hash did not match the hash in the script_pubkey.
+    RedeemScriptMismatch,
+    /// Missing witness_utxo.
+    MissingTxOut,
+    /// Native segwit p2wsh script_pubkey did not match witness script hash.
+    WitnessScriptMismatchWsh,
+    /// Nested segwit p2wsh script_pubkey did not match redeem script hash.
+    WitnessScriptMismatchShWsh,
+    /// The signature sighash did not match the sighash provided in the input.
+    SighashMismatch,
 }
 
 impl From<core::convert::Infallible> for SignError {
@@ -1045,6 +1072,20 @@ impl fmt::Display for SignError {
             Self::WrongSigningAlgorithm =>
                 write!(f, "attempt to sign an input with the wrong signing algorithm"),
             Self::Unsupported => write!(f, "signing request currently unsupported"),
+            Self::NonWitnessSig => write!(f, "witness input will produce a non-witness signature"),
+            Self::NonWitnessUtxoTxidMismatch =>
+                write!(f, "non-witness input has a mismatch between the txid and prevout txid"),
+            Self::WitnessAndNonWitnessUtxo =>
+                write!(f, "input has both witness and non-witness utxos"),
+            Self::RedeemScriptMismatch =>
+                write!(f, "redeem script hash did not match the hash in the script_pubkey"),
+            Self::MissingTxOut => write!(f, "missing witness_utxo"),
+            Self::WitnessScriptMismatchWsh =>
+                write!(f, "native segwit p2wsh script_pubkey did not match witness script hash"),
+            Self::WitnessScriptMismatchShWsh =>
+                write!(f, "nested segwit p2wsh script_pubkey did not match redeem script hash"),
+            Self::SighashMismatch =>
+                write!(f, "signature sighash type did not match the input sighash type"),
         }
     }
 }
@@ -1068,7 +1109,15 @@ impl std::error::Error for SignError {
             | Self::UnknownOutputType
             | Self::KeyNotFound
             | Self::WrongSigningAlgorithm
-            | Self::Unsupported => None,
+            | Self::Unsupported
+            | Self::NonWitnessSig
+            | Self::NonWitnessUtxoTxidMismatch
+            | Self::WitnessAndNonWitnessUtxo
+            | Self::RedeemScriptMismatch
+            | Self::MissingTxOut
+            | Self::WitnessScriptMismatchWsh
+            | Self::WitnessScriptMismatchShWsh
+            | Self::SighashMismatch => None,
         }
     }
 }

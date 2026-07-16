@@ -221,9 +221,6 @@ impl Entity {
 
     /// Signs any ECDSA inputs for which we have keys.
     pub fn sign_ecdsa(&self, mut psbt: Psbt) -> anyhow::Result<Psbt> {
-        // TODO: Should this be called internally in the `v0` module?
-        psbt.signer_checks()?;
-
         let sk = self.private_key();
         let pk = self.public_key();
 
