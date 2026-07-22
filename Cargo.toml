@@ -14,7 +14,7 @@ exclude = ["api", "tests", "contrib"]
 
 [package.metadata.rbmt.toolchains]
 nightly = "nightly-2026-07-21"
-stable = "1.96.0"
+stable = "1.97.1"
 
 [package.metadata.rbmt.tools]
 cargo-mutants = "27.1.0"
