@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [package.metadata.rbmt.toolchains]
-stable = "1.96.0"
+stable = "1.97.1"
 
 [dependencies]
 anyhow = "1"
