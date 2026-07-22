@@ -1,6 +1,6 @@
 alias ulf := update-lock-files
 
-export RBMT_LOG_LEVEL := env_var_or_default("RBMT_LOG_LEVEL", "progress")
+export RBMT_LOG_LEVEL := env("RBMT_LOG_LEVEL", "progress")
 
 _default:
   @just --list
@@ -8,7 +8,7 @@ _default:
 # Install workspace tools including rbmt.
 [group('system')]
 @tools:
-  cargo install --quiet --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev $(cat {{justfile_directory()}}/rbmt-version) cargo-rbmt
+  cargo install --quiet --locked cargo-rbmt@$(grep "^rbmt.version" {{justfile_directory()}}/Cargo.toml | cut -d'"' -f2)
   cargo rbmt toolchains
   cargo rbmt tools
 

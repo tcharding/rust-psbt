@@ -7,8 +7,9 @@ runs:
     - name: Install cargo-rbmt
       shell: bash
       run: |
-        RBMT_VERSION=$(cat rbmt-version)
-        cargo install --locked --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev "$RBMT_VERSION" cargo-rbmt
+        cargo install \
+          --locked \
+          cargo-rbmt@$(grep "^rbmt.version" Cargo.toml | cut -d'"' -f2)
 
     - name: Install toolchains
       shell: bash

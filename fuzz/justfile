@@ -1,12 +1,16 @@
+export RBMT_LOG_LEVEL := env("RBMT_LOG_LEVEL", "progress")
+
 _default:
 	@just --list
 
 # Install tools.
 @tools:
-	cargo install --quiet --git https://git.rust-bitcoin.org/rust-bitcoin/rust-bitcoin-maintainer-tools --rev $(cat {{justfile_directory()}}/../rbmt-version) cargo-rbmt
-	RBMT_LOG_LEVEL=progress cargo rbmt toolchains
-	RBMT_LOG_LEVEL=progress cargo rbmt tools
+	cargo install --quiet --locked cargo-rbmt@$(grep "^rbmt.version" {{justfile_directory()}}/../Cargo.toml | cut -d'"' -f2)
+	cargo rbmt tools
 
 # Cycle all targets.
 @cycle: tools
-	for target in $(cargo rbmt run --toolchain nightly --lock-file existing -- fuzz list); do cargo rbmt run --toolchain nightly --lock-file existing -- fuzz run "$target" -- -max_total_time=10; done
+    nightly=$(cargo rbmt toolchains --nightly) && \
+    for target in $(cargo +$nightly fuzz list); do \
+        cargo +$nightly fuzz run "$target" -- -max_total_time=10; \
+    done

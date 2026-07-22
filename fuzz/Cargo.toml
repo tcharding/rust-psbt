@@ -9,7 +9,7 @@ rust-version = "1.74.0"
 cargo-fuzz = true
 
 [package.metadata.rbmt.tools]
-cargo-fuzz = "0.13.1"
+cargo-fuzz = "0.13.2"
 
 [package.metadata.rbmt.toolchains]
 nightly = "nightly-2026-06-26"
