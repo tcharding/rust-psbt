@@ -46,14 +46,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["std"]
-std = ["bitcoin/std", "miniscript?/std"]
+std = ["bitcoin/std", "bitcoin-consensus-encoding/std", "miniscript?/std"]
 rand = ["std", "bitcoin/rand-std"]
-serde = ["dep:serde", "bitcoin/serde"]
+serde = ["dep:serde", "bitcoin/serde", "bitcoin-consensus-encoding/serde"]
 base64 = ["bitcoin/base64"]
 silent-payments = [] # Silent Payments support
 
 [dependencies]
-bitcoin = { version = "0.32.8", default-features = false }
+bitcoin = { version = "0.32.102", default-features = false, features = ["encoding"] }
+bitcoin-consensus-encoding = { version = "1.2.0", default-features = false, features = ["alloc", "hex"] }
 
 arbitrary = { version = "1.0.1", optional = true }
 miniscript = { version = "13.1.0", default-features = false, optional = true }
