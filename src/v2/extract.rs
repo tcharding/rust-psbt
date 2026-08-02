@@ -49,7 +49,7 @@ impl Extractor {
     ///
     /// As of 2023, even the biggest overpayers during the highest fee markets only paid around
     /// 1000 sats/vByte. 25k sats/vByte is obviously a mistake at this point.
-    pub const DEFAULT_MAX_FEE_RATE: FeeRate = FeeRate::from_sat_per_vb_unchecked(25_000);
+    pub const DEFAULT_MAX_FEE_RATE: FeeRate = FeeRate::from_sat_per_vb_u32(25_000);
 
     /// An alias for [`Self::extract_tx_fee_rate_limit`].
     pub fn extract_tx(&self) -> Result<Transaction, ExtractTxFeeRateError> {
