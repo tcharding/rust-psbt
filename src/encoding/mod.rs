@@ -6,6 +6,8 @@
 //! [`bitcoin_consensus_encoding::Encoder`] trait for a sans-I/O approach. Unlike consensus
 //! encoding, PSBT encoding is specific to the PSBT key-value map format and related structures.
 
+pub mod delegates;
+
 use bitcoin_consensus_encoding::{
     CompactSizeEncoder, Encoder, Encoder2, EncoderStatus, IterEncoder,
 };

@@ -4,7 +4,9 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::consensus::encode as consensus;
+use bitcoin_consensus_encoding::ArrayEncoder;
 
+use crate::encoding::PsbtEncode;
 use crate::prelude::Vec;
 use crate::serialize::{self, Deserialize, Serialize};
 
@@ -55,6 +57,22 @@ impl Deserialize for Version {
         let n: u32 = consensus::deserialize(bytes)?;
         let version = Self::try_from(n)?;
         Ok(version)
+    }
+}
+
+bitcoin_consensus_encoding::encoder_newtype_exact! {
+    /// An encoder for PSBT Version values.
+    pub struct VersionEncoder<'e>(ArrayEncoder<4>);
+}
+
+impl PsbtEncode for Version {
+    type Encoder<'e>
+        = VersionEncoder<'e>
+    where
+        Self: 'e;
+
+    fn psbt_encoder(&self) -> VersionEncoder<'_> {
+        VersionEncoder::new(ArrayEncoder::without_length_prefix(self.to_u32().to_le_bytes()))
     }
 }
 
