@@ -7,21 +7,18 @@
 //! consensus [`bitcoin_consensus_encoding::Encode`] implementations.
 
 use bitcoin::Sequence;
-use bitcoin_consensus_encoding::Encode;
+use bitcoin_consensus_encoding::{Decode, Encode};
 
-use super::PsbtEncode;
+use super::{PsbtDecode, PsbtEncode};
 
-/// Marker trait for types that delegate consensus encoding to PSBT.
+/// Marker trait for types that delegate consensus encoding and decoding to PSBT.
 ///
-/// Types implementing this trait have no PSBT-specific encoding logic and can
-/// delegate directly to their consensus encoder via the blanket [`PsbtEncode`]
-/// implementation.
-trait PsbtDelegate: Encode {}
+/// Types implementing this trait have no PSBT-specific codec logic and can
+/// delegate directly to their consensus implementations via the blanket
+/// [`PsbtEncode`] and [`PsbtDecode`] implementations.
+trait PsbtDelegate: Encode + Decode {}
 
-/// Blanket implementation for types that delegate to consensus encoding.
-///
-/// Any type implementing [`PsbtDelegate`] automatically implements [`PsbtEncode`]
-/// by delegating to its consensus encoder.
+/// Blanket [`PsbtEncode`] implementation for types that delegate to consensus encoding.
 impl<T: PsbtDelegate> PsbtEncode for T {
     type Encoder<'e>
         = <T as Encode>::Encoder<'e>
@@ -31,5 +28,10 @@ impl<T: PsbtDelegate> PsbtEncode for T {
     fn psbt_encoder(&self) -> Self::Encoder<'_> { self.encoder() }
 }
 
-/// [`Sequence`] uses its consensus encoding for PSBT.
+/// Blanket [`PsbtDecode`] implementation for types that delegate to consensus decoding.
+impl<T: PsbtDelegate> PsbtDecode for T {
+    type Decoder = <T as Decode>::Decoder;
+}
+
+/// [`Sequence`] uses its consensus encoding and decoding for PSBT.
 impl PsbtDelegate for Sequence {}

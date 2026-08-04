@@ -9,8 +9,45 @@
 pub mod delegates;
 
 use bitcoin_consensus_encoding::{
-    CompactSizeEncoder, Encoder, Encoder2, EncoderStatus, IterEncoder,
+    CompactSizeEncoder, DecodeError, Decoder, DecoderStatus, Encoder, Encoder2, EncoderStatus,
+    IterEncoder, VecDecoderError, VecDecoderWith,
 };
+
+use crate::prelude::Vec;
+
+/// Types that can be PSBT-decoded.
+///
+/// This trait mirrors the structure of [`bitcoin_consensus_encoding::Decode`],
+/// but for PSBT-specific decoding semantics (not consensus decoding).
+pub trait PsbtDecode: Sized {
+    /// The decoder associated with this type.
+    type Decoder: Decoder<Output = Self> + Default;
+
+    /// Constructs a PSBT decoder for this type.
+    fn psbt_decoder() -> Self::Decoder { Self::Decoder::default() }
+}
+
+/// Decodes a PSBT-decodable value from a byte slice.
+pub fn decode_from_slice<T: PsbtDecode>(
+    bytes: &[u8],
+) -> Result<T, DecodeError<<T::Decoder as Decoder>::Error>> {
+    bitcoin_consensus_encoding::decode_from_slice_with_decoder::<T::Decoder>(bytes)
+}
+
+/// Decodes a PSBT-decodable value from a byte slice, allowing trailing bytes.
+pub fn decode_from_slice_unbounded<T: PsbtDecode>(
+    bytes: &mut &[u8],
+) -> Result<T, <T::Decoder as Decoder>::Error> {
+    bitcoin_consensus_encoding::decode_from_slice_unbounded_with_decoder::<T::Decoder>(bytes)
+}
+
+/// Decodes a PSBT-decodable value from a buffered reader.
+#[cfg(feature = "std")]
+pub fn decode_from_reader<T: PsbtDecode, R: std::io::BufRead>(
+    reader: R,
+) -> Result<T, bitcoin_consensus_encoding::ReadError<<T::Decoder as Decoder>::Error>> {
+    bitcoin_consensus_encoding::decode_from_read_with_decoder::<T::Decoder, R>(reader)
+}
 
 /// Types that can be PSBT-encoded.
 ///
@@ -102,6 +139,38 @@ impl<'e, T: PsbtEncode> PrefixedSliceEncoder<'e, T> {
 
 impl<'e, T: PsbtEncode> Encoder for PrefixedSliceEncoder<'e, T> {
     fn current_chunk(&self) -> &[u8] { self.0.current_chunk() }
-
     fn advance(&mut self) -> EncoderStatus { self.0.advance() }
+}
+
+/// A decoder for a vector of PSBT-decodable types with a compact-size length prefix.
+///
+/// Mirrors [`bitcoin_consensus_encoding::VecDecoder`] but bound to [`PsbtDecode`] instead
+/// of [`bitcoin_consensus_encoding::Decode`].
+pub struct VecDecoder<T: PsbtDecode>(VecDecoderWith<T::Decoder>);
+
+impl<T: PsbtDecode> VecDecoder<T> {
+    /// Constructs a new decoder with the default limit of 4,000,000 elements.
+    pub const fn new() -> Self { Self(VecDecoderWith::new()) }
+
+    /// Constructs a new decoder with a custom element limit.
+    pub const fn new_with_limit(limit: usize) -> Self {
+        Self(VecDecoderWith::new_with_limit(limit))
+    }
+}
+
+impl<T: PsbtDecode> Default for VecDecoder<T> {
+    fn default() -> Self { Self::new() }
+}
+
+impl<T: PsbtDecode> Decoder for VecDecoder<T> {
+    type Output = Vec<T>;
+    type Error = VecDecoderError<<T::Decoder as Decoder>::Error>;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        self.0.push_bytes(bytes)
+    }
+
+    fn end(self) -> Result<Vec<T>, Self::Error> { self.0.end() }
+
+    fn read_limit(&self) -> usize { self.0.read_limit() }
 }
