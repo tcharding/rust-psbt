@@ -227,6 +227,30 @@ where
     }
 }
 
+impl<Subtype> PsbtEncode for ProprietaryKey<Subtype>
+where
+    Subtype: Copy + From<u64> + Into<u64>,
+{
+    type Encoder<'e>
+        = ProprietaryKeyEncoder<'e>
+    where
+        Self: 'e;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> {
+        ProprietaryKeyEncoder::new(Encoder3::new(
+            PrefixedBytesEncoder::new(&self.prefix),
+            CompactSizeEncoder::new_u64(self.subtype.into()),
+            BytesEncoder::without_length_prefix(&self.key),
+        ))
+    }
+}
+
+bitcoin_consensus_encoding::encoder_newtype_exact! {
+    /// Encoder for the body of a raw PSBT [`ProprietaryKey`] (`<prefix> <subtype> <keydata>`,
+    /// without the leading `0xFC` keytype).
+    pub struct ProprietaryKeyEncoder<'e>(Encoder3<PrefixedBytesEncoder<'e>, CompactSizeEncoder, BytesEncoder<'e>>);
+}
+
 /// Error returned when decoding a raw PSBT [`Key`] fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyDecodeError {
@@ -368,6 +392,9 @@ mod tests {
     use super::*;
     use crate::encoding::{decode_from_slice, encode_to_vec};
 
+    // Bytes represent the "test_key" string in utf8
+    const TEST_SUBKEYDATA: [u8; 8] = [0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79];
+
     #[test]
     fn key_roundtrip() {
         let key = Key { type_value: 2, key: vec![1, 2, 3] };
@@ -462,5 +489,56 @@ mod tests {
         let status = decoder.push_bytes(&mut bytes).unwrap();
         assert!(status.is_ready());
         assert_eq!(decoder.read_limit(), 0);
+    }
+
+    #[test]
+    fn proprietary_key_encodes() {
+        let pk = ProprietaryKey::<ProprietaryType> {
+            prefix: vec![1, 2, 3],
+            subtype: 5,
+            key: vec![9, 9],
+        };
+        assert_eq!(encode_to_vec(&pk), vec![0x03, 0x01, 0x02, 0x03, 0x05, 0x09, 0x09]);
+    }
+
+    #[test]
+    fn proprietary_key_encodes_empty() {
+        let pk = ProprietaryKey::<ProprietaryType> { prefix: vec![], subtype: 0, key: vec![] };
+        assert_eq!(encode_to_vec(&pk), vec![0x00, 0x00]);
+    }
+
+    #[test]
+    fn proprietary_key_encodes_no_prefix() {
+        let prop_key =
+            ProprietaryKey { prefix: vec![], subtype: 2u64, key: TEST_SUBKEYDATA.to_vec() };
+        let bytes = encode_to_vec(&prop_key);
+
+        assert_eq!(bytes, vec![0x00, 0x02, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79]);
+    }
+
+    #[test]
+    fn proprietary_key_encodes_no_key() {
+        let prop_key =
+            ProprietaryKey { prefix: "prefix".as_bytes().to_vec(), subtype: 2u64, key: vec![] };
+        let bytes = encode_to_vec(&prop_key);
+
+        assert_eq!(bytes, vec![0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x02]);
+    }
+
+    #[test]
+    fn proprietary_key_encodes_prefix_and_key() {
+        let prop_key = ProprietaryKey {
+            prefix: "prefix".as_bytes().to_vec(),
+            subtype: 2u64,
+            key: TEST_SUBKEYDATA.to_vec(),
+        };
+        let bytes = encode_to_vec(&prop_key);
+        assert_eq!(
+            bytes,
+            vec![
+                0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x02, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b,
+                0x65, 0x79
+            ]
+        );
     }
 }
