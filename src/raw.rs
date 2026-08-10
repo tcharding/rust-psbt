@@ -15,9 +15,7 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::consensus::encode as consensus;
-use bitcoin::consensus::encode::{
-    deserialize, serialize, Decodable, Encodable, VarInt, MAX_VEC_SIZE,
-};
+use bitcoin::consensus::encode::{serialize, Decodable, Encodable, VarInt, MAX_VEC_SIZE};
 use bitcoin::hex::DisplayHex;
 use bitcoin_consensus_encoding::{
     ByteVecDecoder, ByteVecDecoderError, BytesEncoder, CompactSizeDecoderError, CompactSizeEncoder,
@@ -192,7 +190,20 @@ where
             return Err(serialize::Error::InvalidProprietaryKey);
         }
 
-        Ok(deserialize(&key.key)?)
+        let mut inner = Decoder2::<ByteVecDecoder, CompactSizeU64Decoder>::default();
+
+        let mut bytes = key.key.as_slice();
+        if inner
+            .push_bytes(&mut bytes)
+            .map_err(|_| serialize::Error::InvalidProprietaryKey)?
+            .needs_more()
+        {
+            return Err(serialize::Error::InvalidProprietaryKey);
+        }
+
+        let (prefix, subtype) = inner.end().map_err(|_| serialize::Error::InvalidProprietaryKey)?;
+
+        Ok(Self { prefix, subtype: subtype.into(), key: bytes.to_vec() })
     }
 }
 
@@ -539,6 +550,61 @@ mod tests {
                 0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x02, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b,
                 0x65, 0x79
             ]
+        );
+    }
+
+    #[test]
+    fn proprietary_key_roundtrip() {
+        let prop_key = ProprietaryKey {
+            prefix: "prefix".as_bytes().to_vec(),
+            subtype: 2u64,
+            key: TEST_SUBKEYDATA.to_vec(),
+        };
+        let prop_key_bytes = encode_to_vec(&prop_key);
+        let key = Key { type_value: 0xfc, key: prop_key_bytes };
+        assert_eq!(core::convert::TryInto::<ProprietaryKey>::try_into(key).unwrap(), prop_key);
+    }
+
+    #[test]
+    fn proprietary_key_decodes_no_prefix() {
+        let bytes: Vec<u8> =
+            vec![0x0b, 0xfc, 0x00, 0x02, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79];
+        let prop_key =
+            ProprietaryKey { prefix: vec![], subtype: 2u64, key: TEST_SUBKEYDATA.to_vec() };
+        let decoded_key = decode_from_slice::<Key>(&bytes).unwrap();
+        assert_eq!(
+            core::convert::TryInto::<ProprietaryKey>::try_into(decoded_key).unwrap(),
+            prop_key
+        );
+    }
+
+    #[test]
+    fn proprietary_key_decodes_no_key() {
+        let bytes: Vec<u8> = vec![0x09, 0xfc, 0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x02];
+        let prop_key =
+            ProprietaryKey { prefix: "prefix".as_bytes().to_vec(), subtype: 2u64, key: vec![] };
+        let decoded_key = decode_from_slice::<Key>(&bytes).unwrap();
+        assert_eq!(
+            core::convert::TryInto::<ProprietaryKey>::try_into(decoded_key).unwrap(),
+            prop_key
+        );
+    }
+
+    #[test]
+    fn proprietary_key_decodes_prefix_and_key() {
+        let bytes: Vec<u8> = vec![
+            0x11, 0xfc, 0x06, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x02, 0x74, 0x65, 0x73, 0x74,
+            0x5f, 0x6b, 0x65, 0x79,
+        ];
+        let prop_key = ProprietaryKey {
+            prefix: "prefix".as_bytes().to_vec(),
+            subtype: 2u64,
+            key: TEST_SUBKEYDATA.to_vec(),
+        };
+        let decoded_key = decode_from_slice::<Key>(&bytes).unwrap();
+        assert_eq!(
+            core::convert::TryInto::<ProprietaryKey>::try_into(decoded_key).unwrap(),
+            prop_key
         );
     }
 }
