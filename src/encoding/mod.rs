@@ -7,6 +7,7 @@
 //! encoding, PSBT encoding is specific to the PSBT key-value map format and related structures.
 
 pub mod delegates;
+pub mod native;
 
 use alloc::string::String;
 use alloc::vec::Vec;
