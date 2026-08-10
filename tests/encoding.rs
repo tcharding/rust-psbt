@@ -2,6 +2,7 @@
 
 //! Integration tests for PSBT encoding.
 
+use bitcoin::locktime::absolute;
 use bitcoin::{transaction, Sequence};
 use bitcoin_consensus_encoding::{Decoder, DecoderStatus};
 #[cfg(feature = "std")]
@@ -159,4 +160,11 @@ fn tx_version_roundtrip() {
     let version = transaction::Version::TWO;
     let bytes = encode_to_vec(&version);
     assert_eq!(decode_from_slice::<transaction::Version>(&bytes).unwrap(), version);
+}
+
+#[test]
+fn lock_time_roundtrip() {
+    let lock_time = absolute::LockTime::from_height(700_000).unwrap();
+    let bytes = encode_to_vec(&lock_time);
+    assert_eq!(decode_from_slice::<absolute::LockTime>(&bytes).unwrap(), lock_time);
 }
