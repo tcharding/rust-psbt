@@ -2,7 +2,7 @@
 
 //! Integration tests for PSBT encoding.
 
-use bitcoin::Sequence;
+use bitcoin::{transaction, Sequence};
 use bitcoin_consensus_encoding::{Decoder, DecoderStatus};
 #[cfg(feature = "std")]
 use psbt_v2::encoding::encode_to_writer;
@@ -152,4 +152,11 @@ fn vec_decoder_read_limit_lifecycle() {
     let status = decoder.push_bytes(&mut bytes).unwrap();
     assert!(status.is_ready());
     assert_eq!(decoder.read_limit(), 0);
+}
+
+#[test]
+fn tx_version_roundtrip() {
+    let version = transaction::Version::TWO;
+    let bytes = encode_to_vec(&version);
+    assert_eq!(decode_from_slice::<transaction::Version>(&bytes).unwrap(), version);
 }
