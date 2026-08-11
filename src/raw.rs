@@ -19,7 +19,12 @@ use bitcoin::consensus::encode::{
     deserialize, serialize, Decodable, Encodable, VarInt, MAX_VEC_SIZE,
 };
 use bitcoin::hex::DisplayHex;
+use bitcoin_consensus_encoding::{
+    ByteVecDecoder, ByteVecDecoderError, BytesEncoder, CompactSizeDecoderError, CompactSizeEncoder,
+    CompactSizeU64Decoder, Decoder, DecoderStatus, Encoder3, ExactSizeEncoder,
+};
 
+use crate::encoding::{PsbtDecode, PsbtEncode};
 use crate::io::{self, Write};
 use crate::serialize;
 use crate::serialize::{Deserialize, Serialize};
@@ -218,5 +223,155 @@ where
         let _ = r.read_to_limit(&mut key, 1024)?;
 
         Ok(Self { prefix, subtype, key })
+    }
+}
+
+/// Error returned when decoding a raw PSBT [`Key`] fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyDecodeError {
+    /// Failed to decode the key's length-prefixed byte body.
+    Bytes(ByteVecDecoderError),
+    /// The key body was empty.
+    ///
+    /// A `keylen` of zero encodes the end-of-map separator (0x00), not a [`Key`]; callers decoding
+    /// a PSBT map should check for the separator before decoding a [`Key`].
+    Empty,
+    /// Failed to decode the `keytype` compact size integer from the key body.
+    TypeValue(CompactSizeDecoderError),
+}
+
+impl fmt::Display for KeyDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Bytes(e) => write!(f, "failed to decode key body: {}", e),
+            Self::Empty => write!(f, "empty key (this is the map separator)"),
+            Self::TypeValue(e) => write!(f, "failed to decode keytype: {}", e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for KeyDecodeError {}
+
+/// Decoder for raw PSBT keys.
+#[derive(Debug, Default)]
+pub struct KeyDecoder {
+    inner: ByteVecDecoder,
+}
+
+impl Decoder for KeyDecoder {
+    type Output = Key;
+    type Error = KeyDecodeError;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        self.inner.push_bytes(bytes).map_err(KeyDecodeError::Bytes)
+    }
+
+    fn end(self) -> Result<Self::Output, Self::Error> {
+        let body = self.inner.end().map_err(KeyDecodeError::Bytes)?;
+
+        if body.is_empty() {
+            return Err(KeyDecodeError::Empty);
+        }
+
+        let mut rest: &[u8] = &body;
+        let mut type_decoder = CompactSizeU64Decoder::new();
+        type_decoder.push_bytes(&mut rest).map_err(KeyDecodeError::TypeValue)?;
+        let type_value = type_decoder.end().map_err(KeyDecodeError::TypeValue)?;
+
+        Ok(Key { type_value, key: rest.to_vec() })
+    }
+
+    fn read_limit(&self) -> usize { self.inner.read_limit() }
+}
+
+impl PsbtDecode for Key {
+    type Decoder = KeyDecoder;
+}
+
+impl PsbtEncode for Key {
+    type Encoder<'e> = KeyEncoder<'e>;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> { KeyEncoder::from_key(self) }
+}
+
+bitcoin_consensus_encoding::encoder_newtype_exact! {
+    /// Encoder for raw PSBT keys.
+    pub struct KeyEncoder<'e>(Encoder3<CompactSizeEncoder, CompactSizeEncoder, BytesEncoder<'e>>);
+}
+
+impl<'e> KeyEncoder<'e> {
+    fn from_key(key: &'e Key) -> Self {
+        let type_value_encoder = CompactSizeEncoder::new_u64(key.type_value);
+        let body_len = type_value_encoder.len() + key.key.len();
+
+        Self::new(Encoder3::new(
+            CompactSizeEncoder::new(body_len),
+            type_value_encoder,
+            BytesEncoder::without_length_prefix(&key.key),
+        ))
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::encoding::{decode_from_slice, encode_to_vec};
+
+    #[test]
+    fn key_roundtrip() {
+        let key = Key { type_value: 2, key: vec![1, 2, 3] };
+        let bytes = encode_to_vec(&key);
+        assert_eq!(decode_from_slice::<Key>(&bytes).unwrap(), key);
+    }
+
+    #[test]
+    fn key_roundtrip_empty_keydata() {
+        let key = Key { type_value: 0xFB, key: vec![] };
+        let bytes = encode_to_vec(&key);
+        assert_eq!(decode_from_slice::<Key>(&bytes).unwrap(), key);
+    }
+
+    #[test]
+    fn key_roundtrip_multi_byte_type_value() {
+        let key = Key { type_value: 0xFC01, key: vec![0xde, 0xad, 0xbe, 0xef] };
+        let bytes = encode_to_vec(&key);
+        assert_eq!(decode_from_slice::<Key>(&bytes).unwrap(), key);
+    }
+
+    #[test]
+    fn key_decode_vector() {
+        let bytes = [0x04, 0x02, 0x01, 0x02, 0x03];
+        let key = decode_from_slice::<Key>(&bytes).unwrap();
+        assert_eq!(key, Key { type_value: 2, key: vec![1, 2, 3] });
+    }
+
+    #[test]
+    fn key_encode_vector() {
+        let key = Key { type_value: 2, key: vec![1, 2, 3] };
+        assert_eq!(encode_to_vec(&key), vec![0x04, 0x02, 0x01, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn key_decode_empty_is_error() {
+        let err = decode_from_slice::<Key>(&[0x00]).unwrap_err();
+        assert_eq!(err, bitcoin_consensus_encoding::DecodeError::Parse(KeyDecodeError::Empty));
+    }
+
+    #[test]
+    fn key_decode_truncated_is_error() {
+        // keylen=4 but only 2 body bytes are provided.
+        let bytes = [0x04, 0x02, 0x01];
+        assert!(decode_from_slice::<Key>(&bytes).is_err());
+    }
+
+    #[test]
+    fn key_decoder_read_limit() {
+        let mut decoder = KeyDecoder::default();
+        assert_eq!(decoder.read_limit(), 1);
+
+        let mut bytes: &[u8] = &[0x01, 0x0a];
+        let status = decoder.push_bytes(&mut bytes).unwrap();
+        assert!(status.is_ready());
+        assert_eq!(decoder.read_limit(), 0);
     }
 }
