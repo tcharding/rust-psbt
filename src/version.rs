@@ -4,7 +4,11 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::consensus::encode as consensus;
+use bitcoin_consensus_encoding::{
+    ArrayDecoder, ArrayEncoder, Decoder, DecoderStatus, UnexpectedEofError,
+};
 
+use crate::encoding::{PsbtDecode, PsbtEncode};
 use crate::prelude::Vec;
 use crate::serialize::{self, Deserialize, Serialize};
 
@@ -55,6 +59,88 @@ impl Deserialize for Version {
         let n: u32 = consensus::deserialize(bytes)?;
         let version = Self::try_from(n)?;
         Ok(version)
+    }
+}
+
+bitcoin_consensus_encoding::encoder_newtype_exact! {
+    /// An encoder for PSBT Version values.
+    pub struct VersionEncoder<'e>(ArrayEncoder<4>);
+}
+
+impl PsbtEncode for Version {
+    type Encoder<'e>
+        = VersionEncoder<'e>
+    where
+        Self: 'e;
+
+    fn psbt_encoder(&self) -> VersionEncoder<'_> {
+        VersionEncoder::new(ArrayEncoder::without_length_prefix(self.to_u32().to_le_bytes()))
+    }
+}
+
+/// A decoder for [`Version`].
+#[derive(Debug, Clone)]
+pub struct VersionDecoder(ArrayDecoder<4>);
+
+impl VersionDecoder {
+    /// Constructs a new [`Version`] decoder.
+    pub const fn new() -> Self { Self(ArrayDecoder::new()) }
+}
+
+impl Default for VersionDecoder {
+    fn default() -> Self { Self::new() }
+}
+
+impl Decoder for VersionDecoder {
+    type Output = Version;
+    type Error = VersionDecoderError;
+
+    #[inline]
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        self.0.push_bytes(bytes).map_err(VersionDecoderError::UnexpectedEof)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Version, Self::Error> {
+        let bytes = self.0.end().map_err(VersionDecoderError::UnexpectedEof)?;
+        let n = u32::from_le_bytes(bytes);
+        Version::try_from(n).map_err(VersionDecoderError::UnsupportedVersion)
+    }
+
+    #[inline]
+    fn read_limit(&self) -> usize { self.0.read_limit() }
+}
+
+impl PsbtDecode for Version {
+    type Decoder = VersionDecoder;
+}
+
+/// Error decoding a [`Version`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum VersionDecoderError {
+    /// Not enough bytes were provided.
+    UnexpectedEof(UnexpectedEofError),
+    /// The version number is not supported.
+    UnsupportedVersion(UnsupportedVersionError),
+}
+
+impl fmt::Display for VersionDecoderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedEof(e) => write!(f, "unexpected EOF decoding version: {}", e),
+            Self::UnsupportedVersion(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for VersionDecoderError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::UnexpectedEof(e) => Some(e),
+            Self::UnsupportedVersion(e) => Some(e),
+        }
     }
 }
 

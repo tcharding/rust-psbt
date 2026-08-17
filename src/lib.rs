@@ -41,6 +41,7 @@ mod macros;
 mod serde_utils;
 mod sighash_type;
 
+pub mod encoding;
 pub mod raw;
 pub mod serialize;
 pub mod v0;
