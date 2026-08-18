@@ -1,34 +1,50 @@
+set quiet := true
+
 alias ulf := update-lock-files
 
 export RBMT_LOG_LEVEL := env("RBMT_LOG_LEVEL", "progress")
+
+project := file_name(justfile_directory())
+rbmt_version := `grep "^rbmt.version" Cargo.toml | cut -d'"' -f2`
 
 _default:
   @just --list
 
 # Install workspace tools including rbmt.
 [group('system')]
-@tools:
-  cargo install --quiet --locked cargo-rbmt@$(grep "^rbmt.version" {{justfile_directory()}}/Cargo.toml | cut -d'"' -f2)
+tools:
+  echo "{{project}} dev tools [cargo-rbmt@{{rbmt_version}}]"
+  cargo install --quiet --locked cargo-rbmt@{{rbmt_version}}
   cargo rbmt toolchains
   cargo rbmt tools
 
 # Setup rbmt and run with given args.
-@rbmt *args: tools
+rbmt *args: tools
   cargo rbmt {{args}}
 
 # Update lock files.
 [group('ci')]
-@update-lock-files: (rbmt "lock")
-  cargo check --manifest-path {{justfile_directory()}}/bitcoind-tests/Cargo.toml
-  cargo check --manifest-path {{justfile_directory()}}/fuzz/Cargo.toml
+update-lock-files: (rbmt "lock")
+
+# Check docs
+[group('ci')]
+docs: (rbmt "docs --lockfile maximum")
 
 # Format workspace.
 [group('ci')]
-@fmt: (rbmt "fmt")
+fmt: (rbmt "fmt")
 
 # Lint workspace.
 [group('ci')]
-@lint: (rbmt "lint")
+lint: (rbmt "lint")
+
+# Test package on minimal dependency versions
+[group('ci')]
+test: (rbmt "test --lockfile minimal")
+
+# Check prerelease
+[group('ci')]
+prerelease: (rbmt "prerelease --force")
 
 # Bitcoin core integration tests.
 [group('ci')]

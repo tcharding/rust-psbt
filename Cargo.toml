@@ -13,7 +13,7 @@ rust-version = "1.74.0"
 exclude = ["api", "tests", "contrib"]
 
 [package.metadata]
-rbmt.version = "0.5.1"
+rbmt.version = "0.5.3"
 
 [package.metadata.rbmt.toolchains]
 nightly = "nightly-2026-08-01"
@@ -32,11 +32,9 @@ exact_features = [
     ["std", "miniscript", "serde"],
 ]
 
-[package.metadata.rbmt.prerelease]
-enabled = true
-
 [package.metadata.rbmt.lint]
 allowed_duplicates = [
+  # Required until we drop the 0.32 series of bitcoin.
   "hex-conservative",
 ]
 
