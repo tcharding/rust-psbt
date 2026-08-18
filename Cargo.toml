@@ -16,7 +16,7 @@ exclude = ["api", "tests", "contrib"]
 rbmt.version = "0.5.1"
 
 [package.metadata.rbmt.toolchains]
-nightly = "nightly-2026-07-21"
+nightly = "nightly-2026-08-01"
 stable = "1.97.1"
 
 [package.metadata.rbmt.tools]
