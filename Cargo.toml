@@ -76,6 +76,9 @@ required-features = ["std"]
 name = "v2-separate-creator-constructor"
 required-features = ["std"]
 
+[lints.rust]
+missing_docs = "warn"
+
 [lints.clippy]
 redundant_clone = "warn"
 use_self = "warn"

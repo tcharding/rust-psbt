@@ -9,9 +9,7 @@
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
 #![no_std]
-// Coding conventions
-#![warn(missing_docs)]
-#![doc(test(attr(warn(unused))))]
+#![doc(test(attr(deny(unused))))]
 
 extern crate alloc;
 #[cfg(any(feature = "std", test))]
@@ -33,17 +31,17 @@ mod macros;
 #[cfg(feature = "serde")]
 mod serde_utils;
 mod sighash_type;
+mod version;
 
 pub mod encoding;
 pub mod raw;
 pub mod serialize;
 pub mod v0;
 pub mod v2;
-mod version;
 
 use bitcoin::io;
 
-#[rustfmt::skip]                // Keep pubic re-exports separate
+#[rustfmt::skip] // Keep public re-exports separate from private imports.
 #[doc(inline)]
 pub use crate::{
     error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
