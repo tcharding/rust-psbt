@@ -3,7 +3,7 @@
 //! This module complements the Updater role defined in BIP 174, PSBT, described at
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#updater`
 
-use crate::prelude::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use bitcoin::{ScriptBuf, TapLeafHash, XOnlyPublicKey, bip32};
 use bitcoin::taproot::{ControlBlock, LeafVersion};

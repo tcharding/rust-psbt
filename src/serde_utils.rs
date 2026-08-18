@@ -25,9 +25,11 @@ pub mod btreemap_byte_values {
 
     // NOTE: This module can be exactly copied to use with HashMap.
 
+    use alloc::collections::BTreeMap;
+    use alloc::vec::Vec;
+
     use bitcoin::hex::FromHex;
 
-    use crate::prelude::*;
     use crate::serde;
 
     pub fn serialize<S, T>(v: &BTreeMap<T, Vec<u8>>, s: S) -> Result<S::Ok, S::Error>
@@ -93,9 +95,8 @@ pub mod btreemap_as_seq {
     //! serde_json will not serialize hashmaps with non-string keys be default.
     #![allow(missing_docs)]
 
-    // NOTE: This module can be exactly copied to use with HashMap.
+    use alloc::collections::BTreeMap;
 
-    use crate::prelude::*;
     use crate::serde;
 
     pub fn serialize<S, T, U>(v: &BTreeMap<T, U>, s: S) -> Result<S::Ok, S::Error>
@@ -166,7 +167,9 @@ pub mod btreemap_as_seq_byte_values {
 
     // NOTE: This module can be exactly copied to use with HashMap.
 
-    use crate::prelude::*;
+    use alloc::collections::BTreeMap;
+    use alloc::vec::Vec;
+
     use crate::serde;
 
     /// A custom key-value pair type that serialized the bytes as hex.

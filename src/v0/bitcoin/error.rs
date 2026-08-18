@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::boxed::Box;
 use core::fmt;
 
 use bitcoin::bip32::Xpub;
@@ -8,7 +9,6 @@ use bitcoin::{hashes, secp256k1, OutPoint, Transaction, Txid};
 
 use crate::error::write_err;
 use crate::io;
-use crate::prelude::*;
 use crate::v0::bitcoin::raw;
 
 /// Enum for marking psbt hash error.

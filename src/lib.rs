@@ -62,32 +62,3 @@ pub use crate::{
 pub const V0: Version = Version::ZERO;
 /// PSBT version 2 - the second PSBT version.
 pub const V2: Version = Version::TWO;
-
-#[rustfmt::skip]
-mod prelude {
-    #![allow(unused_imports)]
-
-    #[cfg(not(feature = "std"))]
-    #[cfg(not(test))]
-    pub use alloc::{string::{String, ToString}, vec::Vec, boxed::Box, borrow::{Borrow, BorrowMut, Cow, ToOwned}, slice, rc};
-
-    #[cfg(not(feature = "std"))]
-    #[cfg(not(test))]
-    #[cfg(target_has_atomic = "ptr")]
-    pub use alloc::sync;
-
-    #[cfg(any(feature = "std", test))]
-    pub use std::{string::{String, ToString}, vec::Vec, boxed::Box, borrow::{Borrow, BorrowMut, Cow, ToOwned}, slice, rc, sync};
-
-    #[cfg(not(feature = "std"))]
-    #[cfg(not(test))]
-    pub use alloc::collections::{BTreeMap, BTreeSet, btree_map, BinaryHeap};
-
-    #[cfg(any(feature = "std", test))]
-    pub use std::collections::{BTreeMap, BTreeSet, btree_map, BinaryHeap};
-
-    #[cfg(any(feature = "std", test))]
-    pub use std::{println, print, format, write, writeln};
-
-    pub use bitcoin::hex::DisplayHex;
-}

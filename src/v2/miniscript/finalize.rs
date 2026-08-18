@@ -5,6 +5,7 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.media wiki>
 
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 use core::fmt;
 
 use bitcoin::hashes::hash160;
@@ -17,7 +18,6 @@ use miniscript::{
 };
 
 use crate::error::{write_err, FundingUtxoError};
-use crate::prelude::*;
 use crate::v2::map::input::{self, Input};
 use crate::v2::miniscript::satisfy::InputSatisfier;
 use crate::v2::miniscript::InterpreterCheckError;

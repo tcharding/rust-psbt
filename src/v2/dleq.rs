@@ -4,9 +4,9 @@
 //!
 //! This module provides type-safe wrapper for BIP-374 dleq proof field.
 
+use alloc::vec::Vec;
 use core::fmt;
 
-use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 
 /// A 64-byte DLEQ proof (BIP-374).

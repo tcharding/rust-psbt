@@ -30,7 +30,7 @@ macro_rules! impl_psbt_deserialize {
 macro_rules! impl_psbt_serialize {
     ($thing:ty) => {
         impl $crate::v0::bitcoin::serialize::Serialize for $thing {
-            fn serialize(&self) -> $crate::prelude::Vec<u8> {
+            fn serialize(&self) -> alloc::vec::Vec<u8> {
                 $crate::bitcoin::consensus::serialize(self)
             }
         }
@@ -102,11 +102,11 @@ macro_rules! impl_psbt_insert_pair {
         if !$raw_key.key.is_empty() {
             let key_val: $keyed_key_type = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_key.key)?;
             match $slf.$keyed_name.entry(key_val) {
-                $crate::prelude::btree_map::Entry::Vacant(empty_key) => {
+                alloc::collections::btree_map::Entry::Vacant(empty_key) => {
                     let val: $keyed_value_type = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_value)?;
                     empty_key.insert(val);
                 }
-                $crate::prelude::btree_map::Entry::Occupied(_) => return Err($crate::v0::bitcoin::Error::DuplicateKey($raw_key).into()),
+                alloc::collections::btree_map::Entry::Occupied(_) => return Err($crate::v0::bitcoin::Error::DuplicateKey($raw_key).into()),
             }
         } else {
             return Err($crate::v0::bitcoin::Error::InvalidKey($raw_key).into());
@@ -122,18 +122,18 @@ macro_rules! psbt_insert_hash_pair {
         }
         let key_val: $hash = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_key.key)?;
         match $slf.$map.entry(key_val) {
-            $crate::prelude::btree_map::Entry::Vacant(empty_key) => {
-                let val: $crate::prelude::Vec<u8> = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_value)?;
+            alloc::collections::btree_map::Entry::Vacant(empty_key) => {
+                let val: alloc::vec::Vec<u8> = $crate::v0::bitcoin::serialize::Deserialize::deserialize(&$raw_value)?;
                 if <$hash as $crate::bitcoin::hashes::Hash>::hash(&val) != key_val {
                     return Err($crate::v0::bitcoin::Error::InvalidPreimageHashPair {
                         preimage: val.into_boxed_slice(),
-                        hash: $crate::prelude::Box::from(key_val.as_ref()),
+                        hash: alloc::boxed::Box::from(key_val.as_ref()),
                         hash_type: $hash_type_error,
                     });
                 }
                 empty_key.insert(val);
             }
-            $crate::prelude::btree_map::Entry::Occupied(_) => return Err($crate::v0::bitcoin::Error::DuplicateKey($raw_key)),
+            alloc::collections::btree_map::Entry::Occupied(_) => return Err($crate::v0::bitcoin::Error::DuplicateKey($raw_key)),
         }
     }
 }
@@ -186,7 +186,7 @@ macro_rules! impl_psbt_hash_deserialize {
 macro_rules! impl_psbt_hash_serialize {
     ($hash_type:ty) => {
         impl $crate::v0::bitcoin::serialize::Serialize for $hash_type {
-            fn serialize(&self) -> $crate::prelude::Vec<u8> { self.as_byte_array().to_vec() }
+            fn serialize(&self) -> alloc::vec::Vec<u8> { self.as_byte_array().to_vec() }
         }
     };
 }

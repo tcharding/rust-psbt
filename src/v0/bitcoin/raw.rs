@@ -5,16 +5,17 @@
 //! Raw PSBT key-value pairs as defined at
 //! <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>.
 
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::consensus::encode::{
     self, deserialize, serialize, Decodable, Encodable, VarInt, MAX_VEC_SIZE,
 };
+use bitcoin::hex::DisplayHex;
 
 use super::serialize::{Deserialize, Serialize};
 use crate::io::{self, Write};
-use crate::prelude::*;
 use crate::v0::bitcoin::Error;
 
 /// A PSBT key in its raw byte form.

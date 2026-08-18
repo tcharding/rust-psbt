@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use crate::prelude::*;
 use crate::v0::bitcoin::raw;
 
 mod global;
 mod input;
 mod output;
+
+use alloc::vec::Vec;
 
 use super::serialize::Serialize;
 

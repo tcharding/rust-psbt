@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::collections::{btree_map, BTreeMap};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
@@ -17,7 +19,6 @@ use crate::consts::{
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
 use crate::error::write_err;
-use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::v2::map::{raw_key_v2_to_v0, raw_proprietary_v2_to_v0, Map};
 use crate::{raw, serialize, v0};

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::boxed::Box;
+use alloc::collections::{btree_map, BTreeMap};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
@@ -29,7 +32,6 @@ use crate::consts::{
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
 use crate::error::{write_err, FundingUtxoError};
-use crate::prelude::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 #[cfg(feature = "silent-payments")]

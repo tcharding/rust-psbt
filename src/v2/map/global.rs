@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::collections::{btree_map, BTreeMap};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
@@ -19,7 +21,6 @@ use crate::consts::{
 use crate::consts::{PSBT_GLOBAL_SP_DLEQ, PSBT_GLOBAL_SP_ECDH_SHARE};
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{Cursor, Read};
-use crate::prelude::*;
 use crate::serialize::Serialize;
 #[cfg(feature = "silent-payments")]
 use crate::v2::dleq::DleqProof;

@@ -22,9 +22,11 @@ use miniscript::{
     Tap, ToPublicKey,
 };
 
-use crate::prelude::*;
 use crate::v0::miniscript::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::v0::miniscript::util::witness_size;
+use alloc::collections::BTreeMap;
+use alloc::borrow::Borrow;
+use alloc::vec::Vec;
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
 // descriptor from psbt because the information about all the scripts might not

@@ -13,6 +13,10 @@ mod map;
 pub mod raw;
 pub mod serialize;
 
+use alloc::borrow::Borrow;
+use alloc::boxed::Box;
+use alloc::collections::{btree_map, BTreeMap, BTreeSet};
+use alloc::vec::Vec;
 use core::{cmp, fmt};
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};
@@ -25,7 +29,6 @@ use bitcoin::taproot::TapLeafHash;
 use bitcoin::{ecdsa, taproot, transaction, Amount, FeeRate, Transaction, TxOut};
 
 use crate::error::write_err;
-use crate::prelude::*;
 use crate::PsbtSighashType;
 
 #[rustfmt::skip]                // Keep public re-exports separate.
@@ -1717,6 +1720,8 @@ mod tests {
     }
 
     mod bip_371_vectors {
+        use alloc::string::ToString;
+
         use super::*;
 
         #[test]

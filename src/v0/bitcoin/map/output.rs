@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::collections::{btree_map, BTreeMap};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 
 use bitcoin::bip32::KeySource;
@@ -8,7 +10,6 @@ use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::ScriptBuf;
 
-use crate::prelude::*;
 use crate::v0::bitcoin::map::Map;
 use crate::v0::bitcoin::{raw, Error};
 

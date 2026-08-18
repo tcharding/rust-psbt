@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError, TapSighashType};
 
 use crate::error::write_err;
-use crate::prelude::*;
 
 /// A Signature hash type for the corresponding input.
 ///
