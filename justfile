@@ -10,7 +10,7 @@ rbmt_version := `grep "^rbmt.version" Cargo.toml | cut -d'"' -f2`
 _default:
   @just --list
 
-# Install workspace tools including rbmt.
+# Install workspace tools including rbmt
 [group('system')]
 tools:
   echo "{{project}} dev tools [cargo-rbmt@{{rbmt_version}}]"
@@ -18,23 +18,22 @@ tools:
   cargo rbmt toolchains
   cargo rbmt tools
 
-# Setup rbmt and run with given args.
+# Run rbmt with given args
 rbmt *args: tools
   cargo rbmt {{args}}
 
-# Update lock files.
-[group('ci')]
+# Update lock files
 update-lock-files: (rbmt "lock")
 
 # Check docs
 [group('ci')]
 docs: (rbmt "docs --lockfile maximum")
 
-# Format workspace.
+# Format workspace
 [group('ci')]
 fmt: (rbmt "fmt")
 
-# Lint workspace.
+# Lint workspace
 [group('ci')]
 lint: (rbmt "lint")
 
@@ -46,10 +45,10 @@ test: (rbmt "test --lockfile minimal")
 [group('ci')]
 prerelease: (rbmt "prerelease --force")
 
-# Bitcoin core integration tests.
+# Bitcoin Core integration tests
 [group('ci')]
 integration: (rbmt "integration")
 
-# Test bitcoind integration with a bitcoind version.
-test-bitcoind version="29_0":
-  cd {{justfile_directory()}}/bitcoind-tests && cargo test --features={{version}}
+# Check for mutants since baseline
+mutants baseline="master" *args: tools
+  git diff {{baseline}} | cargo +$(cargo rbmt toolchains --stable) mutants --in-diff /dev/stdin {{args}}
