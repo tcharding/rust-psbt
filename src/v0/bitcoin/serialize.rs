@@ -417,6 +417,7 @@ fn key_source_len(key_source: &KeySource) -> usize { 4 + 4 * (key_source.1).as_r
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::convert::TryFrom;
 
     use super::*;

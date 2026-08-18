@@ -120,6 +120,8 @@ impl Psbt {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use ::bitcoin::locktime::absolute;
     use ::bitcoin::script::Builder;
     use ::bitcoin::{

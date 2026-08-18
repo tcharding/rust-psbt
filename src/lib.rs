@@ -16,7 +16,6 @@
 #[cfg(any(feature = "std", test))]
 extern crate std;
 
-#[macro_use]
 extern crate alloc;
 
 #[cfg(feature = "serde")]

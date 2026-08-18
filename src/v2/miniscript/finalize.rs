@@ -5,6 +5,7 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.media wiki>
 
 use alloc::collections::BTreeMap;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 

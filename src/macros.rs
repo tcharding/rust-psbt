@@ -84,7 +84,7 @@ macro_rules! v2_impl_psbt_get_pair {
             $rv.push($crate::raw::Pair {
                 key: $crate::raw::Key {
                     type_value: $unkeyed_typeval,
-                    key: vec![],
+                    key: ::alloc::vec![],
                 },
                 value: $crate::serialize::Serialize::serialize($unkeyed_name),
             });

@@ -175,6 +175,7 @@ impl From<sighash::InvalidSighashTypeError> for InvalidSighashTypeError {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
 
     use super::*;
     use crate::sighash_type::InvalidSighashTypeError;

@@ -34,6 +34,7 @@ mod miniscript;
 use alloc::borrow::Borrow;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;

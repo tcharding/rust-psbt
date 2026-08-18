@@ -520,6 +520,7 @@ impl From<version::UnsupportedVersionError> for Error {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::convert::TryFrom;
 
     use super::*;

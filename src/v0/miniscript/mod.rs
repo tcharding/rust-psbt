@@ -26,6 +26,7 @@ use miniscript::{
 };
 
 use crate::v0::bitcoin::{raw, Input, Output, Psbt};
+use alloc::vec;
 use alloc::collections::BTreeMap;
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;
@@ -1359,6 +1360,7 @@ impl PsbtSighashMsg {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::string::ToString;
 
     use bitcoin::bip32::{DerivationPath, Xpub};

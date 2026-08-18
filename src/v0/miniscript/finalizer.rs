@@ -24,6 +24,7 @@ use miniscript::{
 
 use crate::v0::miniscript::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::v0::miniscript::util::witness_size;
+use alloc::vec;
 use alloc::collections::BTreeMap;
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;

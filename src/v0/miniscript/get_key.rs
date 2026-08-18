@@ -100,6 +100,7 @@ impl GetKey for KeyMap {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::str::FromStr;
 
     use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, IntoDerivationPath, Xpriv};

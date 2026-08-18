@@ -145,7 +145,7 @@ macro_rules! impl_psbt_get_pair {
             $rv.push($crate::v0::bitcoin::raw::Pair {
                 key: $crate::v0::bitcoin::raw::Key {
                     type_value: $unkeyed_typeval,
-                    key: vec![],
+                    key: ::alloc::vec![],
                 },
                 value: $crate::v0::bitcoin::serialize::Serialize::serialize($unkeyed_name),
             });

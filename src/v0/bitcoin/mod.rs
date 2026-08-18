@@ -16,6 +16,7 @@ pub mod serialize;
 use alloc::borrow::Borrow;
 use alloc::boxed::Box;
 use alloc::collections::{btree_map, BTreeMap, BTreeSet};
+use alloc::vec;
 use alloc::vec::Vec;
 use core::{cmp, fmt};
 #[cfg(feature = "std")]
