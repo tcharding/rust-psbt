@@ -159,3 +159,40 @@ impl fmt::Display for UnsupportedVersionError {
 impl std::error::Error for UnsupportedVersionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_as_u32() {
+        assert_eq!(Version::ZERO.to_u32(), 0);
+        assert_eq!(Version::TWO.to_u32(), 2);
+        assert_eq!(u32::from(Version::ZERO), 0);
+        assert_eq!(u32::from(Version::TWO), 2);
+    }
+
+    #[test]
+    fn version_serialize() {
+        assert_eq!(Version::ZERO.serialize(), vec![0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(Version::TWO.serialize(), vec![0x02, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn version_roundtrip() {
+        let bytes = Version::TWO.serialize();
+        let version = Version::deserialize(&bytes).unwrap();
+        assert_eq!(version, Version::TWO);
+    }
+
+    #[test]
+    fn version_decoder_read_limit() {
+        let mut decoder = VersionDecoder::new();
+        assert_eq!(decoder.read_limit(), 4);
+
+        let mut bytes: &[u8] = &[0x02, 0x00, 0x00, 0x00];
+        let status = decoder.push_bytes(&mut bytes).unwrap();
+        assert!(status.is_ready());
+        assert_eq!(decoder.read_limit(), 0);
+    }
+}
