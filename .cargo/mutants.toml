@@ -1,13 +1,13 @@
 additional_cargo_args = ["--all-features"]
+
+exclude_globs = [
+    "src/v0/**", # Deprecated and slated for removal.
+]
+
 exclude_re = [
-    "impl Arbitrary",
-    "impl Debug",
-    "impl fmt::Debug",
-    ".*Error",
-    "deserialize", # Skip serde mutation tests
-    "serde_details::<impl de::Visitor<'_>", # Skip serde mutation tests
-    "Iterator", # Mutating operations in an iterator can result in an infinite loop
-    "Decode::decoder", # Mutant replacing Self::Decoder::default() with Default::default() is equivalent
-    "<impl .*Decode for .*>::decoder", # Mutant replacing Default::default() is equivalent to returning new()
-    "<impl .*Decoder for .*>::read_limit", # Function is for optimization and does not need to be tested.
+    # Standard
+    "<impl fmt::Display for .*Error>::fmt", # Error message formatting
+    "std::error::Error for",                # Error source boilerplate
+    "<impl From<[^>]+> for .*Error>::from", # Error conversion boilerplate
+    "Iterator",                             # Mutating operations in an iterator can result in an infinite loop
 ]

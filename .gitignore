@@ -8,3 +8,4 @@ target
 
 # Mutants
 mutants.out/
+mutants.out.old/
