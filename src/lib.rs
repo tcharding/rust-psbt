@@ -13,24 +13,18 @@
 #![warn(missing_docs)]
 #![doc(test(attr(warn(unused))))]
 
+extern crate alloc;
 #[cfg(any(feature = "std", test))]
 extern crate std;
-
-extern crate alloc;
-
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
 
-/// Re-export of the `rust-bitcoin` crate.
-pub extern crate bitcoin;
-
-/// Re-export of the `rust-bitcoin` crate.
-#[cfg(feature = "miniscript")]
-pub extern crate miniscript;
-
 #[cfg(feature = "arbitrary")]
 pub extern crate arbitrary;
+pub extern crate bitcoin;
+#[cfg(feature = "miniscript")]
+pub extern crate miniscript;
 
 mod consts;
 mod error;
