@@ -19,21 +19,17 @@ jobs:
           persist-credentials: false
       - uses: ./.forgejo/actions/setup-rbmt
       - name: Run cargo mutants
-        run: cargo rbmt run -- mutants --in-place --no-shuffle
-        continue-on-error: true
-      - name: Open issue when new mutants are found
-        if: hashFiles('mutants.out/missed.txt') != ''
+        id: mutants
         run: |
-          set -euo pipefail
-          BODY=$(cat <<EOF
-          Displaying up to the first 10 mutants:
-          \`\`\`
-          $(head -n 10 mutants.out/missed.txt)
-          \`\`\`
-          For the complete list, please check the mutants.out artifact: ${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}
-          EOF
-          )
-          jq -n --arg title "New Mutants Found" --arg body "$BODY" \
+          set +e
+          cargo +$(cargo rbmt toolchains --stable) mutants --in-place
+          echo "exit_code=$?" >> "$FORGEJO_OUTPUT"
+      - name: Open issue when new mutants are found
+        if: steps.mutants.outputs.exit_code == '2'
+        run: |
+          jq -n \
+            --arg title "Mutants Found" \
+            --arg body "See the full list in the run log: ${FORGEJO_SERVER_URL}/${FORGEJO_REPOSITORY}/actions/runs/${FORGEJO_RUN_ID}" \
             '{title: $title, body: $body}' | \
           curl -sSf \
             -X POST \
@@ -42,3 +38,6 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @- \
             "${FORGEJO_SERVER_URL}/api/v1/repos/${FORGEJO_REPOSITORY}/issues"
+      - name: Fail on unexpected mutants outcome
+        if: steps.mutants.outputs.exit_code != '0' && steps.mutants.outputs.exit_code != '2'
+        run: exit 1
