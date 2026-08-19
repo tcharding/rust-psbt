@@ -141,3 +141,15 @@ fn sequences_roundtrip() {
     let decoded: Sequences = decode_from_slice(&bytes).expect("decode failed");
     assert_eq!(decoded.0, seqs.0);
 }
+
+#[test]
+fn vec_decoder_read_limit_lifecycle() {
+    let mut decoder = VecDecoder::<Sequence>::new();
+    assert!(decoder.read_limit() > 0);
+
+    // One-element vector of a 4-byte sequence.
+    let mut bytes: &[u8] = &[0x01, 0x00, 0x00, 0x00, 0x00];
+    let status = decoder.push_bytes(&mut bytes).unwrap();
+    assert!(status.is_ready());
+    assert_eq!(decoder.read_limit(), 0);
+}
