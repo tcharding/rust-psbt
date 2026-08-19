@@ -13,7 +13,7 @@ _default:
   @just --list
 
 # Install workspace tools including rbmt
-[group('system')]
+[group('rbmt')]
 tools:
   echo "{{project}} dev tools [cargo-rbmt@{{rbmt_version}}]"
   cargo install --quiet --locked cargo-rbmt@{{rbmt_version}}
@@ -21,10 +21,12 @@ tools:
   cargo rbmt tools
 
 # Run rbmt with given args
+[group('rbmt')]
 rbmt *args: tools
   cargo rbmt {{args}}
 
-# Update lock files
+# Update rbmt managed lockfiles
+[group('rbmt')]
 update-lock-files: (rbmt "lock")
 
 # Check docs

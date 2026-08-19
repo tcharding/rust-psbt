@@ -236,4 +236,27 @@ mod tests {
         assert_eq!(PsbtSighashType::ALL.ecdsa_hash_ty().unwrap(), EcdsaSighashType::All);
         assert_eq!(PsbtSighashType::ALL.taproot_hash_ty().unwrap(), TapSighashType::All);
     }
+
+    #[test]
+    fn psbt_sighash_type_to_u32_roundtrip() {
+        assert_eq!(PsbtSighashType::from_u32(0xffff_ffff).to_u32(), 0xffff_ffff);
+        assert_eq!(PsbtSighashType::from_u32(0x01).to_u32(), 0x01);
+        assert_eq!(PsbtSighashType::from_u32(0x00).to_u32(), 0x00);
+    }
+
+    #[test]
+    fn psbt_sighash_taproot_boundary_0xff() {
+        // 0xFF is the boundary between the two rejection layers.
+        // (This test killed a `>` → `>=` mutation.)
+        match PsbtSighashType::from_u32(0xff).taproot_hash_ty() {
+            Err(InvalidSighashTypeError::Bitcoin(_)) => {}
+            other => panic!("0xff must be rejected by consensus conversion, got {:?}", other),
+        }
+
+        // The other side of the boundary takes the range-check layer.
+        match PsbtSighashType::from_u32(0x100).taproot_hash_ty() {
+            Err(InvalidSighashTypeError::Invalid(0x100)) => {}
+            other => panic!("0x100 must be rejected by the range check, got {:?}", other),
+        }
+    }
 }
