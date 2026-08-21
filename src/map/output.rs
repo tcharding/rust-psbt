@@ -337,10 +337,18 @@ impl Map for Output {
             value: self.amount.serialize(),
         });
 
-        rv.push(raw::Pair {
-            key: raw::Key { type_value: PSBT_OUT_SCRIPT, key: vec![] },
-            value: self.script_pubkey.serialize(),
-        });
+        // BIP-375: an underived silent payment output has no script.
+        #[cfg(feature = "silent-payments")]
+        let omit_script = self.sp_v0_info.is_some() && self.script_pubkey.is_empty();
+        #[cfg(not(feature = "silent-payments"))]
+        let omit_script = false;
+
+        if !omit_script {
+            rv.push(raw::Pair {
+                key: raw::Key { type_value: PSBT_OUT_SCRIPT, key: vec![] },
+                value: self.script_pubkey.serialize(),
+            });
+        }
 
         v2_impl_psbt_get_pair! {
             rv.push(self.redeem_script, PSBT_OUT_REDEEM_SCRIPT)
@@ -598,5 +606,23 @@ mod tests {
         let mut remaining = &bytes[..];
         assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
         assert_eq!(decoder.read_limit(), 0, "completed decoder should request no bytes");
+    }
+
+    #[cfg(feature = "silent-payments")]
+    #[test]
+    fn silent_payment_output_script_pair() {
+        let ordinary = Output::new(tx_out());
+        let has_script = |output: &Output| {
+            output.pairs().iter().any(|pair| pair.key.type_value == PSBT_OUT_SCRIPT)
+        };
+        assert!(has_script(&ordinary));
+
+        let mut derived_sp = ordinary;
+        derived_sp.sp_v0_info = Some(vec![0; 66]);
+        assert!(has_script(&derived_sp));
+
+        let mut underived_sp = derived_sp;
+        underived_sp.script_pubkey = ScriptBuf::new();
+        assert!(!has_script(&underived_sp));
     }
 }
