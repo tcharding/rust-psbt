@@ -162,6 +162,8 @@ impl std::error::Error for UnsupportedVersionError {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]
