@@ -9,6 +9,8 @@
 //!
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
+use alloc::vec;
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
@@ -19,7 +21,6 @@ use bitcoin::consensus::encode::{
 use bitcoin::hex::DisplayHex;
 
 use crate::io::{self, Write};
-use crate::prelude::*;
 use crate::serialize;
 use crate::serialize::{Deserialize, Serialize};
 

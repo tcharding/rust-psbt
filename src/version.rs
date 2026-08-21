@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt;
 
@@ -9,7 +10,6 @@ use bitcoin_consensus_encoding::{
 };
 
 use crate::encoding::{PsbtDecode, PsbtEncode};
-use crate::prelude::Vec;
 use crate::serialize::{self, Deserialize, Serialize};
 
 /// The PSBT version.

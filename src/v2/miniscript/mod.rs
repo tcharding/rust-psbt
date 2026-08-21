@@ -21,6 +21,8 @@
 mod finalize;
 mod satisfy;
 
+use alloc::borrow::Borrow;
+use alloc::vec::Vec;
 use core::fmt;
 
 use bitcoin::consensus::encode::VarInt;
@@ -31,7 +33,6 @@ use miniscript::miniscript::satisfy::Placeholder;
 use miniscript::{interpreter, Interpreter, MiniscriptKey};
 
 use crate::error::write_err;
-use crate::prelude::*;
 use crate::v2::map::input::Input;
 use crate::v2::{DetermineLockTimeError, Psbt};
 

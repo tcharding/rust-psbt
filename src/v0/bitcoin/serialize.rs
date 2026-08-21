@@ -5,6 +5,8 @@
 //! Traits to serialize PSBT values to and from raw bytes
 //! according to the BIP-174 specification.
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 
 use bitcoin::bip32::{ChildNumber, Fingerprint, KeySource};
@@ -20,7 +22,6 @@ use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, VarInt, Witness};
 
 use super::map::{Input, Map, Output};
 use crate::io::{self, Write};
-use crate::prelude::{String, Vec};
 use crate::sighash_type::PsbtSighashType;
 use crate::v0::bitcoin::{Error, Psbt};
 
@@ -416,6 +417,7 @@ fn key_source_len(key_source: &KeySource) -> usize { 4 + 4 * (key_source.1).as_r
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::convert::TryFrom;
 
     use super::*;

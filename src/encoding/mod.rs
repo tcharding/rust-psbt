@@ -8,12 +8,13 @@
 
 pub mod delegates;
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use bitcoin_consensus_encoding::{
     CompactSizeEncoder, DecodeError, Decoder, DecoderStatus, Encoder, Encoder2, EncoderStatus,
     IterEncoder, VecDecoderError, VecDecoderWith,
 };
-
-use crate::prelude::Vec;
 
 /// Types that can be PSBT-decoded.
 ///
@@ -64,7 +65,7 @@ pub trait PsbtEncode {
 }
 
 /// Encodes a PSBT-encodable value to a vector.
-pub fn encode_to_vec<T: PsbtEncode + ?Sized>(value: &T) -> crate::prelude::Vec<u8> {
+pub fn encode_to_vec<T: PsbtEncode + ?Sized>(value: &T) -> Vec<u8> {
     let mut encoder = value.psbt_encoder();
     bitcoin_consensus_encoding::drain_to_vec(&mut encoder)
 }
@@ -83,7 +84,7 @@ pub fn encode_to_writer<W: std::io::Write, T: PsbtEncode + ?Sized>(
 pub fn encode_to_hex<T: PsbtEncode + ?Sized>(
     value: &T,
     case: bitcoin_consensus_encoding::hex::Case,
-) -> crate::prelude::String {
+) -> String {
     let encoder = value.psbt_encoder();
     bitcoin_consensus_encoding::drain_to_hex(encoder, case)
 }

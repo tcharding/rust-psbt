@@ -2,10 +2,10 @@
 
 //! Private utils copied from `rust-miniscript`'s `util` module.
 
-use crate::prelude::*;
 use bitcoin::consensus::encode::VarInt;
 use miniscript::miniscript::satisfy::Placeholder;
 use miniscript::MiniscriptKey;
+use alloc::vec::Vec;
 
 // Privately scoped stuff taken from `miniscript::util`, this is duplicated in the v2 module.
 

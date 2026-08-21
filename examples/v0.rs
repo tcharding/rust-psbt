@@ -19,8 +19,8 @@ use psbt_v2::bitcoin::{
 };
 use psbt_v2::v0::{self, Psbt};
 
-pub const DUMMY_UTXO_AMOUNT: Amount = Amount::from_sat(20_000_000);
-pub const SPEND_AMOUNT: Amount = Amount::from_sat(20_000_000);
+const DUMMY_UTXO_AMOUNT: Amount = Amount::from_sat(20_000_000);
+const SPEND_AMOUNT: Amount = Amount::from_sat(20_000_000);
 
 const MAINNET: Network = Network::Bitcoin; // Bitcoin mainnet network.
 const FEE: Amount = Amount::from_sat(1_000); // Usually this would be calculated.

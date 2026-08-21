@@ -31,12 +31,18 @@ mod map;
 #[cfg(feature = "miniscript")]
 mod miniscript;
 
+use alloc::borrow::Borrow;
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::collections::{HashMap, HashSet};
 
 use bitcoin::bip32::{self, KeySource, Xpriv};
+use bitcoin::hex::DisplayHex;
 use bitcoin::key::{PrivateKey, PublicKey};
 use bitcoin::locktime::absolute;
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
@@ -44,7 +50,6 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{ecdsa, transaction, Amount, Sequence, Transaction, TxOut, Txid};
 
 use crate::error::{write_err, FeeError, FundingUtxoError};
-use crate::prelude::*;
 use crate::v0;
 use crate::v2::map::Map;
 

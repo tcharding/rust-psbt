@@ -5,6 +5,7 @@
 //! Traits to serialize PSBT values to and from raw bytes
 //! according to the BIP-174 specification.
 
+use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 use core::fmt;
 
@@ -22,7 +23,6 @@ use bitcoin::{
 };
 
 use crate::error::write_err;
-use crate::prelude::*;
 use crate::sighash_type::PsbtSighashType;
 #[cfg(feature = "silent-payments")]
 use crate::v2::dleq;
@@ -520,6 +520,7 @@ impl From<version::UnsupportedVersionError> for Error {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::convert::TryFrom;
 
     use super::*;

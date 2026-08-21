@@ -16,7 +16,8 @@ pub mod input;
 /// The `output-map`.
 pub mod output;
 
-use crate::prelude::*;
+use alloc::vec::Vec;
+
 use crate::serialize::Serialize;
 use crate::{raw, v0};
 

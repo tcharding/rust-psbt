@@ -3,7 +3,8 @@
 //! This module complements the Updater role defined in BIP 174, PSBT, described at
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki#updater`
 
-use crate::prelude::BTreeMap;
+use alloc::vec;
+use alloc::collections::BTreeMap;
 
 use bitcoin::{ScriptBuf, TapLeafHash, XOnlyPublicKey, bip32};
 use bitcoin::taproot::{ControlBlock, LeafVersion};
@@ -139,6 +140,7 @@ impl PlanExt for Plan {
 
 #[cfg(test)]
 mod test {
+    use alloc::format;
     use bitcoin::bip32::Xpub;
     use miniscript::plan::Assets;
     use miniscript::{Descriptor, DescriptorPublicKey};

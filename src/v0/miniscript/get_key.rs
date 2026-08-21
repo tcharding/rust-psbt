@@ -2,8 +2,8 @@ use bitcoin::key::PrivateKey;
 use bitcoin::secp256k1::{Secp256k1, Signing};
 use miniscript::descriptor::{DescriptorSecretKey, KeyMap};
 
-use crate::prelude::*;
 use crate::v0::bitcoin::{GetKey, GetKeyError, KeyRequest};
+use alloc::collections::BTreeMap;
 
 impl GetKey for DescriptorSecretKey {
     type Error = GetKeyError;
@@ -100,6 +100,7 @@ impl GetKey for KeyMap {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use core::str::FromStr;
 
     use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, IntoDerivationPath, Xpriv};

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use alloc::collections::{btree_map, BTreeMap};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 
 use bitcoin::bip32::KeySource;
@@ -10,7 +12,6 @@ use bitcoin::sighash::{EcdsaSighashType, NonStandardSighashTypeError, TapSighash
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{ecdsa, taproot, ScriptBuf, Transaction, TxOut, Witness};
 
-use crate::prelude::*;
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
 use crate::v0::bitcoin::map::Map;
 use crate::v0::bitcoin::{error, raw, Error};
