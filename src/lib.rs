@@ -47,7 +47,11 @@ pub use crate::{
     error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::{Version, UnsupportedVersionError},
+    v0::DeserializeV0Error,
 };
+#[cfg(feature = "base64")]
+#[doc(inline)]
+pub use crate::v0::ParsePsbtV0Error;
 
 /// PSBT version 0 - the original PSBT version.
 pub const V0: Version = Version::ZERO;
