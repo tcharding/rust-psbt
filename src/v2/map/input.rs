@@ -236,10 +236,11 @@ impl Input {
             final_script_sig: None,
             final_script_witness: None,
 
-            // Clear everything else.
-            sequence: None,
-            min_time: None,
-            min_height: None,
+            // Preserve the fields required to reconstruct the unsigned transaction,
+            // clearing them would change the transaction the Extractor produces.
+            sequence: self.sequence,
+            min_time: self.min_time,
+            min_height: self.min_height,
             partial_sigs: BTreeMap::new(),
             sighash_type: None,
             redeem_script: None,
@@ -327,15 +328,17 @@ impl Input {
     pub(crate) fn signed_tx_in(&self) -> TxIn {
         debug_assert!(self.is_finalized());
 
-        let script_sig = self.final_script_sig.as_ref().expect("checked by is_finalized");
-        let witness = self.final_script_witness.as_ref().expect("checked by is_finalized");
+        // Inputs spending non-witness (legacy) outputs have no final script witness, and vice
+        // versa for the final script sig of witness spends (see BIP-174 "Input Finalizer").
+        let script_sig = self.final_script_sig.clone().unwrap_or_default();
+        let witness = self.final_script_witness.clone().unwrap_or_default();
 
         TxIn {
             previous_output: self.out_point(),
-            script_sig: script_sig.clone(),
+            script_sig,
             // TODO: Check this MAX is correct.
             sequence: self.sequence.unwrap_or(Sequence::MAX),
-            witness: witness.clone(),
+            witness,
         }
     }
 
@@ -359,10 +362,10 @@ impl Input {
     /// > It checks whether all inputs have complete scriptSigs and scriptWitnesses by checking for
     /// > the presence of 0x07 Finalized scriptSig and 0x08 Finalized scriptWitness typed records.
     ///
-    /// Therefore a finalized input must have both `final_script_sig` and `final_script_witness`
-    /// fields set. For legacy transactions the `final_script_witness` will be an empty [`Witness`].
+    /// Only one of the two records is required. An input spending a legacy output has no final
+    /// script witness, and an input with a final script witness may have no final script sig.
     pub fn is_finalized(&self) -> bool {
-        self.final_script_sig.is_some() && self.final_script_witness.is_some()
+        self.final_script_sig.is_some() || self.final_script_witness.is_some()
     }
 
     /// TODO: Use this.
@@ -1127,5 +1130,49 @@ mod test {
         from_pairs.push(0x00);
 
         assert_eq!(from_pairs, input.serialize_map());
+    }
+
+    #[cfg(feature = "miniscript")]
+    #[test]
+    fn finalize_preserves_transaction_fields() {
+        // Fields that the Extractor rebuilds the transaction from must survive finalization.
+        let mut input = Input::new(&out_point());
+        input.witness_utxo = Some(TxOut {
+            value: bitcoin::Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::new(),
+        });
+        input.sequence = Some(Sequence::ENABLE_LOCKTIME_NO_RBF);
+        input.min_time =
+            Some(bitcoin::locktime::absolute::Time::from_consensus(1_700_000_000).unwrap());
+        input.min_height =
+            Some(bitcoin::locktime::absolute::Height::from_consensus(800_000).unwrap());
+
+        let finalized = input
+            .finalize(ScriptBuf::new(), Witness::from_slice(&[vec![1u8]]))
+            .expect("finalize must succeed");
+
+        assert_eq!(finalized.sequence, input.sequence);
+        assert_eq!(finalized.min_time, input.min_time);
+        assert_eq!(finalized.min_height, input.min_height);
+    }
+
+    #[cfg(feature = "miniscript")]
+    #[test]
+    fn finalize_clears_signing_material() {
+        // Signing material is cleared once the final scripts exist.
+        let mut input = Input::new(&out_point());
+        input.witness_utxo = Some(TxOut {
+            value: bitcoin::Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::new(),
+        });
+        input.sighash_type = Some(PsbtSighashType::ALL);
+
+        let finalized = input
+            .finalize(ScriptBuf::new(), Witness::from_slice(&[vec![1u8]]))
+            .expect("finalize must succeed");
+
+        assert!(finalized.partial_sigs.is_empty());
+        assert!(finalized.sighash_type.is_none());
+        assert!(finalized.bip32_derivations.is_empty());
     }
 }

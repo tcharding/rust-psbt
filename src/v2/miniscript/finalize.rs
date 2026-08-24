@@ -58,6 +58,11 @@ impl Finalizer {
     pub fn finalize<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<Psbt, FinalizeError> {
         let mut inputs = vec![];
         for (input_index, input) in self.0.inputs.iter().enumerate() {
+            // Already-finalized inputs are passed through unchanged.
+            if input.is_finalized() {
+                inputs.push(input.clone());
+                continue;
+            }
             match self.finalize_input(input) {
                 Ok(input) => inputs.push(input),
                 // TODO: Do we want to continue loop and return a vector of errors?
@@ -612,6 +617,7 @@ impl fmt::Display for InputError {
                  sighashflag {:?} rather than required {:?}",
                 pubkey, got, required
             ),
+
             Self::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
             Self::NonStandardSighashType(ref e) => write!(f, "Non-standard sighash type {}", e),
         }

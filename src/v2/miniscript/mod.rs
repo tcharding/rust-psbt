@@ -59,6 +59,8 @@ impl Psbt {
             .map(|res| res.expect("finalized PSBT has funding utxos"))
             .collect();
         let utxos = &Prevouts::All(&utxos);
+        // Inputs spending legacy outputs have no final script witness, and vice versa for the
+        // final script sig of witness spends.
         for (index, input) in self.inputs.iter().enumerate() {
             self.interpreter_check_input(
                 secp,
@@ -66,8 +68,8 @@ impl Psbt {
                 index,
                 input,
                 utxos,
-                input.final_script_witness.as_ref().expect("checked in is_finalized"),
-                input.final_script_sig.as_ref().expect("checked in is_finalized"),
+                input.final_script_witness.as_ref().unwrap_or(&Witness::default()),
+                input.final_script_sig.as_deref().unwrap_or(Script::new()),
             )?;
         }
         Ok(())
@@ -219,5 +221,117 @@ impl std::error::Error for InterpreterCheckInputError {
             Self::Constructor { input_index: _, ref error } => Some(error),
             Self::Satisfaction { input_index: _, ref error } => Some(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use bitcoin::bip32::{IntoDerivationPath, Xpriv};
+    use bitcoin::{Amount, OutPoint, PublicKey, ScriptBuf, TxOut};
+
+    use super::*;
+    use crate::v2::{Creator, Input, Output, Signer};
+
+    const TEST_XPRIV: &str =
+        "xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu";
+
+    /// Signs `psbt` with the fixture key (`TEST_XPRIV`).
+    fn sign(psbt: Psbt) -> Psbt {
+        let secp = Secp256k1::new();
+        let xpriv = TEST_XPRIV.parse::<Xpriv>().unwrap();
+        let (signed, _) = Signer::new(psbt).unwrap().sign(&xpriv, &secp).unwrap();
+        signed
+    }
+
+    /// Builds a signed P2WPKH PSBT: the fixture signed with `TEST_XPRIV`.
+    fn signed_psbt() -> Psbt { sign(unsigned_psbt()) }
+
+    /// Builds the unsigned P2WPKH PSBT fixture (before signing).
+    fn unsigned_psbt() -> Psbt {
+        let secp = Secp256k1::new();
+        let xpriv = TEST_XPRIV.parse::<Xpriv>().unwrap();
+        let path = "m/0".into_derivation_path().unwrap();
+        let pk =
+            PublicKey::new(xpriv.derive_priv(&secp, &path).unwrap().to_keypair(&secp).public_key());
+
+        let mut input = Input::new(&OutPoint::null());
+        input.witness_utxo = Some(TxOut {
+            value: Amount::from_sat(123_456),
+            script_pubkey: ScriptBuf::new_p2wpkh(&pk.wpubkey_hash().unwrap()),
+        });
+        input.bip32_derivations.insert(pk, (xpriv.fingerprint(&secp), path));
+
+        Creator::new()
+            .constructor_modifiable()
+            .input(input)
+            .output(Output::new(TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::new(),
+            }))
+            .psbt()
+            .unwrap()
+    }
+
+    #[test]
+    fn interpreter_check_rejects_tampered_witness() {
+        let secp = Secp256k1::verification_only();
+        let signed = signed_psbt();
+        let pk_bytes = signed.inputs[0].bip32_derivations.keys().next().unwrap().to_bytes();
+        let finalizer = Finalizer::new(signed).unwrap();
+        let mut finalized = finalizer.finalize(&secp).expect("valid psbt must finalize");
+
+        // A correctly finalized PSBT passes the interpreter check.
+        finalized.interpreter_check(&secp).expect("valid finalized psbt must pass");
+
+        // Tamper with the final script witness so the interpreter rejects the input.
+        let witness = finalized.inputs[0].final_script_witness.as_mut().unwrap();
+        witness.clear();
+        witness.push([1u8; 64]); // garbage "signature"
+        witness.push(pk_bytes);
+
+        assert!(finalized.interpreter_check(&secp).is_err(), "tampered witness must be rejected");
+    }
+
+    #[test]
+    fn finalize_skips_already_finalized_input() {
+        // A finalized input must pass through the finalizer unchanged.
+        let secp = Secp256k1::verification_only();
+        let signed = signed_psbt();
+        let finalizer = Finalizer::new(signed).unwrap();
+        let finalized = finalizer.finalize(&secp).expect("valid psbt must finalize");
+
+        // Finalizing again must leave the already-finalized input untouched.
+        let out = Finalizer::new(finalized.clone()).unwrap().finalize(&secp).unwrap();
+
+        assert_eq!(out.inputs[0], finalized.inputs[0]);
+    }
+
+    #[test]
+    fn finalize_preserves_sequence_used_in_signature() {
+        // Sign with a non-default sequence so the signature commits to it.
+        let mut unsigned = unsigned_psbt();
+        unsigned.inputs[0].sequence = Some(Sequence::ENABLE_LOCKTIME_NO_RBF);
+
+        let secp = Secp256k1::verification_only();
+        Finalizer::new(sign(unsigned))
+            .unwrap()
+            .finalize(&secp)
+            .expect("finalize must preserve the sequence the signature commits to");
+    }
+
+    #[test]
+    fn finalize_preserves_lock_time_used_in_signature() {
+        // Sign with a required height lock time so the signature commits to the lock time.
+        let mut unsigned = unsigned_psbt();
+        unsigned.inputs[0].min_height =
+            Some(bitcoin::locktime::absolute::Height::from_consensus(800_000).unwrap());
+        unsigned.inputs[0].sequence = Some(Sequence::ENABLE_LOCKTIME_NO_RBF);
+
+        let secp = Secp256k1::verification_only();
+        Finalizer::new(sign(unsigned))
+            .unwrap()
+            .finalize(&secp)
+            .expect("finalize must preserve the lock time the signature commits to");
     }
 }
