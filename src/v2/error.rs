@@ -168,6 +168,18 @@ pub enum SignError {
     WrongSigningAlgorithm,
     /// Signing request currently unsupported.
     Unsupported,
+    /// Witness input will produce a non-witness signature.
+    NonWitnessSig,
+    /// Non-witness input has a mismatch between the txid and prevout txid.
+    NonWitnessUtxoTxidMismatch,
+    /// Redeem script hash did not match the hash in the script_pubkey.
+    RedeemScriptMismatch,
+    /// Native segwit p2wsh script_pubkey did not match witness script hash.
+    WitnessScriptMismatchWsh,
+    /// Nested segwit p2wsh script_pubkey did not match redeem script hash.
+    WitnessScriptMismatchShWsh,
+    /// The signature sighash did not match the sighash provided in the input.
+    SighashMismatch,
 }
 
 impl fmt::Display for SignError {
@@ -190,6 +202,17 @@ impl fmt::Display for SignError {
             Self::WrongSigningAlgorithm =>
                 write!(f, "attempt to sign an input with the wrong signing algorithm"),
             Self::Unsupported => write!(f, "signing request currently unsupported"),
+            Self::NonWitnessSig => write!(f, "witness input will produce a non-witness signature"),
+            Self::NonWitnessUtxoTxidMismatch =>
+                write!(f, "non-witness input has a mismatch between the txid and prevout txid"),
+            Self::RedeemScriptMismatch =>
+                write!(f, "redeem script hash did not match the hash in the script_pubkey"),
+            Self::WitnessScriptMismatchWsh =>
+                write!(f, "native segwit p2wsh script_pubkey did not match witness script hash"),
+            Self::WitnessScriptMismatchShWsh =>
+                write!(f, "nested segwit p2wsh script_pubkey did not match redeem script hash"),
+            Self::SighashMismatch =>
+                write!(f, "the signature sighash did not match the sighash provided in the input"),
         }
     }
 }
@@ -213,7 +236,13 @@ impl std::error::Error for SignError {
             | Self::UnknownOutputType
             | Self::KeyNotFound
             | Self::WrongSigningAlgorithm
-            | Self::Unsupported => None,
+            | Self::Unsupported
+            | Self::NonWitnessSig
+            | Self::NonWitnessUtxoTxidMismatch
+            | Self::RedeemScriptMismatch
+            | Self::WitnessScriptMismatchWsh
+            | Self::WitnessScriptMismatchShWsh
+            | Self::SighashMismatch => None,
         }
     }
 }
