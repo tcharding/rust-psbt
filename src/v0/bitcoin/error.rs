@@ -3,9 +3,8 @@
 use alloc::boxed::Box;
 use core::fmt;
 
-use bitcoin::bip32::Xpub;
 use bitcoin::consensus::encode;
-use bitcoin::{hashes, secp256k1, OutPoint, Transaction, Txid};
+use bitcoin::{hashes, secp256k1, OutPoint, Txid};
 
 use crate::error::write_err;
 use crate::io;
@@ -26,12 +25,8 @@ pub enum Error {
     /// Magic bytes for a PSBT must be the ASCII for "psbt" serialized in most
     /// significant byte order.
     InvalidMagic,
-    /// Missing both the witness and non-witness utxo.
-    MissingUtxo,
     /// The separator for a PSBT must be `0xff`.
     InvalidSeparator,
-    /// Returned when output index is out of bounds in relation to the output in non-witness UTXO.
-    PsbtUtxoOutOfbounds,
     /// Known keys must be according to spec.
     InvalidKey(raw::Key),
     /// Non-proprietary key type found when proprietary key was expected
@@ -46,14 +41,6 @@ pub enum Error {
     MustHaveUnsignedTx,
     /// Signals that there are no more key-value pairs in a key-value map.
     NoMorePairs,
-    /// Attempting to combine with a PSBT describing a different unsigned
-    /// transaction.
-    UnexpectedUnsignedTx {
-        /// Expected
-        expected: Box<Transaction>,
-        /// Actual
-        actual: Box<Transaction>,
-    },
     /// Unable to parse as a standard sighash type.
     NonStandardSighashType(u32),
     /// Invalid hash when parsing slice.
@@ -67,15 +54,8 @@ pub enum Error {
         /// Hash value
         hash: Box<[u8]>,
     },
-    /// Conflicting data during combine procedure:
-    /// global extended public key has inconsistent key sources
-    CombineInconsistentKeySources(Box<Xpub>),
     /// Serialization error in bitcoin consensus-encoded structures
     ConsensusEncoding(encode::Error),
-    /// Negative fee
-    NegativeFee,
-    /// Integer overflow in fee calculation
-    FeeOverflow,
     /// Non-witness UTXO (which is a complete transaction) has a txid that
     /// does not match the transaction input.
     IncorrectNonWitnessUtxo {
@@ -123,10 +103,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::InvalidMagic => f.write_str("invalid magic"),
-            Self::MissingUtxo => f.write_str("UTXO information is not present in PSBT"),
             Self::InvalidSeparator => f.write_str("invalid separator"),
-            Self::PsbtUtxoOutOfbounds =>
-                f.write_str("output index is out of bounds of non witness script output array"),
             Self::InvalidKey(ref rkey) => write!(f, "invalid key: {}", rkey),
             Self::InvalidProprietaryKey =>
                 write!(f, "non-proprietary key type found when proprietary key was expected"),
@@ -138,12 +115,6 @@ impl fmt::Display for Error {
             Self::MustHaveUnsignedTx =>
                 f.write_str("partially signed transactions must have an unsigned transaction"),
             Self::NoMorePairs => f.write_str("no more key-value pairs for this psbt map"),
-            Self::UnexpectedUnsignedTx { expected: ref e, actual: ref a } => write!(
-                f,
-                "different unsigned transaction: expected {}, actual {}",
-                e.compute_txid(),
-                a.compute_txid()
-            ),
             Self::NonStandardSighashType(ref sht) =>
                 write!(f, "non-standard sighash type: {}", sht),
             Self::InvalidHash(ref e) => write_err!(f, "invalid hash when parsing slice"; e),
@@ -151,12 +122,7 @@ impl fmt::Display for Error {
                 // directly using debug forms of psbthash enums
                 write!(f, "Preimage {:?} does not match {:?} hash {:?}", preimage, hash_type, hash)
             }
-            Self::CombineInconsistentKeySources(ref s) => {
-                write!(f, "combine conflict: {}", s)
-            }
             Self::ConsensusEncoding(ref e) => write_err!(f, "bitcoin consensus encoding error"; e),
-            Self::NegativeFee => f.write_str("PSBT has a negative fee which is not allowed"),
-            Self::FeeOverflow => f.write_str("integer overflow in fee calculation"),
             Self::IncorrectNonWitnessUtxo { index, input_outpoint, non_witness_utxo_txid } => {
                 write!(
                     f,
@@ -196,9 +162,7 @@ impl std::error::Error for Error {
             Self::ConsensusEncoding(ref e) => Some(e),
             Self::Io(ref e) => Some(e),
             Self::InvalidMagic
-            | Self::MissingUtxo
             | Self::InvalidSeparator
-            | Self::PsbtUtxoOutOfbounds
             | Self::InvalidKey(_)
             | Self::InvalidProprietaryKey
             | Self::DuplicateKey(_)
@@ -206,12 +170,8 @@ impl std::error::Error for Error {
             | Self::UnsignedTxHasScriptWitnesses
             | Self::MustHaveUnsignedTx
             | Self::NoMorePairs
-            | Self::UnexpectedUnsignedTx { .. }
             | Self::NonStandardSighashType(_)
             | Self::InvalidPreimageHashPair { .. }
-            | Self::CombineInconsistentKeySources(_)
-            | Self::NegativeFee
-            | Self::FeeOverflow
             | Self::IncorrectNonWitnessUtxo { .. }
             | Self::InvalidPublicKey(_)
             | Self::InvalidSecp256k1PublicKey(_)

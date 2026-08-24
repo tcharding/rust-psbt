@@ -31,12 +31,12 @@ mod macros;
 #[cfg(feature = "serde")]
 mod serde_utils;
 mod sighash_type;
+mod v0;
 mod version;
 
 pub mod encoding;
 pub mod raw;
 pub mod serialize;
-pub mod v0;
 pub mod v2;
 
 use bitcoin::io;

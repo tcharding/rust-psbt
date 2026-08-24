@@ -5,14 +5,12 @@
 //! Traits to serialize PSBT values to and from raw bytes
 //! according to the BIP-174 specification.
 
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 
 use bitcoin::bip32::{ChildNumber, Fingerprint, KeySource};
 use bitcoin::consensus::encode::{self, deserialize_partial, serialize, Decodable, Encodable};
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
-use bitcoin::hex::DisplayHex;
 use bitcoin::key::PublicKey;
 use bitcoin::secp256k1::{self, XOnlyPublicKey};
 use bitcoin::taproot::{
@@ -39,9 +37,6 @@ pub(crate) trait Deserialize: Sized {
 }
 
 impl Psbt {
-    /// Serializes a value as bytes in hex.
-    pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
-
     /// Serializes as raw binary data
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
