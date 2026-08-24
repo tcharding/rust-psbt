@@ -6,7 +6,8 @@
 //! that have no PSBT-specific encoding logic and can delegate directly to their
 //! consensus [`bitcoin_consensus_encoding::Encode`] implementations.
 
-use bitcoin::Sequence;
+use bitcoin::locktime::absolute;
+use bitcoin::{transaction, Sequence};
 use bitcoin_consensus_encoding::{Decode, Encode};
 
 use super::{PsbtDecode, PsbtEncode};
@@ -33,5 +34,11 @@ impl<T: PsbtDelegate> PsbtDecode for T {
     type Decoder = <T as Decode>::Decoder;
 }
 
+/// [`absolute::LockTime`] uses its consensus encoding and decoding for PSBT.
+impl PsbtDelegate for absolute::LockTime {}
+
 /// [`Sequence`] uses its consensus encoding and decoding for PSBT.
 impl PsbtDelegate for Sequence {}
+
+/// [`transaction::Version`] uses its consensus encoding and decoding for PSBT.
+impl PsbtDelegate for transaction::Version {}
