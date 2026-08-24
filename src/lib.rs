@@ -47,7 +47,7 @@ pub use crate::{
     error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::{Version, UnsupportedVersionError},
-    v0::DeserializeV0Error,
+    v0::{DeserializeV0Error, SerializeV0Error},
 };
 #[cfg(feature = "base64")]
 #[doc(inline)]

@@ -2,8 +2,7 @@
 
 //! PSBT Version 2.
 //!
-//! A second version of the Partially Signed Bitcoin Transaction format implemented by
-//! [`crate::v0::Psbt`] and described in [BIP-174].
+//! A second version of the Partially Signed Bitcoin Transaction format and described in [BIP-174].
 //!
 //! Allows for inputs and outputs to be added to the PSBT after creation.
 //!
@@ -51,7 +50,6 @@ use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOu
 
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::sighash_type::PsbtSighashType;
-use crate::v0;
 use crate::v2::map::Map;
 
 #[rustfmt::skip]                // Keep public exports separate.
@@ -412,45 +410,6 @@ impl Updater {
         Ok(self)
     }
 
-    /// Converts the inner PSBT v2 to a PSBT v0.
-    ///
-    /// This conversion is lossy. V2-specific fields without v0 equivalents are dropped:
-    /// - Global: tx_modifiable_flags, input_count, output_count, fallback_lock_time
-    /// - Input: min_time, min_height
-    /// - Output: silent payments fields sp_v0_label, sp_v0_info
-    /// - Silent payments: sp_dleq_proofs, sp_ecdh_shares
-    ///
-    /// The v1 lock_time may be derived from fallback_lock_time, min_time, or min_height.
-    ///
-    /// Some v2 fields surface in the v0 unsigned_tx: previous_txid,
-    /// spent_output_index, sequence, amount, and script_pubkey.
-    pub fn into_psbt_v0(self) -> v0::Psbt {
-        let unsigned_tx =
-            self.0.unsigned_tx().expect("Updater guarantees lock time can be determined");
-        let psbt = self.psbt();
-        let inputs = psbt.inputs.into_iter().map(|input| input.into_v0()).collect::<Vec<_>>();
-        let outputs = psbt.outputs.into_iter().map(|output| output.into_v0()).collect::<Vec<_>>();
-
-        let global = psbt.global;
-        let proprietary = global
-            .proprietaries
-            .into_iter()
-            .map(|(k, v)| (map::raw_proprietary_v2_to_v0(k), v))
-            .collect();
-        let unknown =
-            global.unknowns.into_iter().map(|(k, v)| (map::raw_key_v2_to_v0(k), v)).collect();
-
-        v0::Psbt {
-            unsigned_tx,
-            version: 0,
-            xpub: global.xpubs,
-            proprietary,
-            unknown,
-            inputs,
-            outputs,
-        }
-    }
-
     /// Returns the inner [`Psbt`].
     pub fn psbt(self) -> Psbt { self.0 }
 }
@@ -554,7 +513,7 @@ impl Psbt {
     ///
     /// Quidado! this transaction should not be used to determine the ID of
     /// the [`Pbst`], use `Self::id()` instead.
-    fn unsigned_tx(&self) -> Result<Transaction, DetermineLockTimeError> {
+    pub(crate) fn unsigned_tx(&self) -> Result<Transaction, DetermineLockTimeError> {
         let lock_time = self.determine_lock_time()?;
 
         Ok(Transaction {

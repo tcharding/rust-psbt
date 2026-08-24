@@ -15,13 +15,17 @@ pub mod miniscript;
 
 #[cfg(feature = "silent-payments")]
 use alloc::collections::BTreeMap;
+#[cfg(feature = "base64")]
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::fmt;
 
 use ::bitcoin::locktime::absolute;
 use ::bitcoin::{ScriptBuf, TapSighashType};
 
 use self::bitcoin::{OutputType, SignError};
-use crate::{v2, PsbtSighashType};
+use crate::v2::{self, DetermineLockTimeError};
+use crate::PsbtSighashType;
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::bitcoin::{Psbt, Input, Output};
@@ -124,6 +128,20 @@ fn raw_key_v0_to_v2(k: bitcoin::raw::Key) -> crate::raw::Key {
 /// Converts a v0 raw proprietary key into the equivalent v2 raw proprietary key.
 fn raw_proprietary_v0_to_v2(k: bitcoin::raw::ProprietaryKey) -> crate::raw::ProprietaryKey {
     crate::raw::ProprietaryKey { prefix: k.prefix, subtype: k.subtype, key: k.key }
+}
+
+/// Converts a v2 raw key into the equivalent v0 raw key.
+fn raw_key_v2_to_v0(k: &crate::raw::Key) -> bitcoin::raw::Key {
+    bitcoin::raw::Key { type_value: k.type_value, key: k.key.clone() }
+}
+
+/// Converts a v2 raw proprietary key into the equivalent v0 raw proprietary key.
+fn raw_proprietary_v2_to_v0(k: &crate::raw::ProprietaryKey) -> bitcoin::raw::ProprietaryKey {
+    bitcoin::raw::ProprietaryKey {
+        prefix: k.prefix.clone(),
+        subtype: k.subtype,
+        key: k.key.clone(),
+    }
 }
 
 /// Converts a v0 [`Psbt`] into a [`v2::Psbt`].
@@ -229,6 +247,81 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
     v2::Psbt { global, inputs, outputs }
 }
 
+/// Converts a v2 [`v2::Input`] into a v0 [`Input`], dropping v2-only fields.
+fn input_v2_to_v0(input: &v2::Input) -> Input {
+    Input {
+        non_witness_utxo: input.non_witness_utxo.clone(),
+        witness_utxo: input.witness_utxo.clone(),
+        partial_sigs: input.partial_sigs.clone(),
+        sighash_type: input.sighash_type,
+        redeem_script: input.redeem_script.clone(),
+        witness_script: input.witness_script.clone(),
+        bip32_derivation: input.bip32_derivations.clone(),
+        final_script_sig: input.final_script_sig.clone(),
+        final_script_witness: input.final_script_witness.clone(),
+        ripemd160_preimages: input.ripemd160_preimages.clone(),
+        sha256_preimages: input.sha256_preimages.clone(),
+        hash160_preimages: input.hash160_preimages.clone(),
+        hash256_preimages: input.hash256_preimages.clone(),
+        tap_key_sig: input.tap_key_sig,
+        tap_script_sigs: input.tap_script_sigs.clone(),
+        tap_scripts: input.tap_scripts.clone(),
+        tap_key_origins: input.tap_key_origins.clone(),
+        tap_internal_key: input.tap_internal_key,
+        tap_merkle_root: input.tap_merkle_root,
+        proprietary: input
+            .proprietaries
+            .iter()
+            .map(|(k, v)| (raw_proprietary_v2_to_v0(k), v.clone()))
+            .collect(),
+        unknown: input.unknowns.iter().map(|(k, v)| (raw_key_v2_to_v0(k), v.clone())).collect(),
+    }
+}
+
+/// Converts a v2 [`v2::Output`] into a v0 [`Output`], dropping v2-only fields.
+fn output_v2_to_v0(output: &v2::Output) -> Output {
+    Output {
+        redeem_script: output.redeem_script.clone(),
+        witness_script: output.witness_script.clone(),
+        bip32_derivation: output.bip32_derivations.clone(),
+        tap_internal_key: output.tap_internal_key,
+        tap_tree: output.tap_tree.clone(),
+        tap_key_origins: output.tap_key_origins.clone(),
+        proprietary: output
+            .proprietaries
+            .iter()
+            .map(|(k, v)| (raw_proprietary_v2_to_v0(k), v.clone()))
+            .collect(),
+        unknown: output.unknowns.iter().map(|(k, v)| (raw_key_v2_to_v0(k), v.clone())).collect(),
+    }
+}
+
+/// Converts a [`v2::Psbt`] into a v0 [`Psbt`], reconstructing the unsigned transaction from
+/// the v2 fields and dropping v2-only fields (see [`v2::Psbt::serialize_v0_lossy`]).
+fn psbt_v2_to_v0(psbt: &v2::Psbt) -> Psbt {
+    let unsigned_tx = psbt.unsigned_tx().expect("caller ensures lock time can be determined");
+    let inputs = psbt.inputs.iter().map(input_v2_to_v0).collect();
+    let outputs = psbt.outputs.iter().map(output_v2_to_v0).collect();
+
+    let global = &psbt.global;
+    let proprietary = global
+        .proprietaries
+        .iter()
+        .map(|(k, v)| (raw_proprietary_v2_to_v0(k), v.clone()))
+        .collect();
+    let unknown = global.unknowns.iter().map(|(k, v)| (raw_key_v2_to_v0(k), v.clone())).collect();
+
+    Psbt {
+        unsigned_tx,
+        version: 0,
+        xpub: global.xpubs.clone(),
+        proprietary,
+        unknown,
+        inputs,
+        outputs,
+    }
+}
+
 impl v2::Psbt {
     /// Deserializes a PSBT v0 (BIP-174) from raw data.
     ///
@@ -243,6 +336,50 @@ impl v2::Psbt {
         Ok(psbt_v0_to_v2(psbt))
     }
 
+    /// Serializes this PSBT as BIP-174 (PSBT v0) raw binary data.
+    ///
+    /// Fails rather than lose data. v2-only fields without v0 equivalents (transaction modifiable
+    /// flags, fallback lock time, per-input lock times, silent payments fields) must not be set.
+    /// Use [`Self::serialize_v0_lossy`] to drop them instead.
+    ///
+    /// Note this produces a v0 PSBT, use [`Self::serialize`] for v2 PSBTs (BIP-370).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction lock time cannot be determined from the PSBT's lock
+    /// time fields, or if the PSBT contains fields with no v0 equivalent.
+    pub fn serialize_v0(&self) -> Result<Vec<u8>, SerializeV0Error> {
+        let bytes = self.serialize_v0_lossy()?;
+        // Anything that does not round-trip identically was by definition lost. The version
+        // field is exempt, it is a format marker, changing it is the point of this method.
+        let mut round_tripped =
+            Self::deserialize_v0(&bytes).expect("serialize_v0_lossy output must deserialize");
+        round_tripped.global.version = self.global.version;
+        if round_tripped != *self {
+            return Err(SerializeV0Error::Lossy);
+        }
+        Ok(bytes)
+    }
+
+    /// Serializes this PSBT as BIP-174 (PSBT v0) raw binary data, dropping v2-only fields.
+    ///
+    /// This conversion is lossy. v2-only fields without v0 equivalents are dropped. The global
+    /// transaction modifiable flags, input count, output count, and fallback lock time;
+    /// per-input lock times; and any silent payments fields. The v0 `unsigned_tx` is
+    /// reconstructed from the v2 fields (previous txid, spent output index, sequence, amount, and
+    /// script pubkey), deriving its lock time from the per-input lock times or the global fallback.
+    ///
+    /// Note this produces a v0 PSBT, use [`Self::serialize`] for v2 PSBTs (BIP-370).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction lock time cannot be determined
+    /// from the PSBT's lock time fields.
+    pub fn serialize_v0_lossy(&self) -> Result<Vec<u8>, DetermineLockTimeError> {
+        let _ = self.determine_lock_time()?;
+        Ok(psbt_v2_to_v0(self).serialize())
+    }
+
     /// Deserializes a PSBT v0 (BIP-174) from a base64 encoded string.
     #[cfg(feature = "base64")]
     pub fn deserialize_v0_base64(s: &str) -> Result<Self, ParsePsbtV0Error> {
@@ -251,6 +388,60 @@ impl v2::Psbt {
         let data = BASE64_STANDARD.decode(s).map_err(ParsePsbtV0Error::Base64Encoding)?;
         Self::deserialize_v0(&data).map_err(ParsePsbtV0Error::PsbtEncoding)
     }
+    /// Serializes this PSBT as a PSBT v0 (BIP-174) base64 encoded string.
+    ///
+    /// Fails rather than lose data, see [`Self::serialize_v0`]. Use
+    /// [`Self::serialize_v0_base64_lossy`] to drop v2-only fields instead.
+    #[cfg(feature = "base64")]
+    pub fn serialize_v0_base64(&self) -> Result<String, SerializeV0Error> {
+        use ::bitcoin::base64::display::Base64Display;
+        use ::bitcoin::base64::prelude::BASE64_STANDARD;
+
+        Ok(Base64Display::new(&self.serialize_v0()?, &BASE64_STANDARD).to_string())
+    }
+
+    /// Serializes as a PSBT v0 (BIP-174) base64 encoded string, dropping v2-only fields.
+    ///
+    /// This conversion is lossy, see [`Self::serialize_v0_lossy`].
+    #[cfg(feature = "base64")]
+    pub fn serialize_v0_base64_lossy(&self) -> Result<String, DetermineLockTimeError> {
+        use ::bitcoin::base64::display::Base64Display;
+        use ::bitcoin::base64::prelude::BASE64_STANDARD;
+
+        Ok(Base64Display::new(&self.serialize_v0_lossy()?, &BASE64_STANDARD).to_string())
+    }
+}
+
+/// Error serializing a PSBT as PSBT v0 (BIP-174) without losing data.
+#[derive(Debug)]
+pub enum SerializeV0Error {
+    /// The transaction lock time could not be determined from the PSBT's lock time fields.
+    DetermineLockTime(DetermineLockTimeError),
+    /// The PSBT contains v2-only fields with no v0 equivalent.
+    Lossy,
+}
+
+impl fmt::Display for SerializeV0Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DetermineLockTime(ref e) => write!(f, "lock time cannot be determined: {}", e),
+            Self::Lossy => write!(f, "PSBT contains v2-only fields with no v0 equivalent"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SerializeV0Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DetermineLockTime(ref e) => Some(e),
+            Self::Lossy => None,
+        }
+    }
+}
+
+impl From<DetermineLockTimeError> for SerializeV0Error {
+    fn from(e: DetermineLockTimeError) -> Self { Self::DetermineLockTime(e) }
 }
 
 /// Error deserializing a BIP-174 (PSBT v0) PSBT.

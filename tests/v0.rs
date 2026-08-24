@@ -9,9 +9,13 @@
 
 use psbt_v2::bitcoin::absolute::{Height, LockTime};
 use psbt_v2::bitcoin::hex::{DisplayHex, FromHex};
-use psbt_v2::bitcoin::Sequence;
-use psbt_v2::v2::Psbt;
+use psbt_v2::bitcoin::{Amount, OutPoint, PublicKey, ScriptBuf, Sequence, TxOut};
+use psbt_v2::v2::{Constructor, Creator, Input, Modifiable, Output, Psbt, Signer};
+use psbt_v2::SerializeV0Error;
 
+const PUBKEY_HEX: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+const TEST_XPUB: &str = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8";
+const TEST_XPRIV: &str = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
 /// The BIP-174 "create" test vector (Workflow A step 1). The canonical empty PSBT with two inputs
 /// and two outputs, tx version 2, lock time zero, sequences `Sequence::MAX`.
 const CREATE_VECTOR_HEX: &str = "70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f000000000000000000";
@@ -22,6 +26,16 @@ const LOCKTIME_VECTOR_HEX: &str = "70736274ff0100750200000001268171371edff285e93
 
 /// BIP-174 deserialize vector "Valid: PSBT with unknown types in the inputs".
 const UNKNOWN_VECTOR_HEX: &str = "70736274ff01003f0200000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000ffffffff010000000000000000036a010000000000000af00102030405060708090f0102030405060708090a0b0c0d0e0f0000";
+
+fn make_tx_out(sats: u64) -> TxOut {
+    TxOut { value: Amount::from_sat(sats), script_pubkey: ScriptBuf::from(vec![0xab; 4]) }
+}
+
+/// Serializes `psbt` as a v0 PSBT then deserializes the bytes back into a v2 PSBT.
+fn round_trip_v0(psbt: &Psbt) -> Psbt {
+    let bytes = psbt.serialize_v0_lossy().expect("serialize_v0_lossy");
+    Psbt::deserialize_v0(&bytes).expect("deserialize_v0")
+}
 
 /// A BIP-174 PSBT decodes into the v2 representation with the unsigned
 /// transaction's fields redistributed onto the v2 global and per-input maps.
@@ -89,4 +103,105 @@ fn deserialize_v0_base64_decodes() {
     let from_base64 = Psbt::deserialize_v0_base64(&b64).expect("valid base64 v0 PSBT");
 
     assert_eq!(from_base64, from_hex);
+}
+
+/// A PSBT decoded from v0 bytes carries no v2-only fields: the strict encoder
+/// succeeds on it and re-encodes byte-identically.
+#[test]
+fn strict_encode_round_trips_v0_decoded_psbt() {
+    let bytes = Vec::from_hex(CREATE_VECTOR_HEX).unwrap();
+    let psbt = Psbt::deserialize_v0(&bytes).unwrap();
+
+    let encoded = psbt.serialize_v0().expect("v0-decoded PSBT must strictly encode");
+    assert_eq!(encoded, bytes);
+}
+
+/// A PSBT with v2-only fields fails the strict encoder but succeeds with the
+/// lossy one, and the lossy output re-decodes to a strictly-encodable PSBT.
+#[test]
+fn strict_fails_on_v2_only_fields_lossy_drops_them() {
+    // The Constructor marks the PSBT as inputs-and-outputs modifiable, a
+    // v2-only global field.
+    let psbt = Constructor::<Modifiable>::default()
+        .input(Input::new(&OutPoint::null()))
+        .output(Output::new(make_tx_out(1)))
+        .psbt()
+        .unwrap();
+    assert_eq!(psbt.global.tx_modifiable_flags & 0b11, 0b11);
+
+    assert!(matches!(psbt.serialize_v0(), Err(SerializeV0Error::Lossy)));
+
+    let v0_bytes = psbt.serialize_v0_lossy().expect("lossy encode");
+    let decoded = Psbt::deserialize_v0(&v0_bytes).unwrap();
+    // The dropped modifiable flags are gone: the decoded PSBT strictly encodes.
+    assert_eq!(decoded.serialize_v0().unwrap(), v0_bytes);
+}
+
+/// Per-input fields that have no v0 equivalent (min_time/min_height) surface in
+/// the reconstructed v0 unsigned transaction's lock time and thereby in the
+/// fallback lock time of a decoded PSBT; sequence survives on the input.
+#[test]
+fn v2_only_input_fields_surface_in_v0_unsigned_tx() {
+    use psbt_v2::bitcoin::absolute;
+
+    let height = absolute::Height::from_consensus(800_000).unwrap();
+    let mut input = Input::new(&OutPoint::null());
+    input.min_height = Some(height);
+    input.sequence = Some(Sequence::ENABLE_LOCKTIME_NO_RBF);
+
+    let psbt = Creator::new()
+        .constructor_modifiable()
+        .input(input)
+        .output(Output::new(make_tx_out(1)))
+        .psbt()
+        .unwrap();
+
+    let parsed = round_trip_v0(&psbt);
+
+    assert_eq!(parsed.global.fallback_lock_time, Some(LockTime::Blocks(height)));
+    assert_eq!(parsed.inputs[0].sequence, Some(Sequence::ENABLE_LOCKTIME_NO_RBF));
+    assert!(parsed.inputs[0].min_height.is_none()); // dropped as a field
+}
+
+/// Signing a PSBT and then converting to v0 preserves the signatures.
+#[test]
+fn sign_then_convert_preserves_signatures() {
+    use psbt_v2::bitcoin::bip32::{IntoDerivationPath, Xpriv, Xpub};
+    use psbt_v2::bitcoin::secp256k1::Secp256k1;
+
+    let pk = PUBKEY_HEX.parse::<PublicKey>().unwrap();
+    let path = "m/0".into_derivation_path().unwrap();
+    let fingerprint = TEST_XPUB.parse::<Xpub>().unwrap().fingerprint();
+
+    let mut input = Input::new(&OutPoint::null());
+    input.witness_utxo = Some(TxOut {
+        value: Amount::from_sat(123_456),
+        script_pubkey: ScriptBuf::new_p2wpkh(&pk.wpubkey_hash().unwrap()),
+    });
+    input.bip32_derivations.insert(pk, (fingerprint, path));
+
+    let psbt = Creator::new()
+        .constructor_modifiable()
+        .input(input)
+        .output(Output::new(make_tx_out(1)))
+        .psbt()
+        .unwrap();
+
+    let secp = Secp256k1::<psbt_v2::bitcoin::secp256k1::All>::new();
+    let xpriv = TEST_XPRIV.parse::<Xpriv>().unwrap();
+    let (signed, _) = Signer::new(psbt).unwrap().sign(&xpriv, &secp).unwrap();
+
+    let parsed = round_trip_v0(&signed);
+    assert_eq!(parsed.inputs[0].partial_sigs, signed.inputs[0].partial_sigs);
+}
+
+#[cfg(feature = "base64")]
+#[test]
+fn base64_encode_lossy_then_decode_round_trips() {
+    let bytes = Vec::from_hex(CREATE_VECTOR_HEX).unwrap();
+    let psbt = Psbt::deserialize_v0(&bytes).unwrap();
+
+    let b64 = psbt.serialize_v0_base64_lossy().expect("serialize_v0_base64_lossy");
+    let decoded = Psbt::deserialize_v0_base64(&b64).expect("deserialize_v0_base64");
+    assert_eq!(decoded, psbt);
 }
