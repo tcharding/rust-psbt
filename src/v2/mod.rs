@@ -22,7 +22,6 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
-mod error;
 mod extract;
 
 use alloc::borrow::Borrow;
@@ -43,21 +42,22 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache, TapSighashType};
 use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid};
 
+#[cfg(feature = "miniscript")]
+use crate::PartialSigsSighashTypeError;
 use crate::error::{write_err, FeeError, FundingUtxoError};
 use crate::global::{self, Global};
 use crate::input::{self, Input};
 use crate::map::Map;
 use crate::output::{self, Output};
 use crate::sighash_type::PsbtSighashType;
+use crate::error::{
+    DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
+    OutputsNotModifiableError, PsbtNotModifiableError, SignError,
+};
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
 pub use self::{
-    error::{
-        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
-        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
-        PsbtNotModifiableError, SignError,
-    },
     extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
 };
 #[cfg(feature = "base64")]

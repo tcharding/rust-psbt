@@ -34,7 +34,8 @@ use miniscript::{interpreter, Interpreter, MiniscriptKey};
 
 use crate::error::write_err;
 use crate::map::input::Input;
-use crate::v2::{DetermineLockTimeError, Psbt};
+use crate::DetermineLockTimeError;
+use crate::v2::Psbt;
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::role::{InputError, Finalizer, FinalizeError, FinalizeInputError};

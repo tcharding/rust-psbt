@@ -21,7 +21,7 @@ use core::fmt;
 use ::bitcoin::locktime::absolute;
 
 use self::bitcoin::{Input, Output, Psbt};
-use crate::v2::{self, DetermineLockTimeError};
+use crate::{DetermineLockTimeError, v2};
 
 /// Converts a v0 raw key into the equivalent v2 raw key.
 fn raw_key_v0_to_v2(k: bitcoin::raw::Key) -> crate::raw::Key {

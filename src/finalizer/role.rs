@@ -22,7 +22,8 @@ use crate::error::{write_err, FundingUtxoError};
 use crate::finalizer::satisfy::InputSatisfier;
 use crate::finalizer::InterpreterCheckError;
 use crate::map::input::{self, Input};
-use crate::v2::{DetermineLockTimeError, PartialSigsSighashTypeError, Psbt};
+use crate::{DetermineLockTimeError, PartialSigsSighashTypeError};
+use crate::v2::Psbt;
 
 /// Implements the BIP-370 Finalized role.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

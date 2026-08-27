@@ -49,7 +49,11 @@ use bitcoin::io;
 #[rustfmt::skip] // Keep public re-exports separate from private imports.
 #[doc(inline)]
 pub use crate::{
-    error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
+    error::{
+        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
+        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
+        PsbtNotModifiableError, SignError, InconsistentKeySourcesError, FeeError, FundingUtxoError
+    },
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::{Version, UnsupportedVersionError},
     v0::{DeserializeV0Error, SerializeV0Error},
