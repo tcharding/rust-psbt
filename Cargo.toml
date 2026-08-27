@@ -24,7 +24,7 @@ cargo-mutants = "27.1.0"
 
 [package.metadata.rbmt.test]
 examples = [
-    "v0:std rand",
+    "v0:std",
     "v2:std",
     "v2-separate-creator-constructor:std",
 ]
@@ -64,7 +64,7 @@ serde_json = "1.0.68"
 
 [[example]]
 name = "v0"
-required-features = ["std", "rand"]
+required-features = ["std"]
 
 [[example]]
 name = "v2"

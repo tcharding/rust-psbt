@@ -7,15 +7,13 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-use bitcoin::{transaction, Sequence, Transaction, TxIn, Witness};
-use psbt_v2::bitcoin::absolute::LockTime;
+use bitcoin::{Sequence, Transaction};
 use psbt_v2::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt_v2::bitcoin::hex::FromHex;
 use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
-use psbt_v2::v0::miniscript::PsbtExt;
-use psbt_v2::v0::Psbt;
+use psbt_v2::v2::{Constructor, Extractor, Finalizer, Input, Modifiable, Output, Psbt, Signer};
 use psbt_v2::PsbtSighashType;
 use serde::{de, Deserialize, Deserializer};
 
@@ -189,12 +187,16 @@ fn run_fail_sign(supplementary: &Supplementary) {
             let hex = hex.as_deref().expect("fail vector must have hex");
             let base64 = base64.as_deref().expect("fail vector must have base64");
             let hex_psbt = hex_psbt_v0(hex).expect("should parse");
-            let base64_psbt = base64.parse::<Psbt>().expect("base64 must decode when hex decoded");
+            let base64_psbt =
+                Psbt::deserialize_v0_base64(base64).expect("base64 must decode when hex decoded");
             assert_eq!(hex_psbt, base64_psbt);
-            assert!(
-                (0..base64_psbt.inputs.len()).any(|i| base64_psbt.signer_checks(i).is_err()),
-                "expected signer_checks() to fail"
-            );
+
+            // The BIP-174 signer validity checks run upfront in `sign` (before any signature is
+            // produced), so signing must fail even though we hold no keys.
+            let key_map: BTreeMap<PublicKey, PrivateKey> = BTreeMap::new();
+            let secp = Secp256k1::new();
+            let signer = Signer::new(base64_psbt).expect("lock time must be determinable");
+            assert!(signer.sign(&key_map, &secp).is_err(), "expected sign() to fail");
         }
     }
 }
@@ -217,31 +219,28 @@ fn run_deserialize(case: &TestCase, supplementary: &Supplementary) {
     }
 }
 
-/// Creator: build an unsigned transaction from the given inputs and outputs,
-/// wrap it in a PSBT, and compare against the expected serialisation.
+/// Creator: build a PSBT from the given inputs and outputs and compare
+/// its v0 encoding against the expected serialisation.
 fn run_create(expected: &PsbtData, supplementary: &Supplementary) {
     let inputs = supplementary.inputs.as_ref().expect("create task needs inputs");
     let outputs = supplementary.outputs.as_ref().expect("create task needs outputs");
     let expected_hex = expected.hex.as_deref().expect("create expected must have hex");
 
-    let tx = Transaction {
-        version: transaction::Version::TWO,
-        lock_time: LockTime::ZERO,
-        input: inputs
-            .iter()
-            .map(|o| TxIn {
-                previous_output: OutPoint { txid: o.txid, vout: o.vout },
-                script_sig: ScriptBuf::new(),
-                sequence: Sequence::MAX,
-                witness: Witness::default(),
-            })
-            .collect(),
-        output: outputs.clone(),
-    };
+    let mut psbt = Constructor::<Modifiable>::default();
+    for prev_out in inputs {
+        let input = Input {
+            sequence: Some(Sequence::MAX),
+            ..Input::new(&OutPoint { txid: prev_out.txid, vout: prev_out.vout })
+        };
+        psbt = psbt.input(input);
+    }
+    for txout in outputs {
+        psbt = psbt.output(Output::new(txout.clone()));
+    }
+    let psbt = psbt.psbt().expect("lock time must be determinable");
 
-    let psbt = Psbt::from_unsigned_tx(tx).expect("failed to create PSBT from unsigned tx");
-    let expected_psbt = hex_psbt_v0(expected_hex).expect("expected PSBT must be valid");
-    assert_eq!(psbt, expected_psbt);
+    let expected_bytes = Vec::from_hex(expected_hex).expect("expected PSBT must be valid hex");
+    assert_eq!(psbt.serialize_v0_lossy().expect("v0 encoding"), expected_bytes);
 }
 
 /// Decode a consensus-encoded transaction from a hex string.
@@ -277,12 +276,11 @@ fn run_update(expected: &PsbtData, supplementary: &Supplementary) {
             let prev_tx = consensus_tx(&u.previous_tx);
             let txid = prev_tx.compute_txid();
             let i = psbt
-                .unsigned_tx
-                .input
+                .inputs
                 .iter()
-                .position(|txin| txin.previous_output.txid == txid)
+                .position(|input| input.previous_txid == txid)
                 .expect("input_update previous_tx does not match any PSBT input");
-            let vout = psbt.unsigned_tx.input[i].previous_output.vout as usize;
+            let vout = psbt.inputs[i].spent_output_index as usize;
             if u.witness {
                 psbt.inputs[i].witness_utxo = Some(prev_tx.output[vout].clone());
             } else {
@@ -296,7 +294,7 @@ fn run_update(expected: &PsbtData, supplementary: &Supplementary) {
             }
             if !u.bip32_derivation.is_empty() {
                 let fp = fp.expect("bip32_derivation requires xpriv");
-                psbt.inputs[i].bip32_derivation =
+                psbt.inputs[i].bip32_derivations =
                     u.bip32_derivation.iter().map(|p| (p.key, (fp, p.path.clone()))).collect();
             }
         }
@@ -306,7 +304,7 @@ fn run_update(expected: &PsbtData, supplementary: &Supplementary) {
         for (i, u) in updates.iter().enumerate() {
             if !u.bip32_derivation.is_empty() {
                 let fp = fp.expect("bip32_derivation requires xpriv");
-                psbt.outputs[i].bip32_derivation =
+                psbt.outputs[i].bip32_derivations =
                     u.bip32_derivation.iter().map(|p| (p.key, (fp, p.path.clone()))).collect();
             }
         }
@@ -336,7 +334,7 @@ fn run_sign(expected: &PsbtData, supplementary: &Supplementary) {
     let input_psbts = supplementary.psbts.as_deref().unwrap_or(&[]);
     assert!(!input_psbts.is_empty(), "sign task needs at least one input PSBT");
     let input_hex = input_psbts[0].hex.as_deref().expect("sign input must have hex");
-    let mut psbt = hex_psbt_v0(input_hex).expect("sign input PSBT must be valid");
+    let psbt = hex_psbt_v0(input_hex).expect("sign input PSBT must be valid");
 
     let expected_hex = expected.hex.as_deref().expect("sign expected must have hex");
     let expected_psbt = hex_psbt_v0(expected_hex).expect("sign expected PSBT must be valid");
@@ -355,22 +353,13 @@ fn run_sign(expected: &PsbtData, supplementary: &Supplementary) {
         }
     }
 
-    // sign() returns Err when it encounters errors for some inputs, even if
-    // other inputs were signed successfully. We tolerate errors only when the
-    // failing input had no key in our map (expected for multisig where we hold
-    // a subset of the required keys).
-    match psbt.sign(&key_map, &secp) {
-        Ok(_) => {}
-        Err((_, errors)) =>
-            for (input_idx, err) in &errors {
-                assert!(
-                    matches!(err, psbt_v2::v0::bitcoin::SignError::KeyNotFound),
-                    "unexpected sign error on input {}: {:?}",
-                    input_idx,
-                    err
-                );
-            },
-    }
+    // `Signer` silently skips inputs for which we hold no key, so errors are returned when a held
+    // key fails to produce a signature or when an input fails the signer validity checks.
+    let signer = Signer::new(psbt).expect("lock time must be determinable");
+    let (psbt, _) = match signer.sign(&key_map, &secp) {
+        Ok(signed) => signed,
+        Err((_, errors)) => panic!("unexpected sign errors: {:?}", errors),
+    };
     assert_eq!(psbt, expected_psbt);
 }
 
@@ -389,7 +378,7 @@ fn run_combine(expected: &PsbtData, supplementary: &Supplementary) {
     for p in &input_psbts[1..] {
         let next = hex_psbt_v0(p.hex.as_deref().expect("combine input must have hex"))
             .expect("combine input must be valid");
-        combined.combine(next).expect("combine must succeed");
+        combined = combined.combine_with(next).expect("combine must succeed");
     }
 
     assert_eq!(combined, expected_psbt);
@@ -434,13 +423,14 @@ fn run_finalize(expected: &PsbtData, supplementary: &Supplementary) {
     assert!(!input_psbts.is_empty(), "finalize task needs at least one input PSBT");
 
     let input_hex = input_psbts[0].hex.as_deref().expect("finalize input must have hex");
-    let mut psbt = hex_psbt_v0(input_hex).expect("finalize input PSBT must be valid");
+    let psbt = hex_psbt_v0(input_hex).expect("finalize input PSBT must be valid");
 
     let expected_hex = expected.hex.as_deref().expect("finalize expected must have hex");
     let expected_psbt = hex_psbt_v0(expected_hex).expect("finalize expected PSBT must be valid");
 
     let secp = Secp256k1::verification_only();
-    psbt.finalize_mut(&secp).expect("input psbt must be finalizable");
+    let finalizer = Finalizer::new(psbt).expect("finalizer requirements must be met");
+    let psbt = finalizer.finalize(&secp).expect("input psbt must be finalizable");
 
     assert_eq!(psbt, expected_psbt);
 }
@@ -457,7 +447,8 @@ fn run_extract(supplementary: &Supplementary) {
     let expected_tx_hex =
         supplementary.tx.as_deref().expect("extract task must provide expected tx hex");
 
-    let tx = psbt.extract_tx_unchecked_fee_rate();
+    let extractor = Extractor::new(psbt).expect("extract task PSBT must be finalized");
+    let tx = extractor.extract_tx_unchecked_fee_rate().expect("extract must succeed");
     assert_eq!(serialize_hex(&tx), expected_tx_hex);
 }
 
