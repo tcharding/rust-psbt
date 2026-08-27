@@ -19,9 +19,9 @@ use miniscript::{
 };
 
 use crate::error::{write_err, FundingUtxoError};
+use crate::finalizer::satisfy::InputSatisfier;
+use crate::finalizer::InterpreterCheckError;
 use crate::map::input::{self, Input};
-use crate::v2::miniscript::satisfy::InputSatisfier;
-use crate::v2::miniscript::InterpreterCheckError;
 use crate::v2::{DetermineLockTimeError, PartialSigsSighashTypeError, Psbt};
 
 /// Implements the BIP-370 Finalized role.

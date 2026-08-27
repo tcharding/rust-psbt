@@ -18,7 +18,7 @@
 
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 
-mod finalize;
+mod role;
 mod satisfy;
 
 use alloc::borrow::Borrow;
@@ -37,7 +37,7 @@ use crate::map::input::Input;
 use crate::v2::{DetermineLockTimeError, Psbt};
 
 #[rustfmt::skip]                // Keep public exports separate.
-pub use self::finalize::{InputError, Finalizer, FinalizeError, FinalizeInputError};
+pub use self::role::{InputError, Finalizer, FinalizeError, FinalizeInputError};
 
 impl Psbt {
     // TODO: Should this be on a Role? Finalizer/Extractor? Then we can remove the debug_assert
@@ -231,7 +231,8 @@ mod tests {
     use bitcoin::{Amount, OutPoint, PublicKey, ScriptBuf, TxOut};
 
     use super::*;
-    use crate::v2::{Creator, Input, Output, Signer};
+    use crate::v2::{Creator, Signer};
+    use crate::{Input, Output};
 
     const TEST_XPRIV: &str =
         "xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu";

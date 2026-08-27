@@ -24,8 +24,6 @@
 
 mod error;
 mod extract;
-#[cfg(feature = "miniscript")]
-mod miniscript;
 
 use alloc::borrow::Borrow;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -65,7 +63,7 @@ pub use self::{
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
 #[cfg(feature = "miniscript")]
-pub use self::miniscript::{
+pub use crate::finalizer::{
     FinalizeError, FinalizeInputError, Finalizer, InputError, InterpreterCheckError,
     InterpreterCheckInputError,
 };
@@ -493,7 +491,7 @@ impl Psbt {
     // TODO: Add inherent methods to get each of the role types.
 
     /// Returns this PSBT's unique identification.
-    fn id(&self) -> Result<Txid, DetermineLockTimeError> {
+    pub(crate) fn id(&self) -> Result<Txid, DetermineLockTimeError> {
         let mut tx = self.unsigned_tx()?;
         // Updaters may change the sequence so to calculate ID we set it to zero.
         tx.input.iter_mut().for_each(|input| input.sequence = Sequence::ZERO);

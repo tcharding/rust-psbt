@@ -28,6 +28,8 @@ mod consts;
 mod error;
 #[macro_use]
 mod macros;
+#[cfg(feature = "miniscript")]
+mod finalizer;
 mod map;
 #[cfg(feature = "serde")]
 mod serde_utils;
