@@ -18,7 +18,7 @@ use core::fmt;
 use bitcoin::{FeeRate, Transaction, Txid};
 
 use crate::error::{write_err, FeeError};
-use crate::v2::{Psbt};
+use crate::psbt::Psbt;
 use crate::DetermineLockTimeError;
 
 /// Implements the BIP-370 Finalized role.

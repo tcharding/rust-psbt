@@ -13,7 +13,7 @@ use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt_v2::bitcoin::hex::FromHex;
 use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
-use psbt_v2::v2::{Constructor, Finalizer, Modifiable, Psbt, Signer};
+use psbt_v2::psbt::{Constructor, Finalizer, Modifiable, Psbt, Signer};
 use psbt_v2::{Extractor, Input, Output, PsbtSighashType};
 use serde::{de, Deserialize, Deserializer};
 
@@ -466,7 +466,7 @@ fn run_determine_lock_time(supplementary: &Supplementary) {
             let psbt = hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
             assert_eq!(
                 psbt,
-                base64.parse::<psbt_v2::v2::Psbt>().expect("failed to deserialize from base64")
+                base64.parse::<psbt_v2::psbt::Psbt>().expect("failed to deserialize from base64")
             );
 
             let got = psbt.determine_lock_time().expect("valid lock time");
@@ -488,7 +488,7 @@ fn run_fail_determine_lock_time(supplementary: &Supplementary) {
             let psbt = hex_psbt_v2(hex).expect("failed to deserialize PSBT from hex");
             assert_eq!(
                 psbt,
-                base64.parse::<psbt_v2::v2::Psbt>().expect("failed to deserialize from base64")
+                base64.parse::<psbt_v2::psbt::Psbt>().expect("failed to deserialize from base64")
             );
 
             assert!(psbt.determine_lock_time().is_err(), "expected determine_lock_time to fail");

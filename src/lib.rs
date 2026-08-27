@@ -28,6 +28,7 @@ mod consts;
 mod error;
 #[macro_use]
 mod macros;
+mod extractor;
 #[cfg(feature = "miniscript")]
 mod finalizer;
 mod map;
@@ -36,14 +37,13 @@ mod serde_utils;
 mod sighash_type;
 mod v0;
 mod version;
-mod extractor;
 
 #[cfg(feature = "silent-payments")]
 pub mod dleq;
 pub mod encoding;
+pub mod psbt;
 pub mod raw;
 pub mod serialize;
-pub mod v2;
 
 use bitcoin::io;
 

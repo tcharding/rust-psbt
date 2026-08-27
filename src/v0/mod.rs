@@ -5,7 +5,7 @@
 //! The codec below is code copied from [`rust-bitcoin`] (`v0.32.8`), stripped
 //! down to serialization/deserialization only. This module is private to the
 //! crate: v0 PSBTs are handled through the explicit decode/encode entry points
-//! on [`v2::Psbt`] implemented at the bottom of this file.
+//! on [`psbt::Psbt`] implemented at the bottom of this file.
 //!
 //! [`rust-bitcoin`]: <https://github.com/rust-bitcoin/rust-bitcoin>
 
@@ -21,7 +21,7 @@ use core::fmt;
 use ::bitcoin::locktime::absolute;
 
 use self::bitcoin::{Input, Output, Psbt};
-use crate::{DetermineLockTimeError, v2};
+use crate::{psbt, DetermineLockTimeError};
 
 /// Converts a v0 raw key into the equivalent v2 raw key.
 fn raw_key_v0_to_v2(k: bitcoin::raw::Key) -> crate::raw::Key {
@@ -47,11 +47,11 @@ fn raw_proprietary_v2_to_v0(k: &crate::raw::ProprietaryKey) -> bitcoin::raw::Pro
     }
 }
 
-/// Converts a v0 [`Psbt`] into a [`v2::Psbt`].
+/// Converts a v0 [`Psbt`] into a [`psbt::Psbt`].
 ///
 /// This conversion is lossless. Fields that live in the v0 `unsigned_tx` are redistributed to
 /// their v2 equivalents.
-fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
+fn psbt_v0_to_v2(psbt: Psbt) -> psbt::Psbt {
     let Psbt { unsigned_tx, xpub, proprietary, unknown, inputs, outputs, .. } = psbt;
 
     let fallback_lock_time = if unsigned_tx.lock_time == absolute::LockTime::ZERO {
@@ -147,10 +147,10 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
         })
         .collect();
 
-    v2::Psbt { global, inputs, outputs }
+    psbt::Psbt { global, inputs, outputs }
 }
 
-/// Converts a v2 [`v2::Input`] into a v0 [`Input`], dropping v2-only fields.
+/// Converts a v2 [`psbt::Input`] into a v0 [`Input`], dropping v2-only fields.
 fn input_v2_to_v0(input: &crate::Input) -> Input {
     Input {
         non_witness_utxo: input.non_witness_utxo.clone(),
@@ -181,7 +181,7 @@ fn input_v2_to_v0(input: &crate::Input) -> Input {
     }
 }
 
-/// Converts a v2 [`v2::Output`] into a v0 [`Output`], dropping v2-only fields.
+/// Converts a v2 [`psbt::Output`] into a v0 [`Output`], dropping v2-only fields.
 fn output_v2_to_v0(output: &crate::Output) -> Output {
     Output {
         redeem_script: output.redeem_script.clone(),
@@ -199,9 +199,9 @@ fn output_v2_to_v0(output: &crate::Output) -> Output {
     }
 }
 
-/// Converts a [`v2::Psbt`] into a v0 [`Psbt`], reconstructing the unsigned transaction from
-/// the v2 fields and dropping v2-only fields (see [`v2::Psbt::serialize_v0_lossy`]).
-fn psbt_v2_to_v0(psbt: &v2::Psbt) -> Psbt {
+/// Converts a [`psbt::Psbt`] into a v0 [`Psbt`], reconstructing the unsigned transaction from
+/// the v2 fields and dropping v2-only fields (see [`psbt::Psbt::serialize_v0_lossy`]).
+fn psbt_v2_to_v0(psbt: &psbt::Psbt) -> Psbt {
     let unsigned_tx = psbt.unsigned_tx().expect("caller ensures lock time can be determined");
     let inputs = psbt.inputs.iter().map(input_v2_to_v0).collect();
     let outputs = psbt.outputs.iter().map(output_v2_to_v0).collect();
@@ -225,7 +225,7 @@ fn psbt_v2_to_v0(psbt: &v2::Psbt) -> Psbt {
     }
 }
 
-impl v2::Psbt {
+impl psbt::Psbt {
     /// Deserializes a PSBT v0 (BIP-174) from raw data.
     ///
     /// This only accepts v0 PSBTs, use [`Self::deserialize`] for v2 PSBTs (BIP-370).

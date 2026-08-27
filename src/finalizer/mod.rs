@@ -34,8 +34,8 @@ use miniscript::{interpreter, Interpreter, MiniscriptKey};
 
 use crate::error::write_err;
 use crate::map::input::Input;
+use crate::psbt::Psbt;
 use crate::DetermineLockTimeError;
-use crate::v2::Psbt;
 
 #[rustfmt::skip]                // Keep public exports separate.
 pub use self::role::{InputError, Finalizer, FinalizeError, FinalizeInputError};
@@ -232,7 +232,7 @@ mod tests {
     use bitcoin::{Amount, OutPoint, PublicKey, ScriptBuf, TxOut};
 
     use super::*;
-    use crate::v2::{Creator, Signer};
+    use crate::psbt::{Creator, Signer};
     use crate::{Input, Output};
 
     const TEST_XPRIV: &str =

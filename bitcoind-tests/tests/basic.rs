@@ -5,7 +5,8 @@ use core::str::FromStr;
 // Only depend on `psbt` (and `bitcoind_tests`) because we are explicitly testing the `psbt_v2` crate.
 use bitcoind_tests::client::Client;
 use psbt::bitcoin::{Address, Amount, CompressedPublicKey, Network, OutPoint, Script, Transaction, TxOut};
-use psbt::v2::{Constructor, InputBuilder, Modifiable, OutputBuilder};
+use psbt::psbt::{Constructor, Modifiable};
+use psbt::{InputBuilder, OutputBuilder};
 // The `psbt_v2` crate, as we expect downstream to use it
 // E.g., in manifest file `use psbt = { package = "psbt_v2" ... }`
 use psbt_v2 as psbt;

@@ -3,7 +3,6 @@
 use core::fmt;
 
 use bitcoin::bip32::Xpub;
-
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
 use bitcoin::{transaction, PublicKey, Txid};
 
