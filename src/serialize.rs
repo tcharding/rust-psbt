@@ -22,10 +22,10 @@ use bitcoin::{
     VarInt, Witness,
 };
 
+#[cfg(feature = "silent-payments")]
+use crate::dleq;
 use crate::error::write_err;
 use crate::sighash_type::PsbtSighashType;
-#[cfg(feature = "silent-payments")]
-use crate::v2::dleq;
 use crate::version;
 
 /// A trait for serializing a value as raw data for insertion into PSBT

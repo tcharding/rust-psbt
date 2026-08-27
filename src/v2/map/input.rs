@@ -32,11 +32,11 @@ use crate::consts::{
 };
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
+#[cfg(feature = "silent-payments")]
+use crate::dleq::DleqProof;
 use crate::error::{write_err, FundingUtxoError};
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
-#[cfg(feature = "silent-payments")]
-use crate::v2::dleq::DleqProof;
 use crate::v2::map::Map;
 use crate::{raw, serialize};
 

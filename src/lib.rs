@@ -34,6 +34,8 @@ mod sighash_type;
 mod v0;
 mod version;
 
+#[cfg(feature = "silent-payments")]
+pub mod dleq;
 pub mod encoding;
 pub mod raw;
 pub mod serialize;
@@ -49,6 +51,10 @@ pub use crate::{
     version::{Version, UnsupportedVersionError},
     v0::{DeserializeV0Error, SerializeV0Error},
 };
+
+#[cfg(feature = "silent-payments")]
+pub use dleq::{DleqProof, InvalidLengthError};
+
 #[cfg(feature = "base64")]
 #[doc(inline)]
 pub use crate::v0::ParsePsbtV0Error;

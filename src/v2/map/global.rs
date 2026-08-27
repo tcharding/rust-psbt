@@ -20,11 +20,11 @@ use crate::consts::{
 };
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_GLOBAL_SP_DLEQ, PSBT_GLOBAL_SP_ECDH_SHARE};
+#[cfg(feature = "silent-payments")]
+use crate::dleq::DleqProof;
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{Cursor, Read};
 use crate::serialize::Serialize;
-#[cfg(feature = "silent-payments")]
-use crate::v2::dleq::DleqProof;
 use crate::v2::map::Map;
 use crate::version::Version;
 use crate::{consts, raw, serialize, V2};

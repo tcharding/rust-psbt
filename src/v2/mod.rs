@@ -22,8 +22,6 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
-#[cfg(feature = "silent-payments")]
-pub mod dleq;
 mod error;
 mod extract;
 mod map;
@@ -70,8 +68,6 @@ pub use self::{
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
-#[cfg(feature = "silent-payments")]
-pub use self::dleq::{DleqProof, InvalidLengthError};
 #[cfg(feature = "miniscript")]
 pub use self::miniscript::{
     FinalizeError, FinalizeInputError, Finalizer, InputError, InterpreterCheckError,
