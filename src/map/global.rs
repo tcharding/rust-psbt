@@ -24,8 +24,8 @@ use crate::consts::{PSBT_GLOBAL_SP_DLEQ, PSBT_GLOBAL_SP_ECDH_SHARE};
 use crate::dleq::DleqProof;
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{Cursor, Read};
+use crate::map::Map;
 use crate::serialize::Serialize;
-use crate::v2::map::Map;
 use crate::version::Version;
 use crate::{consts, raw, serialize, V2};
 

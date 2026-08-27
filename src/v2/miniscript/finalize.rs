@@ -19,7 +19,7 @@ use miniscript::{
 };
 
 use crate::error::{write_err, FundingUtxoError};
-use crate::v2::map::input::{self, Input};
+use crate::map::input::{self, Input};
 use crate::v2::miniscript::satisfy::InputSatisfier;
 use crate::v2::miniscript::InterpreterCheckError;
 use crate::v2::{DetermineLockTimeError, PartialSigsSighashTypeError, Psbt};

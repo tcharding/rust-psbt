@@ -8,7 +8,7 @@ use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
 use bitcoin::{transaction, PublicKey, Txid};
 
 use crate::error::{write_err, FundingUtxoError};
-use crate::v2::map::{global, input, output};
+use crate::map::{global, input, output};
 
 /// Error while deserializing a PSBT.
 ///

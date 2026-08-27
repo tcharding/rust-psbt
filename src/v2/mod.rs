@@ -24,7 +24,6 @@
 
 mod error;
 mod extract;
-mod map;
 #[cfg(feature = "miniscript")]
 mod miniscript;
 
@@ -47,8 +46,11 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache, TapSighashType};
 use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid};
 
 use crate::error::{write_err, FeeError, FundingUtxoError};
+use crate::global::{self, Global};
+use crate::input::{self, Input};
+use crate::map::Map;
+use crate::output::{self, Output};
 use crate::sighash_type::PsbtSighashType;
-use crate::v2::map::Map;
 
 #[rustfmt::skip]                // Keep public exports separate.
 #[doc(inline)]
@@ -59,12 +61,6 @@ pub use self::{
         PsbtNotModifiableError, SignError,
     },
     extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
-    map::{
-        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
-        global::{self, Global},
-        input::{self, Input, InputBuilder},
-        output::{self, Output, OutputBuilder},
-    },
 };
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;

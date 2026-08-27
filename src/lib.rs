@@ -28,6 +28,7 @@ mod consts;
 mod error;
 #[macro_use]
 mod macros;
+mod map;
 #[cfg(feature = "serde")]
 mod serde_utils;
 mod sighash_type;
@@ -50,6 +51,12 @@ pub use crate::{
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::{Version, UnsupportedVersionError},
     v0::{DeserializeV0Error, SerializeV0Error},
+    map::{
+        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
+        global::{self, Global},
+        input::{self, Input, InputBuilder},
+        output::{self, Output, OutputBuilder},
+    },
 };
 
 #[cfg(feature = "silent-payments")]

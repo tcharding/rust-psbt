@@ -60,7 +60,7 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
         Some(unsigned_tx.lock_time)
     };
 
-    let global = v2::Global {
+    let global = crate::Global {
         version: crate::V2,
         tx_version: unsigned_tx.version,
         fallback_lock_time,
@@ -83,7 +83,7 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
         .input
         .iter()
         .zip(inputs)
-        .map(|(txin, input)| v2::Input {
+        .map(|(txin, input)| crate::Input {
             previous_txid: txin.previous_output.txid,
             spent_output_index: txin.previous_output.vout,
             sequence: Some(txin.sequence),
@@ -125,7 +125,7 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
         .output
         .into_iter()
         .zip(outputs)
-        .map(|(txout, output)| v2::Output {
+        .map(|(txout, output)| crate::Output {
             amount: txout.value,
             script_pubkey: txout.script_pubkey,
             redeem_script: output.redeem_script,
@@ -151,7 +151,7 @@ fn psbt_v0_to_v2(psbt: Psbt) -> v2::Psbt {
 }
 
 /// Converts a v2 [`v2::Input`] into a v0 [`Input`], dropping v2-only fields.
-fn input_v2_to_v0(input: &v2::Input) -> Input {
+fn input_v2_to_v0(input: &crate::Input) -> Input {
     Input {
         non_witness_utxo: input.non_witness_utxo.clone(),
         witness_utxo: input.witness_utxo.clone(),
@@ -182,7 +182,7 @@ fn input_v2_to_v0(input: &v2::Input) -> Input {
 }
 
 /// Converts a v2 [`v2::Output`] into a v0 [`Output`], dropping v2-only fields.
-fn output_v2_to_v0(output: &v2::Output) -> Output {
+fn output_v2_to_v0(output: &crate::Output) -> Output {
     Output {
         redeem_script: output.redeem_script.clone(),
         witness_script: output.witness_script.clone(),

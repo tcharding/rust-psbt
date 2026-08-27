@@ -33,7 +33,7 @@ use miniscript::miniscript::satisfy::Placeholder;
 use miniscript::{interpreter, Interpreter, MiniscriptKey};
 
 use crate::error::write_err;
-use crate::v2::map::input::Input;
+use crate::map::input::Input;
 use crate::v2::{DetermineLockTimeError, Psbt};
 
 #[rustfmt::skip]                // Keep public exports separate.

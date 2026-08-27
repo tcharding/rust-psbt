@@ -20,8 +20,8 @@ use crate::consts::{
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
 use crate::error::write_err;
+use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
-use crate::v2::map::Map;
 use crate::{raw, serialize};
 
 /// A key-value map for an output of the corresponding index in the unsigned
@@ -96,7 +96,7 @@ impl Output {
         TxOut { value: self.amount, script_pubkey: self.script_pubkey.clone() }
     }
 
-    pub(in crate::v2) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(crate) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Output`.
         let invalid = TxOut { value: Amount::ZERO, script_pubkey: ScriptBuf::default() };
         let mut rv = Self::new(invalid);
