@@ -36,6 +36,7 @@ mod serde_utils;
 mod sighash_type;
 mod v0;
 mod version;
+mod extractor;
 
 #[cfg(feature = "silent-payments")]
 pub mod dleq;
@@ -49,6 +50,7 @@ use bitcoin::io;
 #[rustfmt::skip] // Keep public re-exports separate from private imports.
 #[doc(inline)]
 pub use crate::{
+    extractor::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
     error::{
         DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
         NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,

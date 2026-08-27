@@ -22,8 +22,6 @@
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
 
-mod extract;
-
 use alloc::borrow::Borrow;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
@@ -55,11 +53,6 @@ use crate::error::{
     OutputsNotModifiableError, PsbtNotModifiableError, SignError,
 };
 
-#[rustfmt::skip]                // Keep public exports separate.
-#[doc(inline)]
-pub use self::{
-    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
-};
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
 #[cfg(feature = "miniscript")]

@@ -13,8 +13,8 @@ use psbt_v2::bitcoin::consensus::encode::{deserialize, serialize_hex};
 use psbt_v2::bitcoin::hex::FromHex;
 use psbt_v2::bitcoin::secp256k1::Secp256k1;
 use psbt_v2::bitcoin::{OutPoint, PrivateKey, PublicKey, ScriptBuf, TxOut};
-use psbt_v2::v2::{Constructor, Extractor, Finalizer, Modifiable, Psbt, Signer};
-use psbt_v2::{Input, Output, PsbtSighashType};
+use psbt_v2::v2::{Constructor, Finalizer, Modifiable, Psbt, Signer};
+use psbt_v2::{Extractor, Input, Output, PsbtSighashType};
 use serde::{de, Deserialize, Deserializer};
 
 pub mod util;
