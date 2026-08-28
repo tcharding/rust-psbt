@@ -28,27 +28,48 @@ mod consts;
 mod error;
 #[macro_use]
 mod macros;
+mod extractor;
+#[cfg(feature = "miniscript")]
+mod finalizer;
+mod map;
 #[cfg(feature = "serde")]
 mod serde_utils;
 mod sighash_type;
 mod v0;
 mod version;
 
+#[cfg(feature = "silent-payments")]
+pub mod dleq;
 pub mod encoding;
+pub mod psbt;
 pub mod raw;
 pub mod serialize;
-pub mod v2;
 
 use bitcoin::io;
 
 #[rustfmt::skip] // Keep public re-exports separate from private imports.
 #[doc(inline)]
 pub use crate::{
-    error::{InconsistentKeySourcesError, FeeError, FundingUtxoError},
+    extractor::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
+    error::{
+        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
+        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
+        PsbtNotModifiableError, SignError, InconsistentKeySourcesError, FeeError, FundingUtxoError
+    },
     sighash_type::{PsbtSighashType, InvalidSighashTypeError, ParseSighashTypeError},
     version::{Version, UnsupportedVersionError},
     v0::{DeserializeV0Error, SerializeV0Error},
+    map::{
+        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
+        global::{self, Global},
+        input::{self, Input, InputBuilder},
+        output::{self, Output, OutputBuilder},
+    },
 };
+
+#[cfg(feature = "silent-payments")]
+pub use dleq::{DleqProof, InvalidLengthError};
+
 #[cfg(feature = "base64")]
 #[doc(inline)]
 pub use crate::v0::ParsePsbtV0Error;

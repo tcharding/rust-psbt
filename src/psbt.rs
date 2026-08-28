@@ -14,21 +14,13 @@
 //! - The **Constructor**: Use the [`Constructor`] type.
 //! - The **Updater** role: Use the [`Updater`] type and then update additional fields of the [`Psbt`] directly.
 //! - The **Signer** role: Use the [`Signer`] type.
-//! - The **Finalizer** role: Use the `Finalizer` type (requires "miniscript" feature).
-//! - The **Extractor** role: Use the [`Extractor`] type.
+//! - The **Finalizer** role: Use the [`Finalizer`] type (requires "miniscript" feature).
+//! - The **Extractor** role: Use the [`Extractor`](crate::extractor::Extractor) type.
 //!
 //! To combine PSBTs use either `psbt.combine_with(other)` or `v2::combine(this, that)`.
 //!
 //! [BIP-174]: <https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki>
 //! [BIP-370]: <https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki>
-
-#[cfg(feature = "silent-payments")]
-pub mod dleq;
-mod error;
-mod extract;
-mod map;
-#[cfg(feature = "miniscript")]
-mod miniscript;
 
 use alloc::borrow::Borrow;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -48,35 +40,25 @@ use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache, TapSighashType};
 use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid};
 
-use crate::error::{write_err, FeeError, FundingUtxoError};
-use crate::sighash_type::PsbtSighashType;
-use crate::v2::map::Map;
-
-#[rustfmt::skip]                // Keep public exports separate.
-#[doc(inline)]
-pub use self::{
-    error::{
-        DeserializeError, DetermineLockTimeError, IndexOutOfBoundsError, InputsNotModifiableError,
-        NotUnsignedError, OutputsNotModifiableError, PartialSigsSighashTypeError,
-        PsbtNotModifiableError, SignError,
-    },
-    extract::{Extractor, ExtractError, ExtractTxError, ExtractTxFeeRateError},
-    map::{
-        // We do not re-export any of the input/output/global error types, use form `input::DecodeError`.
-        global::{self, Global},
-        input::{self, Input, InputBuilder},
-        output::{self, Output, OutputBuilder},
-    },
-};
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
-#[cfg(feature = "silent-payments")]
-pub use self::dleq::{DleqProof, InvalidLengthError};
+use crate::error::{
+    write_err, DeserializeError, DetermineLockTimeError, FeeError, FundingUtxoError,
+    IndexOutOfBoundsError, InputsNotModifiableError, OutputsNotModifiableError,
+    PsbtNotModifiableError, SignError,
+};
 #[cfg(feature = "miniscript")]
-pub use self::miniscript::{
+pub use crate::finalizer::{
     FinalizeError, FinalizeInputError, Finalizer, InputError, InterpreterCheckError,
     InterpreterCheckInputError,
 };
+use crate::global::{self, Global};
+use crate::input::{self, Input};
+use crate::map::Map;
+use crate::output::{self, Output};
+use crate::sighash_type::PsbtSighashType;
+#[cfg(feature = "miniscript")]
+use crate::PartialSigsSighashTypeError;
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 ///
@@ -149,7 +131,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt_v2::v2::{Creator, Constructor, Modifiable};
+    /// use psbt_v2::psbt::{Creator, Constructor, Modifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()
@@ -176,7 +158,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt_v2::v2::{Creator, Constructor, InputsOnlyModifiable};
+    /// use psbt_v2::psbt::{Creator, Constructor, InputsOnlyModifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()
@@ -202,7 +184,7 @@ impl Creator {
     /// # Examples
     ///
     /// ```
-    /// use psbt_v2::v2::{Creator, Constructor, OutputsOnlyModifiable};
+    /// use psbt_v2::psbt::{Creator, Constructor, OutputsOnlyModifiable};
     ///
     /// // Creator role separate from Constructor role.
     /// let psbt = Creator::new()
@@ -501,7 +483,7 @@ impl Psbt {
     // TODO: Add inherent methods to get each of the role types.
 
     /// Returns this PSBT's unique identification.
-    fn id(&self) -> Result<Txid, DetermineLockTimeError> {
+    pub(crate) fn id(&self) -> Result<Txid, DetermineLockTimeError> {
         let mut tx = self.unsigned_tx()?;
         // Updaters may change the sequence so to calculate ID we set it to zero.
         tx.input.iter_mut().for_each(|input| input.sequence = Sequence::ZERO);

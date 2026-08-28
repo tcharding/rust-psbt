@@ -7,8 +7,8 @@ use crate::bitcoin::hashes::{hash160, sha256d, Hash};
 use crate::bitcoin::key::XOnlyPublicKey;
 use crate::bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use crate::bitcoin::{absolute, ecdsa, relative, ScriptBuf};
+use crate::map::input::Input;
 use crate::miniscript::{MiniscriptKey, Preimage32, Satisfier, SigType, ToPublicKey};
-use crate::v2::map::input::Input;
 
 /// A PSBT [`Satisfier`] for an input.
 ///

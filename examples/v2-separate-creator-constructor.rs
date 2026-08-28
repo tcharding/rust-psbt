@@ -2,10 +2,8 @@
 
 use psbt_v2::bitcoin::hashes::Hash as _;
 use psbt_v2::bitcoin::{Amount, OutPoint, ScriptBuf, TxOut, Txid};
-use psbt_v2::v2::{
-    Constructor, Creator, InputBuilder, InputsOnlyModifiable, OutputBuilder, OutputsOnlyModifiable,
-    Psbt,
-};
+use psbt_v2::psbt::{Constructor, Creator, InputsOnlyModifiable, OutputsOnlyModifiable, Psbt};
+use psbt_v2::{InputBuilder, OutputBuilder};
 
 fn main() -> anyhow::Result<()> {
     // Create the PSBT.

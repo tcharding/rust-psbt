@@ -156,7 +156,7 @@ macro_rules! v2_impl_psbt_insert_sp_pair {
         }
         let scan_key = bitcoin::CompressedPublicKey::from_slice(&$raw_key.key)
             .map_err(|_| InsertPairError::KeyWrongLength($raw_key.key.len(), 33))?;
-        let value = $crate::v2::dleq::DleqProof::try_from($raw_value.as_slice())
+        let value = $crate::dleq::DleqProof::try_from($raw_value.as_slice())
             .map_err(|_| InsertPairError::ValueWrongLength($raw_value.len(), 64))?;
         match $map.entry(scan_key) {
             alloc::collections::btree_map::Entry::Vacant(empty_key) => {

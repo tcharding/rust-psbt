@@ -32,12 +32,12 @@ use crate::consts::{
 };
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
+#[cfg(feature = "silent-payments")]
+use crate::dleq::DleqProof;
 use crate::error::{write_err, FundingUtxoError};
+use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
-#[cfg(feature = "silent-payments")]
-use crate::v2::dleq::DleqProof;
-use crate::v2::map::Map;
 use crate::{raw, serialize};
 
 /// A key-value map for an input of the corresponding index in the unsigned
@@ -373,7 +373,7 @@ impl Input {
             .unwrap_or(Ok(TapSighashType::Default))
     }
 
-    pub(in crate::v2) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
+    pub(crate) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Input`.
         let invalid = OutPoint { txid: Txid::all_zeros(), vout: u32::MAX };
         let mut rv = Self::new(&invalid);

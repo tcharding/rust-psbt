@@ -10,8 +10,8 @@
 use psbt_v2::bitcoin::absolute::{Height, LockTime};
 use psbt_v2::bitcoin::hex::{DisplayHex, FromHex};
 use psbt_v2::bitcoin::{Amount, OutPoint, PublicKey, ScriptBuf, Sequence, TxOut};
-use psbt_v2::v2::{Constructor, Creator, Input, Modifiable, Output, Psbt, Signer};
-use psbt_v2::SerializeV0Error;
+use psbt_v2::psbt::{Constructor, Creator, Modifiable, Psbt, Signer};
+use psbt_v2::{Input, Output, SerializeV0Error};
 
 const PUBKEY_HEX: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 const TEST_XPUB: &str = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8";
@@ -58,7 +58,7 @@ fn deserialize_v0_redistributes_unsigned_tx_fields() {
 /// The v0 entry point must reject v2-encoded PSBTs (global version 2).
 #[test]
 fn deserialize_v0_rejects_v2_psbt() {
-    let v2_psbt = Psbt { global: psbt_v2::v2::Global::default(), inputs: vec![], outputs: vec![] };
+    let v2_psbt = Psbt { global: psbt_v2::Global::default(), inputs: vec![], outputs: vec![] };
     assert!(Psbt::deserialize_v0(&v2_psbt.serialize()).is_err());
 }
 
