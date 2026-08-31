@@ -11,6 +11,7 @@ use bitcoin::io::Read;
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{Amount, ScriptBuf, TxOut};
+use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
 
 use crate::consts::{
     PSBT_OUT_AMOUNT, PSBT_OUT_BIP32_DERIVATION, PSBT_OUT_PROPRIETARY, PSBT_OUT_REDEEM_SCRIPT,
@@ -19,6 +20,7 @@ use crate::consts::{
 };
 #[cfg(feature = "silent-payments")]
 use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
+use crate::encoding::PsbtEncode;
 use crate::error::write_err;
 use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
@@ -258,6 +260,24 @@ impl Output {
         v2_combine_map!(unknowns, self, other);
 
         Ok(())
+    }
+}
+
+/// Encoder for a PSBT output map.
+pub struct OutputMapEncoder(Vec<u8>);
+
+impl Encoder for OutputMapEncoder {
+    fn current_chunk(&self) -> &[u8] { &self.0[..] }
+    fn advance(&mut self) -> EncoderStatus { EncoderStatus::Finished }
+}
+
+impl PsbtEncode for Output {
+    type Encoder<'e> = OutputMapEncoder;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> {
+        // TODO: swap out with native pull encoding.
+        // `<output-map> := <keypair>* 0x00`
+        OutputMapEncoder(self.serialize_map())
     }
 }
 
@@ -509,5 +529,14 @@ mod tests {
         from_pairs.push(0x00);
 
         assert_eq!(from_pairs, output.serialize_map());
+    }
+
+    #[test]
+    fn encode_nonempty() {
+        let output = Output::new(tx_out());
+        let bytes = crate::encoding::encode_to_vec(&output);
+        assert!(!bytes.is_empty());
+        assert!(bytes.len() > 1, "map must have at least one keypair before separator");
+        assert_eq!(bytes.last(), Some(&0x00), "output map must end with separator");
     }
 }

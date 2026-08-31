@@ -12,6 +12,7 @@ use bitcoin::locktime::absolute;
 #[cfg(feature = "silent-payments")]
 use bitcoin::CompressedPublicKey;
 use bitcoin::{bip32, transaction, VarInt};
+use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
 
 use crate::consts::{
     PSBT_GLOBAL_FALLBACK_LOCKTIME, PSBT_GLOBAL_INPUT_COUNT, PSBT_GLOBAL_OUTPUT_COUNT,
@@ -22,6 +23,7 @@ use crate::consts::{
 use crate::consts::{PSBT_GLOBAL_SP_DLEQ, PSBT_GLOBAL_SP_ECDH_SHARE};
 #[cfg(feature = "silent-payments")]
 use crate::dleq::DleqProof;
+use crate::encoding::PsbtEncode;
 use crate::error::{write_err, InconsistentKeySourcesError};
 use crate::io::{Cursor, Read};
 use crate::map::Map;
@@ -461,6 +463,24 @@ impl Default for Global {
     fn default() -> Self { Self::new() }
 }
 
+/// Encoder for the PSBT global map.
+pub struct GlobalMapEncoder(Vec<u8>);
+
+impl Encoder for GlobalMapEncoder {
+    fn current_chunk(&self) -> &[u8] { &self.0[..] }
+    fn advance(&mut self) -> EncoderStatus { EncoderStatus::Finished }
+}
+
+impl PsbtEncode for Global {
+    type Encoder<'e> = GlobalMapEncoder;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> {
+        // TODO: swap our with native pull encoding.
+        // `<global-map> := <keypair>* 0x00`
+        GlobalMapEncoder(self.serialize_map())
+    }
+}
+
 impl Map for Global {
     fn get_pairs(&self) -> Vec<raw::Pair> {
         let mut rv: Vec<raw::Pair> = Default::default();
@@ -803,5 +823,14 @@ mod tests {
         from_pairs.push(0x00);
 
         assert_eq!(from_pairs, global.serialize_map());
+    }
+
+    #[test]
+    fn encode_nonempty() {
+        let global = Global::default();
+        let bytes = crate::encoding::encode_to_vec(&global);
+        assert!(!bytes.is_empty());
+        assert!(bytes.len() > 1, "map must have at least one keypair before separator");
+        assert_eq!(bytes.last(), Some(&0x00), "global map must end with separator");
     }
 }

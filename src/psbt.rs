@@ -39,9 +39,11 @@ use bitcoin::locktime::absolute;
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache, TapSighashType};
 use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid};
+use bitcoin_consensus_encoding::{BytesEncoder, Encoder4};
 
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
+use crate::encoding::{encode_to_vec, PsbtEncode};
 use crate::error::{
     write_err, DeserializeError, DetermineLockTimeError, FeeError, FundingUtxoError,
     IndexOutOfBoundsError, InputsNotModifiableError, OutputsNotModifiableError,
@@ -54,11 +56,39 @@ pub use crate::finalizer::{
 };
 use crate::global::{self, Global};
 use crate::input::{self, Input};
-use crate::map::Map;
 use crate::output::{self, Output};
 use crate::sighash_type::PsbtSighashType;
 #[cfg(feature = "miniscript")]
 use crate::PartialSigsSighashTypeError;
+
+/// PSBT magic bytes followed by the 0xff separator.
+const PSBT_MAGIC: &[u8; 5] = b"psbt\xff";
+
+bitcoin_consensus_encoding::encoder_newtype! {
+    /// Encoder for a complete PSBT v2.
+    pub struct PsbtV2Encoder<'e>(
+        Encoder4<
+            BytesEncoder<'static>,
+            global::GlobalMapEncoder,
+            crate::encoding::SliceEncoder<'e, Input>,
+            crate::encoding::SliceEncoder<'e, Output>,
+        >
+    );
+}
+
+impl PsbtEncode for Psbt {
+    type Encoder<'e> = PsbtV2Encoder<'e>;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> {
+        // `<psbt> := <magic> <global-map> <input-map>* <output-map>*`
+        PsbtV2Encoder::new(Encoder4::new(
+            BytesEncoder::without_length_prefix(PSBT_MAGIC),
+            self.global.psbt_encoder(),
+            crate::encoding::SliceEncoder::without_length_prefix(&self.inputs),
+            crate::encoding::SliceEncoder::without_length_prefix(&self.outputs),
+        ))
+    }
+}
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
 ///
@@ -563,26 +593,7 @@ impl Psbt {
     pub fn serialize_hex(&self) -> String { self.serialize().to_lower_hex_string() }
 
     /// Serializes as raw binary data
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-
-        //  <magic>
-        buf.extend_from_slice(b"psbt");
-
-        buf.push(0xff_u8);
-
-        buf.extend(self.global.serialize_map());
-
-        for i in &self.inputs {
-            buf.extend(i.serialize_map());
-        }
-
-        for i in &self.outputs {
-            buf.extend(i.serialize_map());
-        }
-
-        buf
-    }
+    pub fn serialize(&self) -> Vec<u8> { encode_to_vec(self) }
 
     /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
@@ -1440,6 +1451,14 @@ mod tests {
                 script_pubkey: ScriptBuf::new(),
             })],
         }
+    }
+
+    #[test]
+    fn encode_nonempty() {
+        let psbt = single_input_psbt();
+        let bytes = psbt.serialize();
+        assert!(!bytes.is_empty());
+        assert_eq!(&bytes[..5], b"psbt\xff", "must start with PSBT magic");
     }
 
     #[test]
