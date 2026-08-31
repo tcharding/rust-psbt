@@ -98,10 +98,10 @@ impl Psbt {
 
             let mut inputs: Vec<Input> = Vec::with_capacity(inputs_len);
 
-            for i in 0..inputs_len {
+            for (i, tx_in) in global.unsigned_tx.input.iter().enumerate() {
                 let input = Input::decode(r)?;
                 if let Some(ref tx) = input.non_witness_utxo {
-                    let input_outpoint = global.unsigned_tx.input[i].previous_output;
+                    let input_outpoint = tx_in.previous_output;
                     let txid = tx.compute_txid();
                     if txid != input_outpoint.txid {
                         return Err(Error::IncorrectNonWitnessUtxo {
