@@ -1,0 +1,43 @@
+name: Update Lockfiles
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday at 00:00 UTC.
+  workflow_dispatch:     # Allow manual triggering.
+
+permissions:
+  contents: write
+
+# Use a custom rustup home on the same filesystem to avoid cross-device link errors
+# in container environments with layered filesystems (e.g., Docker/overlayfs).
+env:
+  RUSTUP_HOME: /home/ci/tmp
+
+jobs:
+  update-toolchains:
+    runs-on: debian-trixie
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6
+        with:
+          # Use a token associated with a user account, they open the pull request.
+          # The ephemeral workflow token is sometimes user-less.
+          token: ${{ secrets.RBMT }}
+      - name: Install a default toolchain in tmp
+        run: rustup default stable
+      - uses: ./.forgejo/actions/setup-rbmt
+      - name: Configure git
+        run: |
+          git config user.name "RBMT Bot"
+          git config user.email "bot@example.com"
+      - name: Update lockfiles
+        run: |
+          cargo rbmt lock --lockfiles minimal,maximum
+          if git add . && git commit -m "Update lockfiles"; then
+            echo "LOCKFILE_UPDATE=true" >> $FORGEJO_ENV
+          fi
+      - name: Create pull request using agit
+        if: ${{ env.LOCKFILE_UPDATE == 'true' }}
+        run: |
+          git push origin HEAD:refs/for/master/update-lockfiles \
+            -o title="Update lockfiles" \
+            -o description="Automated update to lockfiles by update-lockfiles workflow."
