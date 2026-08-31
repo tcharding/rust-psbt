@@ -73,8 +73,8 @@ fn p2wpkh() -> Result<(), Box<dyn std::error::Error>> {
     let psbt = Creator::new()
         .constructor_modifiable()
         .input(input)
-        .output(OutputBuilder::new(spend_output).build())
-        .output(OutputBuilder::new(change_output).build())
+        .output(OutputBuilder::new(spend_output).build())?
+        .output(OutputBuilder::new(change_output).build())?
         .psbt()?;
 
     // Sign and finalize the PSBT.

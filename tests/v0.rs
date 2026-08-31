@@ -125,6 +125,7 @@ fn strict_fails_on_v2_only_fields_lossy_drops_them() {
     let psbt = Constructor::<Modifiable>::default()
         .input(Input::new(&OutPoint::null()))
         .output(Output::new(make_tx_out(1)))
+        .expect("output must be valid")
         .psbt()
         .unwrap();
     assert_eq!(psbt.global.tx_modifiable_flags & 0b11, 0b11);
@@ -153,6 +154,7 @@ fn v2_only_input_fields_surface_in_v0_unsigned_tx() {
         .constructor_modifiable()
         .input(input)
         .output(Output::new(make_tx_out(1)))
+        .expect("output must be valid")
         .psbt()
         .unwrap();
 
@@ -184,6 +186,7 @@ fn sign_then_convert_preserves_signatures() {
         .constructor_modifiable()
         .input(input)
         .output(Output::new(make_tx_out(1)))
+        .expect("output must be valid")
         .psbt()
         .unwrap();
 

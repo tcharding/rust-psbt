@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     let psbt = Psbt::deserialize(&ser)?;
     let output = dummy_tx_out();
     let ser = Constructor::<OutputsOnlyModifiable>::new(psbt)?
-        .output(OutputBuilder::new(output).build())
+        .output(OutputBuilder::new(output).build())?
         .no_more_outputs()
         .psbt()
         .expect("valid lock time combination")

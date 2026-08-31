@@ -101,6 +101,33 @@ impl Output {
         TxOut { value: self.amount, script_pubkey: self.script_pubkey.clone() }
     }
 
+    /// Checks this output against the BIP-370 and BIP-375 rules for an output map.
+    ///
+    /// BIP-370 requires `PSBT_OUT_SCRIPT`. BIP-375 relaxes that for a silent payment
+    /// output whose script has not been derived yet, where `PSBT_OUT_SP_V0_INFO` stands
+    /// in for it, and requires the info whenever a label is present.
+    ///
+    /// This is the single definition of that rule. Decoding applies it to every output it
+    /// parses, and the Constructor role applies it to every output it is handed.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        #[cfg(not(feature = "silent-payments"))]
+        if self.script_pubkey.is_empty() {
+            return Err(ValidationError::MissingScriptPubkey);
+        }
+
+        #[cfg(feature = "silent-payments")]
+        if self.script_pubkey.is_empty() && self.sp_v0_info.is_none() {
+            return Err(ValidationError::MissingScriptPubkey);
+        }
+
+        #[cfg(feature = "silent-payments")]
+        if self.sp_v0_label.is_some() && self.sp_v0_info.is_none() {
+            return Err(ValidationError::LabelWithoutInfo);
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn decode<R: Read + ?Sized>(r: &mut R) -> Result<Self, DecodeError> {
         // These are placeholder values that never exist in a encode `Output`.
         let invalid = TxOut { value: Amount::ZERO, script_pubkey: ScriptBuf::default() };
@@ -117,21 +144,7 @@ impl Output {
         if rv.amount == Amount::ZERO {
             return Err(DecodeError::MissingValue);
         }
-        // BIP-375 allows outputs to be missing scriptPubkey
-        #[cfg(not(feature = "silent-payments"))]
-        if rv.script_pubkey == ScriptBuf::default() {
-            return Err(DecodeError::MissingScriptPubkey);
-        }
-
-        #[cfg(feature = "silent-payments")]
-        if rv.script_pubkey == ScriptBuf::default() && rv.sp_v0_info.is_none() {
-            return Err(DecodeError::MissingScriptPubkey);
-        }
-
-        #[cfg(feature = "silent-payments")]
-        if rv.sp_v0_label.is_some() && rv.sp_v0_info.is_none() {
-            return Err(DecodeError::LabelWithoutInfo);
-        }
+        rv.validate()?;
 
         Ok(rv)
     }
@@ -337,7 +350,9 @@ impl Map for Output {
             value: self.amount.serialize(),
         });
 
-        // BIP-375: an underived silent payment output has no script.
+        // BIP-375 represents an underived silent payment output by omitting the script, so
+        // encoding one has to leave the field out rather than write it empty. Whether that
+        // state is legal in the first place is decided by `validate`, not here.
         #[cfg(feature = "silent-payments")]
         let omit_script = self.sp_v0_info.is_some() && self.script_pubkey.is_empty();
         #[cfg(not(feature = "silent-payments"))]
@@ -414,6 +429,28 @@ impl OutputBuilder {
     pub fn build(self) -> Output { self.0 }
 }
 
+/// An error while checking an [`Output`] against the BIP-370 and BIP-375 output rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ValidationError {
+    /// Output is missing a script pubkey.
+    MissingScriptPubkey,
+    /// Output has a `sp_v0_label` without a `sp_v0_info`.
+    LabelWithoutInfo,
+}
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingScriptPubkey => write!(f, "output is missing a script pubkey"),
+            Self::LabelWithoutInfo => write!(f, "output has a sp_v0_label without a sp_v0_info"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ValidationError {}
+
 /// An error while decoding.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -455,6 +492,15 @@ impl std::error::Error for DecodeError {
 
 impl From<InsertPairError> for DecodeError {
     fn from(e: InsertPairError) -> Self { Self::InsertPair(e) }
+}
+
+impl From<ValidationError> for DecodeError {
+    fn from(e: ValidationError) -> Self {
+        match e {
+            ValidationError::MissingScriptPubkey => Self::MissingScriptPubkey,
+            ValidationError::LabelWithoutInfo => Self::LabelWithoutInfo,
+        }
+    }
 }
 
 /// Error inserting a key-value pair.

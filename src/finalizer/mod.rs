@@ -269,8 +269,9 @@ mod tests {
             .input(input)
             .output(Output::new(TxOut {
                 value: Amount::from_sat(1_000),
-                script_pubkey: ScriptBuf::new(),
+                script_pubkey: ScriptBuf::new_p2wpkh(&pk.wpubkey_hash().unwrap()),
             }))
+            .expect("fixture output must be valid")
             .psbt()
             .unwrap()
     }
