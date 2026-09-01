@@ -139,3 +139,17 @@ impl fmt::Display for InvalidLengthError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidLengthError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_ref_returns_correct_slice() {
+        let bytes = [0xAB; 64];
+        let proof = DleqProof(bytes);
+        let slice: &[u8] = proof.as_ref();
+        assert_eq!(slice.len(), 64);
+        assert_eq!(slice, &bytes);
+    }
+}
