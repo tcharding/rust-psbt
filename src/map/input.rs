@@ -20,6 +20,7 @@ use bitcoin::CompressedPublicKey;
 use bitcoin::{
     ecdsa, hashes, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
 };
+use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
 
 use crate::consts::{
     PSBT_IN_BIP32_DERIVATION, PSBT_IN_FINAL_SCRIPTSIG, PSBT_IN_FINAL_SCRIPTWITNESS,
@@ -34,6 +35,7 @@ use crate::consts::{
 use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
 #[cfg(feature = "silent-payments")]
 use crate::dleq::DleqProof;
+use crate::encoding::PsbtEncode;
 use crate::error::{write_err, FundingUtxoError};
 use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
@@ -637,6 +639,24 @@ impl Input {
     }
 }
 
+/// Encoder for a PSBT input map.
+pub struct InputMapEncoder(Vec<u8>);
+
+impl Encoder for InputMapEncoder {
+    fn current_chunk(&self) -> &[u8] { &self.0[..] }
+    fn advance(&mut self) -> EncoderStatus { EncoderStatus::Finished }
+}
+
+impl PsbtEncode for Input {
+    type Encoder<'e> = InputMapEncoder;
+
+    fn psbt_encoder(&self) -> Self::Encoder<'_> {
+        // TODO: swap out with native pull encoding.
+        // `<input-map> := <keypair>* 0x00`
+        InputMapEncoder(self.serialize_map())
+    }
+}
+
 impl Map for Input {
     fn get_pairs(&self) -> Vec<raw::Pair> {
         let mut rv: Vec<raw::Pair> = Default::default();
@@ -1099,6 +1119,15 @@ mod test {
         from_pairs.push(0x00);
 
         assert_eq!(from_pairs, input.serialize_map());
+    }
+
+    #[test]
+    fn encode_nonempty() {
+        let input = Input::new(&out_point());
+        let bytes = crate::encoding::encode_to_vec(&input);
+        assert!(!bytes.is_empty());
+        assert!(bytes.len() > 1, "map must have at least one keypair before separator");
+        assert_eq!(bytes.last(), Some(&0x00), "input map must end with separator");
     }
 
     #[cfg(feature = "miniscript")]
