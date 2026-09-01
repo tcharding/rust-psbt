@@ -61,8 +61,10 @@ use crate::sighash_type::PsbtSighashType;
 #[cfg(feature = "miniscript")]
 use crate::PartialSigsSighashTypeError;
 
-/// PSBT magic bytes followed by the 0xff separator.
-const PSBT_MAGIC: &[u8; 5] = b"psbt\xff";
+/// The magic bytes that identify a PSBT (`"psbt"` in ASCII).
+const PSBT_MAGIC: &[u8; 4] = b"psbt";
+/// The byte that separates the magic bytes from the global map (`0xff`).
+const PSBT_SEPARATOR: u8 = 0xff;
 
 bitcoin_consensus_encoding::encoder_newtype! {
     /// Encoder for a complete PSBT v2.
@@ -81,8 +83,9 @@ impl PsbtEncode for Psbt {
 
     fn psbt_encoder(&self) -> Self::Encoder<'_> {
         // `<psbt> := <magic> <global-map> <input-map>* <output-map>*`
+        static HEADER: [u8; 5] = [PSBT_MAGIC[0], PSBT_MAGIC[1], PSBT_MAGIC[2], PSBT_MAGIC[3], PSBT_SEPARATOR];
         PsbtV2Encoder::new(Encoder4::new(
-            BytesEncoder::without_length_prefix(PSBT_MAGIC),
+            BytesEncoder::without_length_prefix(&HEADER),
             self.global.psbt_encoder(),
             crate::encoding::SliceEncoder::without_length_prefix(&self.inputs),
             crate::encoding::SliceEncoder::without_length_prefix(&self.outputs),
@@ -597,17 +600,15 @@ impl Psbt {
 
     /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
-        const MAGIC_BYTES: &[u8] = b"psbt";
         let magic: [u8; 4] =
             bytes.get(0..4).and_then(|s| <&[u8; 4]>::try_from(s).ok()).copied().unwrap_or([0; 4]);
 
-        if magic != *MAGIC_BYTES {
+        if magic != *PSBT_MAGIC {
             return Err(DeserializeError::InvalidMagic(magic));
         }
 
-        const PSBT_SEPARATOR: u8 = 0xff_u8;
-        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
-            return Err(DeserializeError::InvalidSeparator(bytes.get(MAGIC_BYTES.len()).copied()));
+        if bytes.get(PSBT_MAGIC.len()) != Some(&PSBT_SEPARATOR) {
+            return Err(DeserializeError::InvalidSeparator(bytes.get(PSBT_MAGIC.len()).copied()));
         }
 
         let mut d = bytes.get(5..).ok_or(DeserializeError::NoMorePairs)?;
