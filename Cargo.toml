@@ -34,8 +34,8 @@ exact_features = [
 
 [package.metadata.rbmt.lint]
 allowed_duplicates = [
-  # Required until we drop the 0.32 series of bitcoin.
-  "hex-conservative",
+  "hex-conservative",  # Required until we drop the 0.32 series of bitcoin.
+  "syn",               # serde_derive and the old secp256k1 deps clash, scep256k1 will be upgraded at some point.
 ]
 
 [package.metadata.docs.rs]

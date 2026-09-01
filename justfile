@@ -27,7 +27,7 @@ rbmt *args: tools
 
 # Update rbmt managed lockfiles
 [group('rbmt')]
-update-lock-files: (rbmt "lock")
+update-lock-files: (rbmt "lock --lockfiles minimal,maximum")
 
 # Check docs
 [group('ci')]
@@ -39,7 +39,7 @@ fmt: (rbmt "fmt")
 
 # Lint workspace
 [group('ci')]
-lint: (rbmt "lint")
+lint: (rbmt "lint --lockfile maximum")
 
 # Test package on minimal dependency versions
 [group('ci')]
