@@ -10,5 +10,6 @@ exclude_re = [
     "std::error::Error for",                # Source is generally for display, not squashing.
     "<impl From<[^>]+> for .*Error>::from", # Single line, zero logic transformations not worth squashing.
     # Encoding
-    "PsbtDecode::psbt_decoder",             # Default mutant is equivalent to implementation, can't squash.
+    "PsbtDecode::psbt_decoder.*with Default::default",          # Default mutant is equivalent to implementation, can't squash.
+    "needs_more.*with true.*<impl Decoder for .*>::push_bytes", # Causes an infinite loop timeout.
 ]

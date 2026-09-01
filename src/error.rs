@@ -4,7 +4,8 @@ use core::fmt;
 
 use bitcoin::bip32::Xpub;
 use bitcoin::sighash::{self, EcdsaSighashType, NonStandardSighashTypeError};
-use bitcoin::{transaction, PublicKey, Txid};
+use bitcoin::{transaction, PublicKey};
+use bitcoin_consensus_encoding::VecDecoderError;
 
 use crate::map::{global, input, output};
 
@@ -27,16 +28,12 @@ pub enum DeserializeError {
     DecodeInput(input::DecodeError),
     /// Error decoding an output map.
     DecodeOutput(output::DecodeError),
-    /// Non-witness UTXO (which is a complete transaction) has a txid that
-    /// does not match the transaction input.
-    IncorrectNonWitnessUtxo {
-        /// The index of the input in question.
-        index: usize,
-        /// The txid of the input being spent.
-        previous_txid: Txid,
-        /// The txid of the non-witness UTXO.
-        non_witness_utxo_txid: Txid,
-    },
+    /// Error decoding the input maps sequence.
+    DecodeInputs(VecDecoderError<input::DecodeError>),
+    /// Error decoding the output maps sequence.
+    DecodeOutputs(VecDecoderError<output::DecodeError>),
+    /// Called `end()` before decoding finished (truncated or incomplete input).
+    EarlyEnd(&'static str),
 }
 
 impl fmt::Display for DeserializeError {
@@ -51,13 +48,9 @@ impl fmt::Display for DeserializeError {
             Self::DecodeGlobal(e) => write!(f, "error decoding global map: {}", e),
             Self::DecodeInput(e) => write!(f, "error decoding input map: {}", e),
             Self::DecodeOutput(e) => write!(f, "error decoding output map: {}", e),
-            Self::IncorrectNonWitnessUtxo { index, previous_txid, non_witness_utxo_txid } => {
-                write!(
-                    f,
-                    "non-witness utxo txid is {}, which does not match input {}'s previous txid {}",
-                    non_witness_utxo_txid, index, previous_txid
-                )
-            }
+            Self::DecodeInputs(e) => write!(f, "error decoding input maps: {}", e),
+            Self::DecodeOutputs(e) => write!(f, "error decoding output maps: {}", e),
+            Self::EarlyEnd(s) => write!(f, "early end of PSBT (still decoding {})", s),
         }
     }
 }
@@ -69,8 +62,12 @@ impl std::error::Error for DeserializeError {
             Self::DecodeGlobal(e) => Some(e),
             Self::DecodeInput(e) => Some(e),
             Self::DecodeOutput(e) => Some(e),
-            Self::InvalidMagic(_) | Self::InvalidSeparator(_) | Self::NoMorePairs => None,
-            Self::IncorrectNonWitnessUtxo { .. } => None,
+            Self::DecodeInputs(e) => Some(e),
+            Self::DecodeOutputs(e) => Some(e),
+            Self::InvalidMagic(_)
+            | Self::InvalidSeparator(_)
+            | Self::NoMorePairs
+            | Self::EarlyEnd(_) => None,
         }
     }
 }
