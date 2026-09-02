@@ -10,15 +10,10 @@ publish = false
 stable = "1.98.0"
 
 [dependencies]
-
 bitcoind = { version = "0.38.0", features = ["download"] }
-psbt-v2 = { path = "..", features = ["std", "miniscript", "rand"] }
-
-[dev-dependencies]
+psbt-v2 = { path = "..", features = ["std", "miniscript", "rand", "base64"] }
 
 [features]
 # Bitcoin Core version range integration testing.
-# Starting from 0.17.0 because that's when PSBT v0 (BIP-174) was first introduced.
-# v30.2 is latest, Bitcoin Core will support PSBT v2 (BIP-370) soon, possible v32.
-"30_2" = ["bitcoind/30_2"]
-"0_17_2" = ["bitcoind/0_17_2"]
+"latest" = ["bitcoind/30_2"]
+"minimum" = ["bitcoind/0_17_2"] # Initial PSBT v0 (BIP-174) support.

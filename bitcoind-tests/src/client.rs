@@ -6,8 +6,9 @@
 
 // We depend upon and import directly from bitcoin because this module is not concerned with PSBT
 // i.e., it is lower down the stack than the psbt_v2 crate.
+use bitcoind::vtype::GetBlockchainInfo;
+use bitcoind::{AddressType, BitcoinD};
 use psbt_v2::bitcoin::{Address, Amount, Transaction, Txid};
-use bitcoind::{AddressType, BitcoinD, vtype::GetBlockchainInfo};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -106,6 +107,14 @@ impl Client {
         Ok(tx)
     }
 
+    /// Calls `decodepsbt` on Bitcoin Core.
+    pub fn decode_psbt(&self, psbt: &str) -> Result<()> {
+        let client = &self.bitcoind.client;
+        // `DecodePsbt` type not exported.
+        let _ = client.decode_psbt(psbt)?;
+        Ok(())
+    }
+
     pub fn send_raw_transaction(&self, tx: &Transaction) -> Result<Txid> {
         let client = &self.bitcoind.client;
         let txid = client.send_raw_transaction(tx)?.txid()?;
@@ -139,11 +148,7 @@ impl BalanceTracker {
     }
 
     /// Update balance by receiving `amount`.
-    pub fn receive(&mut self, amount: Amount) {
-        // 1000 mimics some fee amount, the exact amount is not important
-        // because we ignore everything after the decimal place.
-        self.balance = self.balance + amount + FIFTY_BTC - Amount::from_sat(1000)
-    }
+    pub fn receive(&mut self, amount: Amount) { self.balance += amount }
 
     /// Asserts balance against `want` ignoring everything except
     /// whole bitcoin, this allows us to ignore fees.
