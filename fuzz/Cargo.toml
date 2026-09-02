@@ -24,3 +24,10 @@ path = "fuzz_targets/deserialize_v0.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "deserialize_v2"
+path = "fuzz_targets/deserialize_v2.rs"
+test = false
+doc = false
+bench = false
