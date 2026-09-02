@@ -4,6 +4,7 @@
 //!
 //! This module provides type-safe wrapper for BIP-374 dleq proof field.
 
+#[cfg(feature = "serde")]
 use alloc::format;
 use alloc::vec::Vec;
 use core::fmt;
