@@ -10,7 +10,7 @@ publish = false
 stable = "1.98.0"
 
 [dependencies]
-anyhow = "1"
+
 bitcoind = { version = "0.38.0", features = ["download"] }
 psbt-v2 = { path = "..", features = ["std", "miniscript", "rand"] }
 

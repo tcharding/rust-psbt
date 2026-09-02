@@ -9,6 +9,8 @@
 use psbt_v2::bitcoin::{Address, Amount, Transaction, Txid};
 use bitcoind::{AddressType, BitcoinD, vtype::GetBlockchainInfo};
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 const FIFTY_BTC: Amount = Amount::from_int_btc(50);
 
 /// A custom bitcoind client.
@@ -22,7 +24,7 @@ pub struct Client {
 
 impl Client {
     /// Creates a new [`Client`].
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Result<Self> {
         let exe_path = bitcoind::exe_path()?;
         let bitcoind = BitcoinD::new(exe_path)?;
         let balance = BalanceTracker::zero();
@@ -41,7 +43,7 @@ impl Client {
     }
 
     /// Mines a block to a new address controlled by the currently loaded Bitcoin Core wallet.
-    pub fn mine_a_block(&mut self) -> anyhow::Result<()> {
+    pub fn mine_a_block(&mut self) -> Result<()> {
         self.mine_blocks(1)?;
         self.balance.mine_a_block();
         Ok(())
@@ -51,20 +53,20 @@ impl Client {
     pub fn tracked_balance(&self) -> Amount { self.balance.balance }
 
     #[track_caller]
-    pub fn assert_balance_is_as_expected(&self) -> anyhow::Result<()> {
+    pub fn assert_balance_is_as_expected(&self) -> Result<()> {
         let balance = self.balance()?;
         self.balance.assert(balance);
         Ok(())
     }
 
     /// Calls through to bitcoincore_rpc client.
-    pub fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfo> {
+    pub fn get_blockchain_info(&self) -> Result<GetBlockchainInfo> {
         let client = &self.bitcoind.client;
         Ok(client.get_blockchain_info()?)
     }
 
     /// Gets an address controlled by the currently loaded Bitcoin Core wallet (via `bitcoind`).
-    pub fn core_wallet_controlled_address(&self) -> anyhow::Result<Address> {
+    pub fn core_wallet_controlled_address(&self) -> Result<Address> {
         let client = &self.bitcoind.client;
         // Use Bech32 (segwit v0) for compatibility with all Bitcoin Core versions.
         // Bech32m (taproot) is only available from Bitcoin Core 22.0+.
@@ -72,14 +74,14 @@ impl Client {
         Ok(address)
     }
 
-    pub fn balance(&self) -> anyhow::Result<Amount> {
+    pub fn balance(&self) -> Result<Amount> {
         let client = &self.bitcoind.client;
         let balance = client.get_balance()?.balance()?;
         Ok(balance)
     }
 
     /// Mines `n` blocks to a new address controlled by the currently loaded Bitcoin Core wallet.
-    fn mine_blocks(&self, n: usize) -> anyhow::Result<()> {
+    fn mine_blocks(&self, n: usize) -> Result<()> {
         let client = &self.bitcoind.client;
         // Generate to an address controlled by the bitcoind wallet and wait for funds to mature.
         let address = self.core_wallet_controlled_address()?;
@@ -91,20 +93,20 @@ impl Client {
     /// Send `amount` to `address`.
     ///
     /// Caller required to update balance (ie, call self.balance.send()).
-    pub fn send(&self, amount: Amount, address: &Address) -> anyhow::Result<Txid> {
+    pub fn send(&self, amount: Amount, address: &Address) -> Result<Txid> {
         let client = &self.bitcoind.client;
         let txid = client.send_to_address(address, amount)?.txid()?;
         Ok(txid)
     }
 
-    pub fn get_transaction(&self, txid: &Txid) -> anyhow::Result<Transaction> {
+    pub fn get_transaction(&self, txid: &Txid) -> Result<Transaction> {
         let client = &self.bitcoind.client;
         let res = client.get_transaction(*txid)?;
         let tx = res.into_model()?.tx;
         Ok(tx)
     }
 
-    pub fn send_raw_transaction(&self, tx: &Transaction) -> anyhow::Result<Txid> {
+    pub fn send_raw_transaction(&self, tx: &Transaction) -> Result<Txid> {
         let client = &self.bitcoind.client;
         let txid = client.send_raw_transaction(tx)?.txid()?;
         Ok(txid)

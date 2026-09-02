@@ -17,7 +17,7 @@ const ONE_BTC: Amount = Amount::from_int_btc(1);
 const FEE: Amount = Amount::from_sat(1000); // Arbitrary fee.
 
 #[test]
-fn basic() -> anyhow::Result<()> {
+fn basic() -> Result<(), Box<dyn std::error::Error>> {
     // Create the RPC client and a wallet controlled by Bitcoin Core.
     let mut client = Client::new()?;
     // Fund the wallet with 50 BTC.
