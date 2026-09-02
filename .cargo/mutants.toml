@@ -9,7 +9,6 @@ exclude_re = [
     "<impl fmt::Display for .*Error>::fmt", # Error message formatting
     "std::error::Error for",                # Error source boilerplate
     "<impl From<[^>]+> for .*Error>::from", # Error conversion boilerplate
-    "Iterator",                             # Mutating operations in an iterator can result in an infinite loop
     # Encoding
     "PsbtDecode::psbt_decoder",             # Default mutant is equivalent to implementation, can't squash.
 ]

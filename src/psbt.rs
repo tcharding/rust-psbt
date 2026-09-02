@@ -1569,4 +1569,24 @@ mod tests {
 
         assert_eq!(psbt.signer_checks(0), Err(SignError::SighashMismatch));
     }
+
+    #[test]
+    fn iter_funding_utxos_yields_correct_utxo() {
+        let mut psbt = single_input_psbt();
+        let tx_out = TxOut { value: Amount::from_sat(5_000), script_pubkey: ScriptBuf::new() };
+        psbt.inputs[0].witness_utxo = Some(tx_out.clone());
+
+        let results: Vec<_> = psbt.iter_funding_utxos().collect();
+        assert_eq!(results.len(), 1, "should yield exactly one UTXO");
+        let utxo = results[0].as_ref().expect("UTXO should be present");
+        assert_eq!(**utxo, tx_out, "UTXO should match what was set");
+    }
+
+    #[test]
+    fn iter_funding_utxos_errors_on_missing_utxo() {
+        let psbt = single_input_psbt();
+        let results: Vec<_> = psbt.iter_funding_utxos().collect();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].is_err(), "missing UTXO should produce an error");
+    }
 }
