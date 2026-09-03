@@ -9,7 +9,7 @@
 use bitcoind_tests::client::Client;
 use psbt::bitcoin::bip32::{IntoDerivationPath, Xpriv, Xpub};
 use psbt::bitcoin::secp256k1::Secp256k1;
-use psbt::bitcoin::{Address, Amount, CompressedPublicKey, Network, OutPoint, TxOut};
+use psbt::bitcoin::{Address, Amount, Network, OutPoint, TxOut};
 use psbt::psbt::{Creator, Finalizer, Signer};
 use psbt::{Extractor, InputBuilder, OutputBuilder};
 use psbt_v2 as psbt;
@@ -39,8 +39,7 @@ fn p2wpkh() -> Result<(), Box<dyn std::error::Error>> {
     let (cpk, address) = {
         let derived = xpriv.derive_priv(&secp, &path)?;
         let xpub = Xpub::from_priv(&secp, &derived);
-        let pk = xpub.to_pub();
-        let cpk = CompressedPublicKey::try_from(pk).expect("compressed");
+        let cpk = xpub.to_pub();
         (cpk, Address::p2wpkh(&cpk, NETWORK))
     };
 
