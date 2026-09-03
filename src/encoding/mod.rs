@@ -176,3 +176,20 @@ impl<T: PsbtDecode> Decoder for VecDecoder<T> {
 
     fn read_limit(&self) -> usize { self.0.read_limit() }
 }
+
+#[cfg(test)]
+mod tests {
+    use bitcoin::Sequence;
+
+    use super::*;
+
+    #[test]
+    fn encoders_next_yields_items_then_none() {
+        let items = [Sequence::ZERO, Sequence::MAX];
+        let mut encoders = Encoders { iter: items.iter() };
+
+        assert!(encoders.next().is_some(), "should yield first item");
+        assert!(encoders.next().is_some(), "should yield second item");
+        assert!(encoders.next().is_none(), "should be exhausted after two items");
+    }
+}

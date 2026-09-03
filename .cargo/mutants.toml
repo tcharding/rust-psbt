@@ -6,10 +6,9 @@ exclude_globs = [
 
 exclude_re = [
     # Standard
-    "<impl fmt::Display for .*Error>::fmt", # Error message formatting
-    "std::error::Error for",                # Error source boilerplate
-    "<impl From<[^>]+> for .*Error>::from", # Error conversion boilerplate
-    "Iterator",                             # Mutating operations in an iterator can result in an infinite loop
+    "<impl fmt::Display for .*Error>::fmt", # Error message for display not worth squashing.
+    "std::error::Error for",                # Source is generally for display, not squashing.
+    "<impl From<[^>]+> for .*Error>::from", # Single line, zero logic transformations not worth squashing.
     # Encoding
     "PsbtDecode::psbt_decoder",             # Default mutant is equivalent to implementation, can't squash.
 ]
