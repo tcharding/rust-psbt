@@ -136,7 +136,6 @@ dependencies = [
 name = "bitcoind-tests"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "bitcoind",
  "psbt-v2",
 ]
