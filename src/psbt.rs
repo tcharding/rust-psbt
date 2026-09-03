@@ -39,11 +39,11 @@ use bitcoin::locktime::absolute;
 use bitcoin::secp256k1::{Message, Secp256k1, Signing};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache, TapSighashType};
 use bitcoin::{ecdsa, transaction, Amount, ScriptBuf, Sequence, Transaction, TxOut, Txid};
-use bitcoin_consensus_encoding::{BytesEncoder, Encoder4};
+use bitcoin_consensus_encoding::{ArrayDecoder, BytesEncoder, Decoder, DecoderStatus, Encoder4};
 
 #[cfg(feature = "base64")]
 pub use self::display_from_str::ParsePsbtError;
-use crate::encoding::{encode_to_vec, PsbtEncode};
+use crate::encoding::{encode_to_vec, PsbtDecode, PsbtEncode};
 use crate::error::{
     write_err, DeserializeError, DetermineLockTimeError, FeeError, FundingUtxoError,
     IndexOutOfBoundsError, InputsNotModifiableError, OutputsNotModifiableError,
@@ -61,8 +61,10 @@ use crate::sighash_type::PsbtSighashType;
 #[cfg(feature = "miniscript")]
 use crate::PartialSigsSighashTypeError;
 
-/// PSBT magic bytes followed by the 0xff separator.
-const PSBT_MAGIC: &[u8; 5] = b"psbt\xff";
+/// The magic bytes that identify a PSBT (`"psbt"` in ASCII).
+const PSBT_MAGIC: &[u8; 4] = b"psbt";
+/// The byte that separates the magic bytes from the global map (`0xff`).
+const PSBT_SEPARATOR: u8 = 0xff;
 
 bitcoin_consensus_encoding::encoder_newtype! {
     /// Encoder for a complete PSBT v2.
@@ -81,13 +83,158 @@ impl PsbtEncode for Psbt {
 
     fn psbt_encoder(&self) -> Self::Encoder<'_> {
         // `<psbt> := <magic> <global-map> <input-map>* <output-map>*`
+        static HEADER: [u8; 5] =
+            [PSBT_MAGIC[0], PSBT_MAGIC[1], PSBT_MAGIC[2], PSBT_MAGIC[3], PSBT_SEPARATOR];
         PsbtV2Encoder::new(Encoder4::new(
-            BytesEncoder::without_length_prefix(PSBT_MAGIC),
+            BytesEncoder::without_length_prefix(&HEADER),
             self.global.psbt_encoder(),
             crate::encoding::SliceEncoder::without_length_prefix(&self.inputs),
             crate::encoding::SliceEncoder::without_length_prefix(&self.outputs),
         ))
     }
+}
+
+/// Decoder for PSBT v2.
+#[derive(Debug)]
+pub struct PsbtV2Decoder {
+    stage: DecoderStage,
+}
+
+/// The state of the PSBT v2 decoder.
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+enum DecoderStage {
+    /// Decoding the magic bytes (`"psbt"`).
+    Magic(ArrayDecoder<4>),
+    /// Decoding the separator (`0xff`).
+    Separator,
+    /// Decoding the global map.
+    Global(global::GlobalDecoder),
+    /// Decoding the input maps.
+    Inputs(Global, input::InputsDecoder),
+    /// Decoding the output maps.
+    Outputs(Global, Vec<Input>, output::OutputsDecoder),
+    /// Done decoding the [`Psbt`].
+    Done(Psbt),
+    /// Sentinel used during state transitions.
+    Errored,
+}
+
+impl Decoder for PsbtV2Decoder {
+    type Output = Psbt;
+    type Error = DeserializeError;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        loop {
+            // Attempt to push bytes into the active decoder, return on success (more bytes required).
+            match &mut self.stage {
+                DecoderStage::Magic(decoder) => match decoder.push_bytes(bytes) {
+                    Ok(status) if status.needs_more() => return Ok(DecoderStatus::NeedsMore),
+                    Ok(_) => {}
+                    Err(_) => unreachable!("ArrayDecoder never panics in push_bytes"),
+                },
+                DecoderStage::Separator =>
+                    if bytes.is_empty() {
+                        return Ok(DecoderStatus::NeedsMore);
+                    },
+                DecoderStage::Global(decoder) =>
+                    if decoder.push_bytes(bytes)?.needs_more() {
+                        return Ok(DecoderStatus::NeedsMore);
+                    },
+                DecoderStage::Inputs(_, decoder) =>
+                    if decoder
+                        .push_bytes(bytes)
+                        .map_err(DeserializeError::DecodeInputs)?
+                        .needs_more()
+                    {
+                        return Ok(DecoderStatus::NeedsMore);
+                    },
+                DecoderStage::Outputs(_, _, decoder) =>
+                    if decoder
+                        .push_bytes(bytes)
+                        .map_err(DeserializeError::DecodeOutputs)?
+                        .needs_more()
+                    {
+                        return Ok(DecoderStatus::NeedsMore);
+                    },
+                DecoderStage::Done(_) => return Ok(DecoderStatus::Ready),
+                DecoderStage::Errored => {
+                    panic!("call to push_bytes() after decoder errored")
+                }
+            }
+
+            // If the above failed, end the current decoder and go to the next state.
+            match core::mem::replace(&mut self.stage, DecoderStage::Errored) {
+                DecoderStage::Magic(decoder) => {
+                    let magic = decoder.end().expect("magic ready after push_bytes");
+                    if magic != *PSBT_MAGIC {
+                        return Err(DeserializeError::InvalidMagic(magic));
+                    }
+                    self.stage = DecoderStage::Separator;
+                }
+                DecoderStage::Separator => {
+                    let sep = bytes[0];
+                    *bytes = &bytes[1..];
+                    if sep != PSBT_SEPARATOR {
+                        return Err(DeserializeError::InvalidSeparator(Some(sep)));
+                    }
+                    self.stage = DecoderStage::Global(global::GlobalDecoder::default());
+                }
+                DecoderStage::Global(decoder) => {
+                    let global = decoder.end()?;
+                    let input_count = global.input_count;
+                    self.stage =
+                        DecoderStage::Inputs(global, input::InputsDecoder::new(input_count));
+                }
+                DecoderStage::Inputs(global, decoder) => {
+                    let inputs = decoder.end().map_err(DeserializeError::DecodeInputs)?;
+                    let output_count = global.output_count;
+                    self.stage = DecoderStage::Outputs(
+                        global,
+                        inputs,
+                        output::OutputsDecoder::new(output_count),
+                    );
+                }
+                DecoderStage::Outputs(global, inputs, decoder) => {
+                    let outputs = decoder.end().map_err(DeserializeError::DecodeOutputs)?;
+                    self.stage = DecoderStage::Done(Psbt { global, inputs, outputs });
+                }
+                DecoderStage::Done(..) => return Ok(DecoderStatus::Ready),
+                DecoderStage::Errored => unreachable!("checked above"),
+            }
+        }
+    }
+
+    fn end(self) -> Result<Psbt, Self::Error> {
+        match self.stage {
+            DecoderStage::Done(psbt) => Ok(psbt),
+            DecoderStage::Magic(_) => Err(DeserializeError::EarlyEnd("magic")),
+            DecoderStage::Separator => Err(DeserializeError::EarlyEnd("separator")),
+            DecoderStage::Global(_) => Err(DeserializeError::EarlyEnd("global")),
+            DecoderStage::Inputs(..) => Err(DeserializeError::EarlyEnd("inputs")),
+            DecoderStage::Outputs(..) => Err(DeserializeError::EarlyEnd("outputs")),
+            DecoderStage::Errored => panic!("PsbtV2Decoder ended in Errored state"),
+        }
+    }
+
+    fn read_limit(&self) -> usize {
+        match &self.stage {
+            DecoderStage::Magic(magic) => magic.read_limit(),
+            DecoderStage::Separator => 1,
+            DecoderStage::Global(dec) => dec.read_limit(),
+            DecoderStage::Inputs(_, dec) => dec.read_limit(),
+            DecoderStage::Outputs(_, _, dec) => dec.read_limit(),
+            DecoderStage::Done(_) | DecoderStage::Errored => 0,
+        }
+    }
+}
+
+impl Default for PsbtV2Decoder {
+    fn default() -> Self { Self { stage: DecoderStage::Magic(ArrayDecoder::default()) } }
+}
+
+impl PsbtDecode for Psbt {
+    type Decoder = PsbtV2Decoder;
 }
 
 /// Combines these two PSBTs as described by BIP-174 (i.e. combine is the same for BIP-370).
@@ -597,57 +744,8 @@ impl Psbt {
 
     /// Deserializes a value from raw binary data.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, DeserializeError> {
-        const MAGIC_BYTES: &[u8] = b"psbt";
-        let magic: [u8; 4] =
-            bytes.get(0..4).and_then(|s| <&[u8; 4]>::try_from(s).ok()).copied().unwrap_or([0; 4]);
-
-        if magic != *MAGIC_BYTES {
-            return Err(DeserializeError::InvalidMagic(magic));
-        }
-
-        const PSBT_SEPARATOR: u8 = 0xff_u8;
-        if bytes.get(MAGIC_BYTES.len()) != Some(&PSBT_SEPARATOR) {
-            return Err(DeserializeError::InvalidSeparator(bytes.get(MAGIC_BYTES.len()).copied()));
-        }
-
-        let mut d = bytes.get(5..).ok_or(DeserializeError::NoMorePairs)?;
-
-        let global = Global::decode(&mut d)?;
-
-        let inputs: Vec<Input> = {
-            let inputs_len: usize = global.input_count;
-            let mut inputs: Vec<Input> = Vec::with_capacity(inputs_len);
-
-            for i in 0..inputs_len {
-                let input = Input::decode(&mut d)?;
-                if let Some(ref tx) = input.non_witness_utxo {
-                    let txid = tx.compute_txid();
-                    if txid != input.previous_txid {
-                        return Err(DeserializeError::IncorrectNonWitnessUtxo {
-                            index: i,
-                            previous_txid: input.previous_txid,
-                            non_witness_utxo_txid: txid,
-                        });
-                    }
-                }
-                inputs.push(input);
-            }
-
-            inputs
-        };
-
-        let outputs: Vec<Output> = {
-            let outputs_len: usize = global.output_count;
-            let mut outputs: Vec<Output> = Vec::with_capacity(outputs_len);
-
-            for _ in 0..outputs_len {
-                outputs.push(Output::decode(&mut d)?)
-            }
-
-            outputs
-        };
-
-        Ok(Self { global, inputs, outputs })
+        let mut remaining = bytes;
+        crate::encoding::decode_from_slice_unbounded::<Self>(&mut remaining)
     }
 
     /// Returns an iterator for the funding UTXOs of the psbt
@@ -1453,12 +1551,89 @@ mod tests {
         }
     }
 
+    fn valid_psbt() -> Psbt {
+        use crate::bitcoin::hashes::Hash as _;
+
+        Psbt {
+            global: Global { input_count: 1, output_count: 1, ..Global::default() },
+            inputs: vec![Input::new(&OutPoint {
+                txid: Txid::hash(b"some arbitrary bytes"),
+                vout: 0x15,
+            })],
+            outputs: vec![Output::new(TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::from_hex(
+                    "76a914162c5ea71c0b23f5b9022ef047c4a86470a5b07088ac",
+                )
+                .unwrap(),
+            })],
+        }
+    }
+
     #[test]
     fn encode_nonempty() {
         let psbt = single_input_psbt();
         let bytes = psbt.serialize();
         assert!(!bytes.is_empty());
         assert_eq!(&bytes[..5], b"psbt\xff", "must start with PSBT magic");
+    }
+
+    #[test]
+    fn creator_psbt_roundtrip() {
+        let psbt = Creator::new().inputs_modifiable().outputs_modifiable().psbt();
+        let bytes = psbt.serialize();
+        assert_eq!(&bytes[..5], b"psbt\xff");
+        let decoded = Psbt::deserialize(&bytes).expect("failed to decode creator PSBT");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
+    }
+
+    #[test]
+    fn creator_psbt_inputs_modifiable_only_roundtrip() {
+        let psbt = Creator::new().inputs_modifiable().psbt();
+        let bytes = psbt.serialize();
+        assert_eq!(&bytes[..5], b"psbt\xff");
+        let decoded = Psbt::deserialize(&bytes).expect("failed to decode creator PSBT");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
+    }
+
+    #[test]
+    fn creator_psbt_outputs_modifiable_only_roundtrip() {
+        let psbt = Creator::new().outputs_modifiable().psbt();
+        let bytes = psbt.serialize();
+        assert_eq!(&bytes[..5], b"psbt\xff");
+        let decoded = Psbt::deserialize(&bytes).expect("failed to decode creator PSBT");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
+    }
+
+    #[test]
+    fn creator_psbt_no_flags_roundtrip() {
+        let psbt = Creator::new().psbt();
+        let bytes = psbt.serialize();
+        assert_eq!(&bytes[..5], b"psbt\xff");
+        let decoded = Psbt::deserialize(&bytes).expect("failed to decode creator PSBT");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
+    }
+
+    #[test]
+    fn deserialize_one_input_no_outputs() {
+        use crate::bitcoin::hashes::Hash as _;
+        let psbt = Psbt {
+            global: Global { input_count: 1, output_count: 0, ..Global::default() },
+            inputs: vec![Input::new(&OutPoint {
+                txid: Txid::hash(b"some arbitrary bytes"),
+                vout: 0x15,
+            })],
+            outputs: vec![],
+        };
+        let bytes = psbt.serialize();
+        assert!(!bytes.is_empty());
+        let decoded = Psbt::deserialize(&bytes).expect("failed to decode PSBT with 1 input");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
     }
 
     #[test]
@@ -1569,7 +1744,6 @@ mod tests {
 
         assert_eq!(psbt.signer_checks(0), Err(SignError::SighashMismatch));
     }
-
     #[test]
     fn iter_funding_utxos_yields_correct_utxo() {
         let mut psbt = single_input_psbt();
@@ -1588,5 +1762,63 @@ mod tests {
         let results: Vec<_> = psbt.iter_funding_utxos().collect();
         assert_eq!(results.len(), 1);
         assert!(results[0].is_err(), "missing UTXO should produce an error");
+    }
+
+    #[test]
+    fn encode_decode_roundtrip_nonempty() {
+        let psbt = valid_psbt();
+        let bytes = psbt.serialize();
+        let decoded = Psbt::deserialize(&bytes).expect("roundtrip decode failed");
+        let reencoded = decoded.serialize();
+        assert_eq!(bytes, reencoded);
+    }
+
+    #[test]
+    fn decode_partial_magic_bytes() {
+        let psbt = valid_psbt();
+        let bytes = psbt.serialize();
+        let mut decoder = PsbtV2Decoder::default();
+
+        // Feed 2 bytes at a time — exercises the NeedsMore path in the Magic stage.
+        let mut remaining = &bytes[..];
+        loop {
+            let chunk_size = 2.min(remaining.len());
+            let mut chunk = &remaining[..chunk_size];
+            let status = decoder.push_bytes(&mut chunk).unwrap();
+            let consumed = chunk_size - chunk.len();
+            remaining = &remaining[consumed..];
+            if status.is_ready() {
+                break;
+            }
+        }
+        let decoded = decoder.end().unwrap();
+        assert_eq!(decoded.serialize(), bytes);
+    }
+
+    #[test]
+    fn read_limit_during_incremental_decode() {
+        let psbt = valid_psbt();
+        let bytes = psbt.serialize();
+        let mut decoder = PsbtV2Decoder::default();
+        let mut remaining = &bytes[..];
+
+        // Initial read_limit should request at least one byte.
+        assert!(decoder.read_limit() > 0);
+
+        // After feeding half the magic bytes, still needs more.
+        let mut chunk = &remaining[..2];
+        let status = decoder.push_bytes(&mut chunk).unwrap();
+        remaining = &remaining[2 - chunk.len()..];
+        assert!(status.needs_more());
+        assert!(decoder.read_limit() > 0);
+
+        // After feeding the rest, the decoder should finish.
+        chunk = remaining;
+        let status = decoder.push_bytes(&mut chunk).unwrap();
+        assert!(status.is_ready());
+        assert_eq!(decoder.read_limit(), 0);
+
+        let decoded = decoder.end().unwrap();
+        assert_eq!(decoded.serialize(), bytes);
     }
 }

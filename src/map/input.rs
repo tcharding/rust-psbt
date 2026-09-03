@@ -20,7 +20,9 @@ use bitcoin::CompressedPublicKey;
 use bitcoin::{
     ecdsa, hashes, taproot, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
 };
-use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
+use bitcoin_consensus_encoding::{
+    Decoder, DecoderStatus, Encoder, EncoderStatus, ExactVecDecoderWith,
+};
 
 use crate::consts::{
     PSBT_IN_BIP32_DERIVATION, PSBT_IN_FINAL_SCRIPTSIG, PSBT_IN_FINAL_SCRIPTWITNESS,
@@ -37,6 +39,7 @@ use crate::consts::{PSBT_IN_SP_DLEQ, PSBT_IN_SP_ECDH_SHARE};
 use crate::dleq::DleqProof;
 use crate::encoding::PsbtEncode;
 use crate::error::{write_err, FundingUtxoError};
+use crate::io::Cursor;
 use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
 use crate::sighash_type::{InvalidSighashTypeError, PsbtSighashType};
@@ -639,6 +642,62 @@ impl Input {
     }
 }
 
+/// Decoder for a PSBT input map.
+#[derive(Debug, Default)]
+pub struct InputDecoder {
+    // TODO: Make into a push decoder. Temporary hack to connect to the legacy io decode impl.
+    buf: Vec<u8>,
+    done: bool,
+}
+
+impl Decoder for InputDecoder {
+    type Output = Input;
+    type Error = DecodeError;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        let had = self.buf.len();
+        self.buf.extend_from_slice(bytes);
+
+        let mut cursor = Cursor::new(&self.buf[..]);
+        match Input::decode(&mut cursor) {
+            Ok(_) => {
+                *bytes = &bytes[(cursor.position() as usize).saturating_sub(had)..];
+                self.done = true;
+                Ok(DecoderStatus::Ready)
+            }
+            Err(_) => {
+                *bytes = &[];
+                Ok(DecoderStatus::NeedsMore)
+            }
+        }
+    }
+
+    fn end(self) -> Result<Input, Self::Error> {
+        let input = Input::decode(&mut Cursor::new(&self.buf[..]))?;
+        if let Some(ref tx) = input.non_witness_utxo {
+            let txid = tx.compute_txid();
+            if txid != input.previous_txid {
+                return Err(DecodeError::IncorrectNonWitnessUtxo {
+                    previous_txid: input.previous_txid,
+                    non_witness_utxo_txid: txid,
+                });
+            }
+        }
+        Ok(input)
+    }
+
+    fn read_limit(&self) -> usize {
+        if self.done {
+            0
+        } else {
+            1
+        }
+    }
+}
+
+/// Decodes a sequence of input maps, one per input.
+pub(crate) type InputsDecoder = ExactVecDecoderWith<InputDecoder>;
+
 /// Encoder for a PSBT input map.
 pub struct InputMapEncoder(Vec<u8>);
 
@@ -875,6 +934,13 @@ pub enum DecodeError {
     MissingSpentOutputIndex,
     /// BIP-375: ECDH shares and DLEQ proofs must both be present or both absent.
     FieldMismatch,
+    /// Non-witness UTXO txid does not match the input's previous txid.
+    IncorrectNonWitnessUtxo {
+        /// The txid of the input being spent.
+        previous_txid: Txid,
+        /// The txid of the non-witness UTXO.
+        non_witness_utxo_txid: Txid,
+    },
 }
 
 impl fmt::Display for DecodeError {
@@ -887,6 +953,13 @@ impl fmt::Display for DecodeError {
             Self::FieldMismatch => {
                 write!(f, "ECDH shares and DLEQ proofs must both be present or both absent")
             }
+            Self::IncorrectNonWitnessUtxo { previous_txid, non_witness_utxo_txid } => {
+                write!(
+                    f,
+                    "non-witness utxo txid {} does not match previous txid {}",
+                    non_witness_utxo_txid, previous_txid
+                )
+            }
         }
     }
 }
@@ -897,8 +970,10 @@ impl std::error::Error for DecodeError {
         match self {
             Self::InsertPair(ref e) => Some(e),
             Self::DeserPair(ref e) => Some(e),
-            Self::MissingPreviousTxid | Self::MissingSpentOutputIndex => None,
-            Self::FieldMismatch => None,
+            Self::MissingPreviousTxid
+            | Self::MissingSpentOutputIndex
+            | Self::FieldMismatch
+            | Self::IncorrectNonWitnessUtxo { .. } => None,
         }
     }
 }
@@ -1128,6 +1203,70 @@ mod test {
         assert!(!bytes.is_empty());
         assert!(bytes.len() > 1, "map must have at least one keypair before separator");
         assert_eq!(bytes.last(), Some(&0x00), "input map must end with separator");
+    }
+
+    #[test]
+    fn read_limit_lifecycle() {
+        let input = Input::new(&out_point());
+        let bytes = crate::encoding::encode_to_vec(&input);
+
+        let mut decoder = InputDecoder::default();
+        assert_eq!(decoder.read_limit(), 1, "fresh decoder should request bytes");
+
+        let mut remaining = &bytes[..];
+        assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
+        assert_eq!(decoder.read_limit(), 0, "completed decoder should request no bytes");
+    }
+
+    #[test]
+    fn decode_non_witness_utxo_matching_txid() {
+        // A non-witness UTXO whose txid matches the input's previous txid is valid.
+        let funding_tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: bitcoin::Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let txid = funding_tx.compute_txid();
+
+        let mut input = Input::new(&OutPoint { txid, vout: 0 });
+        input.non_witness_utxo = Some(funding_tx);
+
+        let bytes = crate::encoding::encode_to_vec(&input);
+        let mut decoder = InputDecoder::default();
+        let mut remaining = &bytes[..];
+        assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
+        let decoded = decoder.end().expect("matching txid must decode");
+        assert_eq!(decoded.previous_txid, txid);
+    }
+
+    #[test]
+    fn decode_non_witness_utxo_mismatched_txid() {
+        // A non-witness UTXO whose txid does not match the previous txid is invalid.
+        let funding_tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: bitcoin::Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+
+        let mut input = Input::new(&out_point());
+        input.non_witness_utxo = Some(funding_tx);
+
+        let bytes = crate::encoding::encode_to_vec(&input);
+        let mut decoder = InputDecoder::default();
+        let mut remaining = &bytes[..];
+        assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
+        match decoder.end() {
+            Err(DecodeError::IncorrectNonWitnessUtxo { .. }) => {}
+            other => panic!("expected IncorrectNonWitnessUtxo, got {other:?}"),
+        }
     }
 
     #[cfg(feature = "miniscript")]

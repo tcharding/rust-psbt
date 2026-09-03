@@ -11,7 +11,9 @@ use bitcoin::io::Read;
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::taproot::{TapLeafHash, TapTree};
 use bitcoin::{Amount, ScriptBuf, TxOut};
-use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
+use bitcoin_consensus_encoding::{
+    Decoder, DecoderStatus, Encoder, EncoderStatus, ExactVecDecoderWith,
+};
 
 use crate::consts::{
     PSBT_OUT_AMOUNT, PSBT_OUT_BIP32_DERIVATION, PSBT_OUT_PROPRIETARY, PSBT_OUT_REDEEM_SCRIPT,
@@ -22,6 +24,7 @@ use crate::consts::{
 use crate::consts::{PSBT_OUT_SP_V0_INFO, PSBT_OUT_SP_V0_LABEL};
 use crate::encoding::PsbtEncode;
 use crate::error::write_err;
+use crate::io::Cursor;
 use crate::map::Map;
 use crate::serialize::{Deserialize, Serialize};
 use crate::{raw, serialize};
@@ -262,6 +265,50 @@ impl Output {
         Ok(())
     }
 }
+
+/// Decoder for a PSBT output map.
+#[derive(Debug, Default)]
+pub struct OutputDecoder {
+    // TODO: Make into a push decoder. Temporary hack to connect to the legacy io decode impl.
+    buf: Vec<u8>,
+    done: bool,
+}
+
+impl Decoder for OutputDecoder {
+    type Output = Output;
+    type Error = DecodeError;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        let had = self.buf.len();
+        self.buf.extend_from_slice(bytes);
+
+        let mut cursor = Cursor::new(&self.buf[..]);
+        match Output::decode(&mut cursor) {
+            Ok(_) => {
+                *bytes = &bytes[(cursor.position() as usize).saturating_sub(had)..];
+                self.done = true;
+                Ok(DecoderStatus::Ready)
+            }
+            Err(_) => {
+                *bytes = &[];
+                Ok(DecoderStatus::NeedsMore)
+            }
+        }
+    }
+
+    fn end(self) -> Result<Output, Self::Error> { Output::decode(&mut Cursor::new(&self.buf[..])) }
+
+    fn read_limit(&self) -> usize {
+        if self.done {
+            0
+        } else {
+            1
+        }
+    }
+}
+
+/// Decodes a sequence of output maps, one per output.
+pub(crate) type OutputsDecoder = ExactVecDecoderWith<OutputDecoder>;
 
 /// Encoder for a PSBT output map.
 pub struct OutputMapEncoder(Vec<u8>);
@@ -538,5 +585,18 @@ mod tests {
         assert!(!bytes.is_empty());
         assert!(bytes.len() > 1, "map must have at least one keypair before separator");
         assert_eq!(bytes.last(), Some(&0x00), "output map must end with separator");
+    }
+
+    #[test]
+    fn read_limit_lifecycle() {
+        let output = Output::new(tx_out());
+        let bytes = crate::encoding::encode_to_vec(&output);
+
+        let mut decoder = OutputDecoder::default();
+        assert_eq!(decoder.read_limit(), 1, "fresh decoder should request bytes");
+
+        let mut remaining = &bytes[..];
+        assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
+        assert_eq!(decoder.read_limit(), 0, "completed decoder should request no bytes");
     }
 }

@@ -12,7 +12,7 @@ use bitcoin::locktime::absolute;
 #[cfg(feature = "silent-payments")]
 use bitcoin::CompressedPublicKey;
 use bitcoin::{bip32, transaction, VarInt};
-use bitcoin_consensus_encoding::{Encoder, EncoderStatus};
+use bitcoin_consensus_encoding::{Decoder, DecoderStatus, Encoder, EncoderStatus};
 
 use crate::consts::{
     PSBT_GLOBAL_FALLBACK_LOCKTIME, PSBT_GLOBAL_INPUT_COUNT, PSBT_GLOBAL_OUTPUT_COUNT,
@@ -463,6 +463,47 @@ impl Default for Global {
     fn default() -> Self { Self::new() }
 }
 
+/// Decoder for a PSBT global map.
+#[derive(Debug, Default)]
+pub struct GlobalDecoder {
+    // TODO: Make into a push decoder. Temporary hack to connect to the legacy io decode impl.
+    buf: Vec<u8>,
+    done: bool,
+}
+
+impl Decoder for GlobalDecoder {
+    type Output = Global;
+    type Error = DecodeError;
+
+    fn push_bytes(&mut self, bytes: &mut &[u8]) -> Result<DecoderStatus, Self::Error> {
+        let had = self.buf.len();
+        self.buf.extend_from_slice(bytes);
+
+        let mut cursor = Cursor::new(&self.buf[..]);
+        match Global::decode(&mut cursor) {
+            Ok(_) => {
+                *bytes = &bytes[(cursor.position() as usize).saturating_sub(had)..];
+                self.done = true;
+                Ok(DecoderStatus::Ready)
+            }
+            Err(_) => {
+                *bytes = &[];
+                Ok(DecoderStatus::NeedsMore)
+            }
+        }
+    }
+
+    fn end(self) -> Result<Global, Self::Error> { Global::decode(&mut Cursor::new(&self.buf[..])) }
+
+    fn read_limit(&self) -> usize {
+        if self.done {
+            0
+        } else {
+            1
+        }
+    }
+}
+
 /// Encoder for the PSBT global map.
 pub struct GlobalMapEncoder(Vec<u8>);
 
@@ -832,5 +873,18 @@ mod tests {
         assert!(!bytes.is_empty());
         assert!(bytes.len() > 1, "map must have at least one keypair before separator");
         assert_eq!(bytes.last(), Some(&0x00), "global map must end with separator");
+    }
+
+    #[test]
+    fn read_limit_lifecycle() {
+        let global = Global::default();
+        let bytes = crate::encoding::encode_to_vec(&global);
+
+        let mut decoder = GlobalDecoder::default();
+        assert_eq!(decoder.read_limit(), 1, "fresh decoder should request bytes");
+
+        let mut remaining = &bytes[..];
+        assert!(decoder.push_bytes(&mut remaining).unwrap().is_ready());
+        assert_eq!(decoder.read_limit(), 0, "completed decoder should request no bytes");
     }
 }
