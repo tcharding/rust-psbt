@@ -56,7 +56,7 @@ integration: (rbmt "integration")
 # Check mutants in code changed since baseline
 [group('mutants')]
 mutants-since baseline="master": tools
-  git diff {{baseline}} | cargo +$(cargo rbmt toolchains --stable) mutants --in-diff /dev/stdin
+  git diff {{baseline}} | cargo +$(cargo rbmt toolchains --nightly) mutants --in-diff /dev/stdin -- -- -Z unstable-options --fail-fast
 
 # Run mutants in a file or glob
 [group('mutants')]
