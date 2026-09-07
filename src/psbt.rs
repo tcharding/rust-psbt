@@ -474,10 +474,15 @@ impl Constructor<Modifiable> {
     }
 
     /// Adds an output to the PSBT.
-    pub fn output(mut self, output: Output) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// If `output` breaks the BIP-370 and BIP-375 output rules, see [`Output::validate`].
+    pub fn output(mut self, output: Output) -> Result<Self, output::ValidationError> {
+        output.validate()?;
         self.0.outputs.push(output);
         self.0.global.output_count += 1;
-        self
+        Ok(self)
     }
 }
 // Useful if the Creator and Constructor are a single entity.
@@ -527,10 +532,15 @@ impl Constructor<OutputsOnlyModifiable> {
     }
 
     /// Adds an output to the PSBT.
-    pub fn output(mut self, output: Output) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// If `output` breaks the BIP-370 and BIP-375 output rules, see [`Output::validate`].
+    pub fn output(mut self, output: Output) -> Result<Self, output::ValidationError> {
+        output.validate()?;
         self.0.outputs.push(output);
         self.0.global.output_count += 1;
-        self
+        Ok(self)
     }
 }
 
@@ -1820,5 +1830,96 @@ mod tests {
 
         let decoded = decoder.end().unwrap();
         assert_eq!(decoded.serialize(), bytes);
+    }
+
+    fn output_with_script() -> Output {
+        Output::new(TxOut {
+            value: Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::from(vec![0xab; 4]),
+        })
+    }
+
+    fn output_without_script() -> Output {
+        Output::new(TxOut { value: Amount::from_sat(1_000), script_pubkey: ScriptBuf::new() })
+    }
+
+    #[test]
+    fn constructor_accepts_output_with_script() {
+        let constructor = Constructor::<Modifiable>::default()
+            .output(output_with_script())
+            .expect("output must be valid");
+        assert_eq!(constructor.0.outputs.len(), 1);
+        assert_eq!(constructor.0.global.output_count, 1);
+
+        let constructor = Constructor::<OutputsOnlyModifiable>::default()
+            .output(output_with_script())
+            .expect("output must be valid");
+        assert_eq!(constructor.0.outputs.len(), 1);
+        assert_eq!(constructor.0.global.output_count, 1);
+    }
+
+    #[test]
+    fn constructor_rejects_output_missing_script() {
+        assert_eq!(
+            Constructor::<Modifiable>::default().output(output_without_script()).err(),
+            Some(output::ValidationError::MissingScriptPubkey)
+        );
+        assert_eq!(
+            Constructor::<OutputsOnlyModifiable>::default().output(output_without_script()).err(),
+            Some(output::ValidationError::MissingScriptPubkey)
+        );
+    }
+
+    #[cfg(feature = "silent-payments")]
+    #[test]
+    fn constructor_accepts_underived_silent_payment_output() {
+        // BIP-375: the silent payment info stands in for the script until it is derived.
+        let mut output = output_without_script();
+        output.sp_v0_info = Some(vec![0; 66]);
+
+        assert!(Constructor::<Modifiable>::default().output(output.clone()).is_ok());
+        assert!(Constructor::<OutputsOnlyModifiable>::default().output(output).is_ok());
+    }
+
+    #[cfg(feature = "silent-payments")]
+    #[test]
+    fn constructor_rejects_silent_payment_label_without_info() {
+        let mut output = output_with_script();
+        output.sp_v0_label = Some(0);
+
+        assert_eq!(
+            Constructor::<Modifiable>::default().output(output).err(),
+            Some(output::ValidationError::LabelWithoutInfo)
+        );
+    }
+
+    /// BIP-375 represents an underived silent payment output by omitting `PSBT_OUT_SCRIPT`,
+    /// so a PSBT that arrives without the field has to leave without it too. Writing it back
+    /// empty is a PSBT other implementations reject.
+    #[cfg(feature = "silent-payments")]
+    #[test]
+    fn underived_silent_payment_output_round_trips_without_out_script() {
+        use ::bitcoin::hashes::Hash as _;
+
+        use crate::consts::PSBT_OUT_SCRIPT;
+
+        let mut output = output_without_script();
+        output.sp_v0_info = Some(vec![0; 66]);
+
+        let mut psbt = single_input_psbt();
+        // An all-zeros txid and a zero output index are the "not set yet" sentinels, so a
+        // null outpoint does not survive a decode.
+        psbt.inputs[0] = Input::new(&OutPoint { txid: Txid::from_byte_array([1u8; 32]), vout: 1 });
+        psbt.outputs = vec![output];
+
+        let encoded = psbt.serialize();
+        let decoded = Psbt::deserialize(&encoded).expect("psbt must decode");
+
+        assert!(decoded.outputs[0].script_pubkey.is_empty());
+        assert!(
+            !decoded.outputs[0].pairs().iter().any(|pair| pair.key.type_value == PSBT_OUT_SCRIPT),
+            "underived silent payment output must not encode PSBT_OUT_SCRIPT"
+        );
+        assert_eq!(decoded.serialize(), encoded);
     }
 }

@@ -77,8 +77,8 @@ fn main() -> anyhow::Result<()> {
     let psbt = constructor
         .input(input_a)
         .input(input_b)
-        .output(OutputBuilder::new(multi).build()) // Use of the `OutputBuilder` is identical
-        .output(Output::new(change)) // to just creating the `Output`.
+        .output(OutputBuilder::new(multi).build())? // Use of the `OutputBuilder` is identical
+        .output(Output::new(change))? // to just creating the `Output`.
         .psbt()
         .expect("valid lock time combination");
 

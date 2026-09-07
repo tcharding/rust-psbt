@@ -235,7 +235,7 @@ fn run_create(expected: &PsbtData, supplementary: &Supplementary) {
         psbt = psbt.input(input);
     }
     for txout in outputs {
-        psbt = psbt.output(Output::new(txout.clone()));
+        psbt = psbt.output(Output::new(txout.clone())).expect("create task output must be valid");
     }
     let psbt = psbt.psbt().expect("lock time must be determinable");
 
