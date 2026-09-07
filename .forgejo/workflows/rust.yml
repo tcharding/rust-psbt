@@ -76,4 +76,4 @@ jobs:
           fetch-depth: 0 # History required to diff against the baseline.
       - uses: ./.forgejo/actions/setup-rbmt
       - name: "Check mutants"
-        run: git diff ${{ forgejo.event.pull_request.base.sha || forgejo.event.before }} | cargo +$(cargo rbmt toolchains --stable) mutants --in-diff /dev/stdin
+        run: git diff ${{ forgejo.event.pull_request.base.sha || forgejo.event.before }} | cargo +$(cargo rbmt toolchains --nightly) mutants --in-diff /dev/stdin -- -- -Z unstable-options --fail-fast --nocapture

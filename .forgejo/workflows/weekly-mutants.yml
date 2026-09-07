@@ -22,7 +22,7 @@ jobs:
         id: mutants
         run: |
           set +e
-          cargo +$(cargo rbmt toolchains --stable) mutants --in-place
+          cargo +$(cargo rbmt toolchains --nightly) mutants --in-place -- -- -Z unstable-options --fail-fast
           echo "exit_code=$?" >> "$FORGEJO_OUTPUT"
       - name: Open issue when new mutants are found
         if: steps.mutants.outputs.exit_code == '2'
